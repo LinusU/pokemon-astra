@@ -136,6 +136,53 @@ describe.skipIf(!romAvailable)("complete native battle decisions", () => {
     expect(seen.has("GrewToLevel")).toBe(true);
     expect(seen.has("AskForgetMove")).toBe(true);
   });
+
+  it("trains a reserve through the native learn prompt without awarding reserve stat EXP", async () => {
+    const { instance } = await WebAssembly.instantiate(
+      readFileSync("public/astra_native.wasm"),
+      {},
+    );
+    const engine = new Engine(
+      instance.exports as never,
+      readFileSync("pokecrystal11.gbc"),
+    );
+    const reserve = engine.makePokemon(1, 6);
+    reserve.exp = engine.makePokemon(1, 7).exp - 1;
+    reserve.moves = [33, 45, 39, 22];
+    reserve.pp = reserve.moves.map((id) => engine.move(id).pp);
+    const lead = engine.makeStarter(58);
+    const enemy = engine.makePokemon(10, 5);
+    for (const training of [false, true]) {
+      const battle = engine.startBattle({
+        party: [lead, reserve],
+        opponent: { party: [enemy] },
+        training,
+        seed: 123,
+      });
+      let learned = false;
+      for (let i = 0; i < 20 && !battle.snapshot().outcome; i++) {
+        const snapshot = battle.snapshot();
+        const actions = snapshot.legal as { Move?: { slot: number }; LearnMove?: { slot: number } }[];
+        const learning = snapshot.site === "LearnMove";
+        if (learning) {
+          learned = true;
+          expect(snapshot.learning_slot).toBe(1);
+          expect(snapshot.state.player.party?.[1].moves).toEqual(reserve.moves);
+        }
+        const action = actions.findIndex((a) =>
+          learning ? a.LearnMove?.slot === 2 : a.Move?.slot === 2,
+        );
+        expect(action).toBeGreaterThanOrEqual(0);
+        battle.act(action);
+      }
+      const result = battle.snapshot().result;
+      expect(result?.outcome).toBe("win");
+      expect(learned).toBe(training);
+      expect(result?.party[1].level).toBe(training ? 7 : 6);
+      expect(result?.party[1].moves[2]).toBe(training ? 73 : 39);
+      expect(result?.party[1].stat_exp).toEqual(reserve.stat_exp);
+    }
+  });
 });
 
 describe("authored trainer names", () => {

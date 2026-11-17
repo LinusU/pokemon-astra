@@ -1,15 +1,36 @@
 # World content
 
-`src/world/index.ts` is the source of truth for the region. It exports `WORLD`, `QUESTS`, `BADGES`, `ABILITIES`, and the corresponding types. Tile coordinates are integer cell positions. Towns are 32×28 or 40×32; routes are 40×24 or 28×40; dungeon and gym rooms are 28×24; interiors are 24×16. `#`, `r`, `w`, `~`, `B`, `C`, `P`, `T`, and `S` block movement (the latter five are interior furnishings); `.` is path, `g` is encounter grass, `d` is a doorway, `=` is a bridge, and `,` and `f` are decorative walkable terrain. Exits are bidirectional links; an exit's `requires` applies in that direction only. Outdoor roads carry `direction` and `span` metadata and sit on the map edge. Their reciprocal exits face the opposite direction; entrances and stairs have no direction and use `entrance` (`door`, `cave`, or `stairs`) for their visual landmark. Road transitions preserve the lateral offset and place the player just inside the destination edge. A transition should suppress retriggering until the player steps away from the destination exit. People can specify a `facing` and roaming radius, while trainers can specify a facing and sight range.
+[`src/world/index.ts`](../src/world/index.ts) defines the connections, story flags, trainers, quests and rewards. [`src/world/geography.ts`](../src/world/geography.ts) composes the terrain, roads, doors and landmark placements. [`src/world/habitats.ts`](../src/world/habitats.ts) assigns regional encounter pools.
 
-Requirements combine all listed flags, minimum badge count, permanent field ability, caught count, owned species, type counts, and items. A successful switch or NPC interaction records its `setsFlag` and grants its reward once. Trainers and leaders award these only after victory. Legendary encounters remain retryable after a loss or escape, and record their flag only on capture. The starter interaction is special: it offers Growlithe, Poliwag, or Bellsprout and grants the initial supplies.
+The main settlements use 26×20 maps after the opening, with 26×18 routes and 20×16 dungeon rooms. Dewdrop and Mossford have their larger opening layouts. Town paths connect the services to the local landscape. Tideglass uses a harbor promenade and jetties, Copperwick crosses its canals, Sunspire clusters around a desert oasis, and Reedhaven spans a wetland on boardwalks. The gym and service entrances lead to indoor maps. Route markers give directions at bends and point out optional terrain and local supplies.
 
-The central campaign uses the community objective before each gym, ordered gym switches before the keeper, the Bell Tower revelation before Meridian HQ, Vale's defeat before the observatory, the recovered lens before Orion, and all eight badges before stopping the Engine and entering Crown Road. The Ascent must be completed before the ordered League encounters. Shortcuts on Routes 21–24 require their field abilities; Route 25 requires the Champion flag. Dungeon inner chambers have a shortcut that opens after their objective.
+## Travel around Astra
 
-The current data is a playable content scaffold, not a complete implementation of every design detail. Several side quests use explicit collection flags or species/type checks, while others remain simplified. The early species pools are hand-selected and remaining species are distributed across reserve routes rather than fully curated habitats. Road connections have explicit directional continuity, while terrain still combines authored landmarks with deterministic paths and dressing; the dungeon mechanisms are ordered switches rather than distinct physical simulations. The runtime must support complete opposing teams, legendary captures, individual reward items, and persistent quest state for the content to behave as intended. `tests/world.test.ts` checks map geometry, reciprocal links, simulated progression, and species coverage; it does not establish campaign balance or substitute for a playthrough.
+```text
+East   Dewdrop → Mossford → Bramble → Tideglass → Copperwick
+North  Copperwick → Sunspire
+West   Sunspire → Reedhaven → Cinderfall → Rimepeak
+North  Rimepeak → Bellweather
+West   Bellweather → Aster
+North  Aster → Crown Summit
+```
 
-## Road orientation
+The arrows between places follow the campaign. Travel heads east through Copperwick, then north along Saffron Dunes to Sunspire. The far shore runs west via Reedhaven and Cinderfall to Rimepeak. Bellflower Way heads north to Bellweather. Starlit Avenue continues west to Aster, and Crown Road takes the last climb north. A town guide lists the actual direction of each local road, and side routes lead to dungeon entrances.
 
-The main communities progress eastward: Dewdrop → Route 01 → Mossford → Route 02 → Bramble → Route 04 → Tideglass → Route 06 → Copperwick → Route 08 → Sunspire → Route 10 → Reedhaven → Route 12 → Cinderfall → Route 14 → Rimepeak → Route 16 → Bellweather → Route 18 → Aster → Route 20 → Crown. A traveler leaving west enters the destination at its east edge and can continue west; eastward travel is the reverse. Side routes 03, 05, 07, 09, 11, 13, 15, 17 and 19 lead from their communities toward dungeon entrances. Routes 21 and 23 leave their starting towns northward, while Routes 22, 24 and 25 leave southward. The opposite end of a through-route faces the other way. This diagram describes travel continuity rather than a global metric map: shortcuts and dungeon entrances are not laid out as Euclidean distances.
+Dewdrop Grove reconnects Dewdrop to Bramble using Cut. Tidal Crossing links Tideglass and Reedhaven using Surf, Old Quarry links Mossford and Cinderfall using Strength, and Moonwater Reach links Tideglass and Bellweather using Whirlpool. Later landings also check badge progression. Aurora Trail leads south from Dewdrop after the player enters the Hall of Fame.
 
-Each directional exit is centered on a boundary cell, with `span: 1` meaning one tile to either side of that center. Both the boundary and first interior row of all three road cells are walkable. The transition must preserve the travel direction and lateral offset; doors, caves and stairs are separate from edge roads.
+Road exits are centered on a map edge with one walkable tile of shoulder on either side. Reciprocal exits face the opposite direction and preserve the lateral offset. Doors, caves and stairs use portal coordinates. Tile coordinates are integers. Paths use `.`, encounter grass uses `g`, bridges use `=`, and `,` and `f` are walkable surroundings. `#`, `r`, `w` and `BCPTS` block movement. Water `~` is passable with Surf. The League uses walkable arena inlay `a`, crest `h` and uplights `l`.
+
+## Progression
+
+A dungeon’s entrance holds the clue and first mechanism. Completing it opens the next room, where the second interaction powers the passage to the objective chamber. The objective opens the return stairs between the chamber and the entrance. The twelve sites use distinct layouts and local devices, including sluice tunnels, a flooded bridgehouse, a relay hall, a gallery of bells and a security wing. Puzzle state uses persisted flags and gated exits.
+
+Keeper challenges require the local dungeon objective and the gym sequence. Orion’s four constellations lead into the Astral Badge, which is needed to shut down the Celestial Engine. Victory Ascent opens the Astral League challenge. Rowan, Petra, Nyx, Gale and Mira each have a chamber. Mira’s arena centers the League’s beacon crest in a gold-edged floor inlay. Each victory opens the next chamber, and the Hall of Fame shortcut leads back to the League entrance.
+
+Requirements combine flags, minimum badge counts, field abilities, species and type checks, caught counts and items. A successful switch or NPC interaction records its flag and grants its reward once. Trainers and leaders grant them after victory. Legendary encounters remain retryable until capture.
+
+## Habitats and research
+
+Encounter grass is optional on main roads. Habitat pools group species by landscape and progression, with evolved forms appearing at lower weights in many pools. The Aurora rooms split the late research grounds into starter plant, water and fire families. Legendary hints name the appropriate ability or story milestone, while the Living Atlas quest checks all 251 catches after the sanctuary is restored. The prerequisite for entering the sanctuary itself is the Hall of Fame.
+
+[`tests/world.test.ts`](../tests/world.test.ts) checks reciprocal doors, dry paths around solid characters, reachable grass, badge barriers, puzzle and League ordering, and species coverage. It models campaign unlocks with zero research catches. Battle tuning and visual readability also depend on live play.

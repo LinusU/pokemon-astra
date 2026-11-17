@@ -127,7 +127,13 @@ impl Battle {
     /// game's data `data` ([`GameData::crystal`](crate::data::GameData::crystal)
     /// for Pokémon Crystal) and the random stream seeded with `seed`.
     pub fn start(data: &'static crate::data::GameData, setup: &BattleSetup, seed: u64) -> Result<Battle, Error> {
-        let engine = catch(|| FastBattle::from_setup(data, setup, seed, true))?.map_err(Error::Setup)?;
+        Self::start_with_training(data, setup, seed, 0)
+    }
+
+    /// Give eligible under-levelled party members training experience in
+    /// trainer battles, up to the host game's current level target.
+    pub fn start_with_training(data: &'static crate::data::GameData, setup: &BattleSetup, seed: u64, training_level: u8) -> Result<Battle, Error> {
+        let engine = catch(|| FastBattle::from_setup_with_training(data, setup, seed, true, training_level.min(100)))?.map_err(Error::Setup)?;
         let current = current(&engine);
         Ok(Battle { engine, current })
     }

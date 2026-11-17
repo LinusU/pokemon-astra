@@ -104,3 +104,12 @@ describe("save files", () => {
     expect(recovered.flags).toEqual(save.flags);
   });
 });
+
+it("recovers a v1 adventure beyond the edge of a resized route", () => {
+  const original = { ...populated(), map: "route02", x: 20.5, y: 38.5 };
+  expect(isValidSave(original)).toBe(true);
+  const repaired = normalizeSavePosition(original);
+  expect(repaired.y).toBeLessThan(WORLD.route02.height);
+  expect(repaired.party).toEqual(original.party);
+  expect(repaired.flags).toEqual(original.flags);
+});

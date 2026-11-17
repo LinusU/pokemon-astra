@@ -71,9 +71,25 @@
   background: #db6053;
 }
 .battle-hp-value {
-  text-align: right;
+  margin-left: auto;
   font-size: 0.8em;
 }
+.battle-hud-bottom {
+  display: flex;
+  align-items: center;
+  margin-top: 3px;
+}
+.battle-status {
+  padding: 2px 3px 1px;
+  border-radius: 2px;
+  font-size: 0.68em;
+  color: #fff;
+  background: #525f69;
+}
+.battle-status.psn { background: #793b91; }
+.battle-status.brn { background: #a2442a; }
+.battle-status.frz { background: #246b89; }
+.battle-status.par { background: #775a0b; }
 .battle-mon {
   position: absolute;
   width: 33%;
@@ -117,7 +133,7 @@
 .battle-controls {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-content: center;
+  align-content: safe center;
   gap: 2px;
   min-width: 40%;
   max-width: 57%;
@@ -125,6 +141,11 @@
 }
 .battle-controls:empty {
   display: none;
+}
+.battle-controls:has(.battle-continue) {
+  grid-template-columns: auto;
+  align-content: end;
+  min-width: 0;
 }
 .battle-controls button {
   font: inherit;
@@ -137,6 +158,17 @@
   background: transparent;
   color: #26352f;
   cursor: pointer;
+}
+.battle-controls button small {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.66em;
+  color: #4a624d;
+}
+.battle-controls button:disabled {
+  color: #6d786d;
+  opacity: 0.65;
+  cursor: default;
 }
 .battle-controls button:focus-visible,
 .battle-controls button:hover {
@@ -368,7 +400,24 @@
 .battle-controls {
   min-height: 0;
 }
+.battle-choosing .battle-box {
+  flex-basis: 38%;
+  max-height: 38%;
+}
+.battle-choosing .battle-controls {
+  width: 64%;
+  max-width: 64%;
+}
+.battle-choosing .battle-copy {
+  white-space: pre-line;
+}
 .battle-mon.concealed {
+  visibility: hidden;
+}
+.conceal-enemy .battle-enemy,
+.conceal-enemy .battle-enemy-hud,
+.conceal-player .battle-player,
+.conceal-player .battle-player-hud {
   visibility: hidden;
 }
 .battle-mon[class*="effect-"]:after,
@@ -543,12 +592,115 @@
 }
 .battle-field {
   background:
-    radial-gradient(ellipse 25% 9% at 24% 91%, #b3d493 0 98%, transparent 100%),
-    radial-gradient(ellipse 21% 7% at 78% 54%, #b3d493 0 98%, transparent 100%),
-    #f2f2d9;
+    radial-gradient(ellipse 25% 9% at 24% 91%, var(--battle-platform, #b3d493) 0 94%, transparent 100%),
+    radial-gradient(ellipse 21% 7% at 78% 54%, var(--battle-platform, #b3d493) 0 94%, transparent 100%),
+    linear-gradient(var(--battle-sky, #deeee0) 27%, var(--battle-ground, #f2f2d9) 68%);
 }
 .battle-field:before {
   display: none;
+}
+.battle-scene[data-arena="league"],
+.battle-scene[data-arena="champion"],
+.battle-scene[data-arena="legendary"] {
+  --battle-sky: #202642;
+  --battle-ground: #666180;
+  --battle-platform: #a392b3;
+}
+.battle-scene[data-arena="champion"] {
+  --battle-sky: #191b35;
+  --battle-ground: #534974;
+  --battle-platform: #c4ad7d;
+}
+.battle-scene[data-arena="legendary"] {
+  --battle-sky: #233b52;
+  --battle-ground: #497269;
+  --battle-platform: #8cbe9e;
+}
+.battle-scene:is([data-arena="league"], [data-arena="champion"], [data-arena="legendary"]) .battle-field::before {
+  display: block;
+  inset: 0;
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  box-shadow: none;
+  background:
+    radial-gradient(circle at 47% 19%, #d8c8e570 0 1px, transparent 2px),
+    radial-gradient(circle at 24% 40%, #ded2ea70 0 1px, transparent 2px),
+    radial-gradient(circle at 83% 14%, #d8c8e570 0 1px, transparent 2px),
+    radial-gradient(circle at 6% 10%, #e8d9b470 0 1px, transparent 2px),
+    linear-gradient(0deg, #22223645, transparent 48%);
+  pointer-events: none;
+}
+.battle-scene[data-arena="champion"] .battle-field::before {
+  background:
+    radial-gradient(ellipse at 50% 60%, #cbadc450 0 18%, transparent 64%),
+    radial-gradient(circle at 64% 17%, #f9df9c 0 1px, transparent 2px),
+    radial-gradient(circle at 53% 27%, #f3d7a77d 0 1px, transparent 2px),
+    radial-gradient(circle at 79% 13%, #f9df9c 0 1px, transparent 2px),
+    radial-gradient(circle at 18% 27%, #f9df9c 0 1px, transparent 2px),
+    linear-gradient(0deg, #191b3545, transparent 55%);
+}
+.battle-scene[data-arena="champion"] .battle-box {
+  border-color: #7a655b;
+  background: #f7efda;
+}
+.battle-scene:is([data-arena="league"], [data-arena="champion"], [data-arena="legendary"]) .battle-enemy-hud {
+  padding: 3px 6px;
+  background: #f4efdc;
+  border: 2px solid #28263b;
+  border-radius: 2px 2px 10px 2px;
+  box-shadow: 2px 2px #9b8f9a;
+}
+.battle-challenger {
+  position: absolute;
+  z-index: 2;
+  inset: 10% 14% auto;
+  padding: clamp(5px, 2vw, 13px);
+  display: grid;
+  justify-items: center;
+  gap: clamp(3px, 1vw, 7px);
+  color: #233631;
+  background: #f4efdc;
+  border: 3px double #315c50;
+  box-shadow: 3px 3px #405a5866;
+  text-align: center;
+  animation: challenger-enter calc(320ms * var(--battle-speed, 1)) steps(6, end) both;
+}
+.battle-scene:is([data-arena="league"], [data-arena="champion"]) .battle-challenger {
+  color: #f6e7c0;
+  background: #25233b;
+  border-color: #c1a46a;
+  box-shadow: 3px 3px #18102b8c;
+}
+.battle-challenge-emblem {
+  width: clamp(16px, 5vw, 40px);
+  aspect-ratio: 1;
+  background: currentColor;
+  clip-path: polygon(50% 0, 60% 33%, 89% 11%, 67% 40%, 100% 50%, 67% 60%, 89% 89%, 60% 67%, 50% 100%, 40% 67%, 11% 89%, 33% 60%, 0 50%, 33% 40%, 11% 11%, 40% 33%);
+}
+.battle-challenger-name {
+  font-size: clamp(18px, 5.4vw, 34px);
+  line-height: 0.9;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+.battle-team {
+  display: flex;
+  gap: 4px;
+}
+.battle-team i {
+  width: clamp(8px, 2.4vw, 15px);
+  aspect-ratio: 1;
+  border: 1px solid #342e3b;
+  border-radius: 50%;
+  outline: 1px solid #ffedc580;
+  background:
+    radial-gradient(circle, #fff6da 0 18%, #342e3b 20% 31%, transparent 33%),
+    linear-gradient(#df716c 0 43%, #342e3b 43% 56%, #fff6da 56%);
+}
+@keyframes challenger-enter {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 .battle-scene.capture .battle-enemy:after {
   position: absolute;
@@ -596,3 +748,12 @@
     filter: brightness(1);
   }
 }
+
+.battle-mon.faint { animation-duration: calc(650ms * var(--battle-speed, 1)); }
+.battle-mon.withdraw { animation-duration: calc(450ms * var(--battle-speed, 1)); }
+.battle-mon.appear { animation-duration: calc(500ms * var(--battle-speed, 1)); }
+.battle-mon[class*="effect-"],
+.battle-mon[class*="effect-"]:after { animation-duration: calc(500ms * var(--battle-speed, 1)); }
+.battle-exp i { animation-duration: calc(550ms * var(--battle-speed, 1)); }
+.battle-scene.capture.throwing .battle-enemy:after,
+.battle-scene.capture.throwing .battle-enemy img { animation-duration: calc(450ms * var(--battle-speed, 1)); }

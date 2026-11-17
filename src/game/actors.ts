@@ -77,6 +77,33 @@ export function interactionDistance(
   return distance;
 }
 
+export function objectVisible(object: WorldObject, flags: ReadonlySet<string>) {
+  return (
+    (object.kind !== "item" && object.kind !== "legendary") ||
+    !flags.has(object.setsFlag || object.id)
+  );
+}
+
+/** Choose the same reachable object for the interaction prompt and confirm input. */
+export function interactionTarget(
+  map: WorldMap,
+  player: { x: number; y: number; facing: string },
+  flags: ReadonlySet<string>,
+  position: (object: WorldObject) => { x: number; y: number },
+) {
+  let nearest: WorldObject | undefined;
+  let distance = Infinity;
+  for (const object of map.objects) {
+    if (!objectVisible(object, flags)) continue;
+    const reach = interactionDistance(map, player, position(object));
+    if (reach < distance) {
+      nearest = object;
+      distance = reach;
+    }
+  }
+  return nearest;
+}
+
 /** Moving people have one shared position for drawing, interactions, collisions and trainer sight. */
 export class WorldActors {
   states: Record<string, ActorState> = {};

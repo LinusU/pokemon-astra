@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { WorldActors, terrainBlocked } from "../src/game/actors";
+import {
+  WorldActors,
+  interactionTarget,
+  terrainBlocked,
+} from "../src/game/actors";
 import type { WorldMap, WorldObject } from "../src/world";
 const person: WorldObject = {
   id: "walker",
@@ -37,6 +41,28 @@ const map = (objects: WorldObject[]): WorldMap => ({
   ),
 });
 describe("living overworld actors", () => {
+  it("uses live positions and excludes completed pickups from the confirm target", () => {
+    const item: WorldObject = {
+      ...person,
+      id: "pickup",
+      kind: "item",
+      x: 2,
+      y: 3,
+    };
+    const m = map([person, item]);
+    const actors = new WorldActors();
+    actors.enter(m);
+    const player = { x: 1.5, y: 3.5, facing: "right" };
+    const target = (flags: string[]) =>
+      interactionTarget(m, player, new Set(flags), (object) =>
+        actors.position(object),
+      );
+    actors.states.walker.x = 2.8;
+    expect(target([])).toBe(item);
+    expect(target(["pickup"])).toBe(person);
+    player.facing = "left";
+    expect(target([])).toBeUndefined();
+  });
   it("shares moving positions with collision and interaction", () => {
     const m = map([person]),
       actors = new WorldActors();

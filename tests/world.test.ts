@@ -112,7 +112,8 @@ describe("authored region", () => {
           ?.victoryDialogue,
       ).toBeTruthy();
     expect(
-      WORLD.league.objects.find((o) => o.id === "league_4")?.victoryDialogue,
+      WORLD.league_mira.objects.find((o) => o.id === "league_4")
+        ?.victoryDialogue,
     ).toContain("Hall of Fame");
     for (const m of maps.filter((m) => m.kind === "town"))
       expect(
@@ -218,7 +219,7 @@ describe("authored region", () => {
       const flags = new Set<string>(),
         seen = new Set(["dewdrop"]);
       let badges = 0;
-      for (let pass = 0; pass < 100; pass++) {
+      for (let pass = 0; pass < maps.length * 2; pass++) {
         let changed = false;
         for (const id of [...seen]) {
           const m = WORLD[id];
@@ -245,16 +246,16 @@ describe("authored region", () => {
       expect(seen.has(blocked), `${blocked} with ${cap} badges`).toBe(false);
     }
   });
-  it("unlocks the full campaign in order without inaccessible dependencies", () => {
+  it("unlocks the full campaign without requiring research catches", () => {
     const flags = new Set<string>();
     let badges = 0;
     const reachable = new Set(["dewdrop"]);
-    for (let pass = 0; pass < 100; pass++) {
+    for (let pass = 0; pass < maps.length * 2; pass++) {
       let changed = false;
       for (const id of [...reachable]) {
         const m = WORLD[id];
         for (const o of m.objects)
-          if (can(o.requires, flags, badges)) {
+          if (can(o.requires, flags, badges, 0)) {
             if (o.setsFlag && !flags.has(o.setsFlag)) {
               flags.add(o.setsFlag);
               changed = true;
@@ -265,7 +266,7 @@ describe("authored region", () => {
             }
           }
         for (const e of m.exits)
-          if (can(e.requires, flags, badges) && !reachable.has(e.to)) {
+          if (can(e.requires, flags, badges, 0) && !reachable.has(e.to)) {
             reachable.add(e.to);
             changed = true;
           }
@@ -275,6 +276,8 @@ describe("authored region", () => {
     expect(badges).toBe(8);
     expect(flags.has("engine_stopped")).toBe(true);
     expect(flags.has("champion")).toBe(true);
+    expect(flags.has("aurora_restored")).toBe(true);
+    expect(flags.has("quest_atlas_complete")).toBe(false);
     expect(maps.filter((m) => !reachable.has(m.id)).map((m) => m.id)).toEqual(
       [],
     );
@@ -385,39 +388,49 @@ describe("opening composition", () => {
   });
 });
 
+function connectedFloor(
+  map: (typeof maps)[number],
+  start: { x: number; y: number },
+  passable: (tile: string) => boolean,
+) {
+  const occupied = new Set(
+    map.objects
+      .filter((o) =>
+        ["person", "trainer", "leader", "healer", "shop", "starter"].includes(
+          o.kind,
+        ),
+      )
+      .map((o) => `${o.x},${o.y}`),
+  );
+  const queue: [number, number][] = [[start.x, start.y]];
+  const seen = new Set<string>();
+  for (let i = 0; i < queue.length; i++) {
+    const [x, y] = queue[i];
+    const key = `${x},${y}`;
+    const tile = map.tiles[y]?.[x];
+    if (
+      tile === undefined ||
+      !passable(tile) ||
+      seen.has(key) ||
+      occupied.has(key)
+    )
+      continue;
+    seen.add(key);
+    queue.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+  }
+  return seen;
+}
+
 it("keeps doors and conversations reachable around solid people", () => {
   for (const m of maps) {
-    const id = m.id;
-    const solid = new Set(
-      m.objects
-        .filter((o) =>
-          ["person", "trainer", "leader", "healer", "shop", "starter"].includes(
-            o.kind,
-          ),
-        )
-        .map((o) => `${o.x},${o.y}`),
-    );
     const start = m.exits.find((e) => e.direction) ?? m.exits[0];
-    const queue: [number, number][] = [[start.x, start.y]],
-      seen = new Set<string>();
-    for (let i = 0; i < queue.length; i++) {
-      const [x, y] = queue[i],
-        key = `${x},${y}`;
-      if (
-        x < 0 ||
-        y < 0 ||
-        x >= m.width ||
-        y >= m.height ||
-        seen.has(key) ||
-        solid.has(key) ||
-        "#rw~BCPTS".includes(m.tiles[y][x])
-      )
-        continue;
-      seen.add(key);
-      queue.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
-    }
+    const seen = connectedFloor(
+      m,
+      start,
+      (tile) => !"#rw~BCPTS".includes(tile),
+    );
     for (const e of m.exits)
-      expect(seen.has(`${e.x},${e.y}`), `${id} exit ${e.to}`).toBe(true);
+      expect(seen.has(`${e.x},${e.y}`), `${m.id} exit ${e.to}`).toBe(true);
     for (const o of m.objects) {
       const adjacent = [
         [o.x + 1, o.y],
@@ -425,9 +438,94 @@ it("keeps doors and conversations reachable around solid people", () => {
         [o.x, o.y + 1],
         [o.x, o.y - 1],
       ].some(([x, y]) => seen.has(`${x},${y}`));
-      expect(adjacent, `${id} interaction ${o.id}`).toBe(true);
+      expect(adjacent, `${m.id} interaction ${o.id}`).toBe(true);
     }
   }
+});
+
+it("keeps encounters off mandatory roads and grass accessible in every habitat", () => {
+  for (const m of maps.filter((m) => m.encounters.length)) {
+    const [entry] = m.exits;
+    const dry = connectedFloor(
+      m,
+      entry,
+      (tile) => !"#rw~BCPTSg".includes(tile),
+    );
+    expect(
+      m.exits.every((exit) => dry.has(`${exit.x},${exit.y}`)),
+      m.id,
+    ).toBe(true);
+    const withGrass = connectedFloor(
+      m,
+      entry,
+      (tile) => !"#rw~BCPTS".includes(tile),
+    );
+    const accessibleGrass = [...withGrass].filter((key) => {
+      const [x, y] = key.split(",").map(Number);
+      return m.tiles[y][x] === "g";
+    });
+    expect(accessibleGrass.length, m.id).toBeGreaterThanOrEqual(8);
+  }
+});
+
+it("enforces each dungeon’s stages at its stairs and opens a direct return", () => {
+  for (const entry of maps.filter(
+    (m) => m.kind === "dungeon" && m.id.endsWith("_1"),
+  )) {
+    const id = entry.id.slice(0, -2);
+    const middle = WORLD[`${id}_2`];
+    const final = WORLD[`${id}_3`];
+    const objective = final.objects.find((o) => o.id === `${id}_objective`)!;
+    const mechanism = middle.objects.find((o) => o.id === `${id}_mechanism`)!;
+    const stairs = (from: typeof entry, to: typeof entry) =>
+      from.exits.find((e) => e.to === to.id)!;
+    expect(entry.objects.some((o) => o.id === `${id}_step1`)).toBe(true);
+    expect(stairs(entry, middle).requires?.flags).toEqual([`${id}_step1`]);
+    expect(stairs(middle, final).requires?.flags).toEqual([mechanism.setsFlag]);
+    expect(stairs(entry, final).requires?.flags).toEqual([objective.setsFlag]);
+    expect(stairs(final, entry).requires?.flags).toEqual([objective.setsFlag]);
+    expect(stairs(final, middle).requires).toBeUndefined();
+  }
+});
+
+it("paces the Astral League through separate chambers", () => {
+  const chambers = [
+    "league",
+    "league_petra",
+    "league_nyx",
+    "league_gale",
+    "league_mira",
+  ];
+  chambers.forEach((id, i) => {
+    const map = WORLD[id];
+    expect(map.objects.filter((o) => o.trainer).map((o) => o.id)).toEqual([
+      `league_${i}`,
+    ]);
+    if (i === chambers.length - 1) return;
+    const onward = map.exits.find((e) => e.to === chambers[i + 1]);
+    expect(onward?.requires?.flags).toEqual([`league_${i}_won`]);
+  });
+  expect(
+    WORLD.league_mira.exits.find((e) => e.to === "league")?.requires?.flags,
+  ).toEqual(["champion"]);
+});
+
+it("keeps authored replacements compact and returns around the far shore", () => {
+  for (const m of maps.filter((m) => m.kind === "dungeon")) {
+    expect(m.width).toBeLessThanOrEqual(20);
+    expect(m.height).toBeLessThanOrEqual(16);
+  }
+  for (const [town, road, direction] of [
+    ["copperwick", "route08", "north"],
+    ["sunspire", "route10", "west"],
+    ["reedhaven", "route12", "west"],
+    ["rimepeak", "route16", "north"],
+    ["bellweather", "route18", "west"],
+    ["aster", "route20", "north"],
+  ])
+    expect(WORLD[town].exits.find((e) => e.to === road)?.direction).toBe(
+      direction,
+    );
 });
 
 it("keeps the full three-cell width of every road mouth open", () => {

@@ -343,10 +343,56 @@ impl Engine {
         if self.mem.rw(bc + u16::from(MON_HP)) == 0 {
             return Ok(()); // fainted
         }
-        if !self.small_far_flag_action(W_BATTLE_PARTICIPANTS_NOT_FAINTED, cur, FlagAction::Check) {
+        let participated = self.small_far_flag_action(W_BATTLE_PARTICIPANTS_NOT_FAINTED, cur, FlagAction::Check);
+        let training = self.training_exp(bc);
+        if !participated && training == 0 {
             return Ok(());
         }
-        // give stat exp
+        let gained = if participated { self.participation_exp(bc) } else {
+            self.mem.wb(W_STRING_BUFFER2 + 2, 0); // regular, non-traded message
+            0
+        }.max(training);
+        let [q2, q3] = gained.to_be_bytes();
+        self.mem.wb(W_STRING_BUFFER2 + 1, q3);
+        self.mem.wb(W_STRING_BUFFER2, q2);
+        self.get_nickname(W_PARTY_MON_NICKNAMES, cur);
+        self.text(r::TEXT_MON_GAINED_EXP_POINT);
+        let v = self.mem.rb(W_STRING_BUFFER2 + 1);
+        self.mem.wb(H_QUOTIENT + 3, v);
+        let v = self.mem.rb(W_STRING_BUFFER2);
+        self.mem.wb(H_QUOTIENT + 2, v);
+        self.animate_exp_bar();
+        self.apply_earned_exp(bc, cur)
+    }
+
+    /// Training uses the member's growth curve and only brings them toward
+    /// local readiness. Benched members receive EXP without stat EXP.
+    fn training_exp(&self, bc: u16) -> u16 {
+        let level = self.mem.rb(bc + u16::from(MON_LEVEL));
+        let enemy_level = self.mem.rb(W_ENEMY_MON_LEVEL);
+        let goal = self.training_level.min(enemy_level.saturating_add(9));
+        if level >= goal || self.battle_mode() == WILD_BATTLE
+            || self.mem.rb(W_GIVING_EXPERIENCE_TO_EXP_SHARE_HOLDERS) != 0
+        {
+            return 0;
+        }
+        let species = self.mem.rb(bc + u16::from(MON_SPECIES));
+        let rate = self.data.growth_rate(self.data.species(species).growth_rate);
+        let exp_at = |level: u8| {
+            let n = i32::from(level);
+            let c = i32::from(rate.quadratic & 0x7f) * if rate.quadratic & 0x80 == 0 { 1 } else { -1 };
+            (i32::from(rate.cubic >> 4) * n.pow(3) / i32::from(rate.cubic & 0x0f)
+                + c * n.pow(2) + i32::from(rate.linear) * n - i32::from(rate.constant)).max(0)
+        };
+        let exp = bc + u16::from(MON_EXP);
+        let current = i32::from_be_bytes([0, self.mem.rb(exp), self.mem.rb(exp + 1), self.mem.rb(exp + 2)]);
+        let step = exp_at(level + 1) - exp_at(level);
+        let award = if goal - level >= 5 { step } else { step * 2 / 3 };
+        award.min(exp_at(goal) - current).clamp(0, 65535) as u16
+    }
+
+    /// Original Crystal stat EXP and regular battle EXP calculation.
+    fn participation_exp(&mut self, bc: u16) -> u16 {
         let mut de = bc + u16::from(MON_STAT_EXP) + 1;
         for i in 0..u16::from(NUM_EXP_STATS) {
             let hl = W_ENEMY_MON_BASE_STATS + i;
@@ -415,17 +461,10 @@ impl Engine {
         if self.mem.rb(item) == LUCKY_EGG {
             self.boost_exp();
         }
-        let q3 = self.mem.rb(H_QUOTIENT + 3);
-        self.mem.wb(W_STRING_BUFFER2 + 1, q3);
-        let q2 = self.mem.rb(H_QUOTIENT + 2);
-        self.mem.wb(W_STRING_BUFFER2, q2);
-        self.get_nickname(W_PARTY_MON_NICKNAMES, cur);
-        self.text(r::TEXT_MON_GAINED_EXP_POINT);
-        let v = self.mem.rb(W_STRING_BUFFER2 + 1);
-        self.mem.wb(H_QUOTIENT + 3, v);
-        let v = self.mem.rb(W_STRING_BUFFER2);
-        self.mem.wb(H_QUOTIENT + 2, v);
-        self.animate_exp_bar();
+        u16::from_be_bytes([self.mem.rb(H_QUOTIENT + 2), self.mem.rb(H_QUOTIENT + 3)])
+    }
+
+    fn apply_earned_exp(&mut self, bc: u16, cur: u8) -> Flow {
         // MON_EXP += hQuotient + 2..3
         let exp = bc + u16::from(MON_EXP);
         let (v, carry) = self.mem.rb(exp + 2).overflowing_add(self.mem.rb(H_QUOTIENT + 3));

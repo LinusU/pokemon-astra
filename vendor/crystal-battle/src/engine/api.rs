@@ -59,7 +59,12 @@ impl FastBattle {
     /// Start a battle from a game's [`BattleSetup`] with the random stream at
     /// `seed`, producing its [`Event`]s when `events`.
     pub fn from_setup(data: &'static crate::data::GameData, setup: &crate::battle::BattleSetup, seed: u64, events: bool) -> Result<FastBattle, String> {
-        let engine = super::load::start(data, setup, seed, events).map_err(|error| error.to_string())?;
+        Self::from_setup_with_training(data, setup, seed, events, 0)
+    }
+
+    pub(crate) fn from_setup_with_training(data: &'static crate::data::GameData, setup: &crate::battle::BattleSetup, seed: u64, events: bool, training_level: u8) -> Result<FastBattle, String> {
+        let mut engine = super::load::start(data, setup, seed, events).map_err(|error| error.to_string())?;
+        engine.training_level = training_level;
         Ok(Self::from_engine(engine, TurnEntry::TurnStart))
     }
 

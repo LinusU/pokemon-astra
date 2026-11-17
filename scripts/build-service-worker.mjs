@@ -31,7 +31,7 @@ const FILES=${JSON.stringify(assets)};
 const local=p=>new URL(p,ROOT).href;
 self.addEventListener('install',event=>event.waitUntil((async()=>{
  const cache=await caches.open(CACHE);
- await cache.addAll(FILES.map(local));
+ await cache.addAll(FILES.map(file=>new Request(local(file),{cache:'reload'})));
  const shell=await cache.match(local('index.html'));
  if(shell)await cache.put(ROOT.href,shell);
  await self.skipWaiting();

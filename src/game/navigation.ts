@@ -1,5 +1,24 @@
 import { WORLD, type Exit, type WorldMap } from "../world";
 
+/** The destination map's origin relative to this map's origin, in tiles. */
+export function connectionOffset(map: WorldMap, exit: Exit) {
+  const destination = WORLD[exit.to];
+  return {
+    x:
+      exit.direction === "east"
+        ? map.width
+        : exit.direction === "west"
+          ? -destination.width
+          : exit.x - exit.toX,
+    y:
+      exit.direction === "south"
+        ? map.height
+        : exit.direction === "north"
+          ? -destination.height
+          : exit.y - exit.toY,
+  };
+}
+
 export function connectionAt(
   map: WorldMap,
   x: number,
@@ -35,16 +54,9 @@ export function crossConnection(
   x: number,
   y: number,
 ) {
-  const destination = WORLD[exit.to];
-  if (exit.direction === "east")
-    return { x: x - map.width, y: y + exit.toY - exit.y };
-  if (exit.direction === "west")
-    return { x: x + destination.width, y: y + exit.toY - exit.y };
-  if (exit.direction === "north")
-    return { x: x + exit.toX - exit.x, y: y + destination.height };
-  if (exit.direction === "south")
-    return { x: x + exit.toX - exit.x, y: y - map.height };
-  return { x: exit.toX + 0.5, y: exit.toY + 0.5 };
+  if (!exit.direction) return { x: exit.toX + 0.5, y: exit.toY + 0.5 };
+  const offset = connectionOffset(map, exit);
+  return { x: x - offset.x, y: y - offset.y };
 }
 
 export function connectedTile(

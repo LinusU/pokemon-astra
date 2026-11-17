@@ -8,6 +8,7 @@
     "build": "sh scripts/build-native.sh && tsc --noEmit && vite build && node scripts/build-service-worker.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:campaign": "sh scripts/build-native.sh && vite-node scripts/smoke-campaign.ts",
     "test:native": "cargo test --manifest-path native/Cargo.toml && node scripts/smoke-native.cjs",
     "preview": "vite preview --host 127.0.0.1"
   },

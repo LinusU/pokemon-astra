@@ -1,6 +1,6 @@
 # Verification record — November 17, 2026
 
-## Automated checks passed
+## Earlier build checks
 
 - `npm run build`: compiles the actual Rust WASM bridge, typechecks TypeScript, builds Vite assets, and generates a content-versioned offline worker. Final bundle excludes ROMs and saves.
 - `npm test`: 49 tests across nine files: world content/progression, actors, navigation, input, audio scheduling, battle presentation, offline caching, save validation, and native bridge integration.
@@ -12,7 +12,7 @@
 - Battle/graphics checks: native damage/status/capture events, all 251 move classifications, trainer names and prizes, replacement Pokémon HP, level-up move choices, directional walk frames, and exterior-only sprite transparency.
 - Audio/offline checks: gesture-unlocked scheduling, scene changes and mute handling; generated service worker installation and offline shell/JS/CSS/WASM retrieval with cartridge/save exclusion. Eight music tracks and seven emitted native sound-effect IDs produced nonzero PCM during local ROM verification.
 
-## Browser checks passed
+## Earlier browser checks
 
 Using the actual production JavaScript/WASM and the user's local English Crystal 1.1 ROM:
 
@@ -29,8 +29,19 @@ Using the actual production JavaScript/WASM and the user's local English Crystal
 
 Polish QA additionally caught incorrect overworld tree cells, opaque white sprite regions being removed, oversized small Pokémon, stale replacement HP, missing capture-ball positioning, raw native trainer names/prize text, parcel feedback, landscape controls, and offline startup. These were fixed before this publication.
 
+## Current release verification
+
+- The production build compiled the Rust engine and TypeScript, emitted 13 offline assets, and passed the cartridge-exclusion check.
+- All 61 Vitest checks passed across 11 test files, alongside three Rust tests and the native WASM smoke check using the local English Crystal 1.1 ROM.
+- The revised region contains 112 maps, 95 authored trainer battles, and 46,092 total map tiles. The previous build had 108 maps and 77,504 tiles. Separate suites check reachability with solid characters, grass and species coverage, badge barriers, League chamber order, and a valid journal route at each step from a fresh save through the Living Atlas.
+- Three native campaign runs, one per starter, won 64 pre-League trainer battles each and cleared all eight gyms and the five League fights. They caught 15–16 Pokémon, included one optional trainer per numbered campaign route, used Centers between pre-League fights, and made informed switch, evolution and inventory choices. Each could buy a ₽40,400 League kit with earned funds. No repeated wild fights for experience were needed. The check is reproducible with `npm run test:campaign`.
+- Chrome rendered all 112 maps using the local cartridge. Visual review covered all 12 settlements plus representative routes, gyms, caves and service interiors. A 390×780 browser test used simulated standard Gamepad input to verify two-column navigation, held-direction scrolling, confirm and back.
+- In an isolated browser save, a new journey imported the local ROM, walked from home to the lab and chose Poliwag. The party screen showed Bubble, Water Gun, their PP and the level-25 evolution. Local maps displayed the player, next destination, exits and bearings.
+- A save from the campaign simulation was imported in Mira’s chamber. The entire six-opponent Champion battle was played through the production UI. It awarded victory, showed the six winning partners in the Hall of Fame, and advanced the journal to the Aurora Sanctuary. Reloading retained Champion progress. A later browser check confirmed the updated ceremonial arena, a scaled rematch, staged trainer introduction, Pokémon reveals and twilight battle scene.
+- Tideglass was visited using Fly. Its pier, lighthouse, Surf skiff, and route map were inspected. With the local server stopped, a reload continued the saved Tideglass adventure and the postgame map still offered Fly to Dewdrop. The worker’s update flow was also exercised against successive production builds.
+
 ## Limits
 
-This remains a playable alpha with a substantial presentation pass. No full human playthrough from new save to Champion and 251 catches has been completed. Difficulty, economy, dialogue pacing, and all postgame quests require sustained playtesting. A physical 8BitDo FlipPad and native phone home-screen installation were not available for testing. The original battle library still has explicitly unported paths (notably PP Up and contest-only mechanics), which Astra does not offer. Move effects use custom animation families covering all 251 move IDs and native battle events; Crystal's complete per-move animation-script interpreter and its script-only sound cues are not implemented. Some reserve habitats and mechanism puzzles remain simple. The opening towns received the most detailed visual playtesting.
+The scripted campaign measures playability with informed team choices. Uninterrupted first-time human playthroughs, time to complete the 251-species Pokédex, physical FlipPad input, and native phone installation remain unverified. Puzzles use themed mechanisms and persistent conditions. Move effects use custom animation families; upstream battle paths such as PP Up and contest-only mechanics remain unported.
 
-The synthesizer's Gen 2 music wave channel is implemented in the vendored 0.2.3 code; the upstream README checkbox is stale.
+The synthesizer’s Gen 2 music wave channel is implemented in the vendored 0.2.3 code. The upstream README checkbox is stale.

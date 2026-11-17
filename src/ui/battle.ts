@@ -4,15 +4,18 @@ import "./battle.css";
 
 type Side = "Player" | "Enemy";
 type Event = Record<string, any>;
+type Experience = { mon: string; exp: number };
 type Options = {
   layer: HTMLElement;
   trainerName?: string;
   prizeMoney?: number;
+  arena?: "league" | "champion";
+  wildEncounter?: "legendary";
   snapshot: BattleSnapshot;
   act: (index: number) => BattleSnapshot;
   sprite: (id: number, back?: boolean) => string;
-  species: (id: number) => { name: string };
-  move: (id: number) => { name: string; type?: number };
+  species: (id: number) => { name: string; types?: number[] };
+  move: (id: number) => { name: string; type?: number; pp?: number; power?: number };
   cry: (id: number) => void;
   sound?: (id: number) => void;
   itemName: (id: number) => string;
@@ -21,6 +24,20 @@ type Options = {
   finish: (snapshot: BattleSnapshot) => void;
   error: (error: unknown) => void;
 };
+
+const typeNames: Record<number, string> = {
+  0: "Normal", 1: "Fighting", 2: "Flying", 3: "Poison", 4: "Ground",
+  5: "Rock", 7: "Bug", 8: "Ghost", 9: "Steel", 20: "Fire", 21: "Water",
+  22: "Grass", 23: "Electric", 24: "Psychic", 25: "Ice", 26: "Dragon", 27: "Dark",
+};
+
+export function battleStatus(status: number): [string, string] | undefined {
+  if (status & 7) return ["SLP", "Asleep"];
+  if (status & 8) return ["PSN", "Poisoned"];
+  if (status & 16) return ["BRN", "Burned"];
+  if (status & 32) return ["FRZ", "Frozen"];
+  if (status & 64) return ["PAR", "Paralyzed"];
+}
 
 const nativeTemplates: Record<string, [string, string[]]> = {
   WildAppeared: ["Wild … appeared!", ["mon"]],
@@ -410,7 +427,7 @@ export function moveEffect(name: string, type?: number): string {
     27: "psychic",
   };
   const n = name.toLowerCase();
-  if (/fire|flame|ember|burn|heat|blast/.test(n)) return "fire";
+  if (/fire|flame|ember|burn|heat/.test(n)) return "fire";
   if (/water|bubble|surf|hydro|rain|whirlpool|crabhammer/.test(n))
     return "water";
   if (/thunder|shock|spark|zap/.test(n)) return "electric";
@@ -450,12 +467,35 @@ export function battleMonAtSendOut(
   return mon;
 }
 
+function groupExperience(events: Event[]): Event[] {
+  const grouped: Event[] = [];
+  let gains: Experience[] | undefined;
+  for (const event of events) {
+    const gain = event.Message?.GainedExp;
+    if (gain) {
+      if (!gains) {
+        gains = [];
+        grouped.push({ Experience: gains });
+      }
+      gains.push(gain);
+      continue;
+    }
+    if (
+      !event.ExpBar && !event.StatsBox && event.Sound === undefined
+      && !event.Message?.GrewToLevel && !event.Message?.LearnedMove
+    ) gains = undefined;
+    grouped.push(event);
+  }
+  return grouped;
+}
+
 export class BattlePresenter {
   private root: HTMLElement;
   private snapshot: BattleSnapshot;
   private shown: { player: BattleMon; enemy: BattleMon };
   private queue: Event[] = [];
   private category = "";
+  private bagItem: number | undefined;
   private waiting = false;
   private typing = false;
   private message = "";
@@ -467,7 +507,27 @@ export class BattlePresenter {
       player: this.initialMon("player"),
       enemy: this.initialMon("enemy"),
     };
-    o.layer.innerHTML = `<section class="battle-scene encounter" role="dialog" aria-label="Battle"><div class="battle-field"><div class="battle-hud battle-enemy-hud"></div><div class="battle-hud battle-player-hud"></div><div class="battle-mon battle-enemy"><img alt=""></div><div class="battle-mon battle-player"><img alt=""></div><div class="battle-fx"></div></div><div class="battle-box"><div class="battle-copy" aria-live="polite"></div><div class="battle-controls"></div></div></section>`;
+    const arena = o.arena ?? (o.trainerName === "Champion Mira" ? "champion" : o.wildEncounter ?? "field");
+    const trainer = o.wildEncounter ? undefined : o.trainerName;
+    const teamSize = o.snapshot.state.enemy.party?.length ?? 0;
+    const trainerIntro = trainer ? `<div class="battle-challenger">
+      <div class="battle-challenge-emblem" aria-hidden="true"></div>
+      <div class="battle-challenger-name">${escapeHtml(trainer)}</div>
+      ${teamSize ? `<div class="battle-team" role="img" aria-label="${teamSize} Pokémon">${'<i aria-hidden="true"></i>'.repeat(teamSize)}</div>` : ""}
+    </div>` : "";
+    o.layer.innerHTML = `<section class="battle-scene encounter" data-arena="${arena}" role="dialog" aria-label="Battle">
+      <div class="battle-field">
+        ${trainerIntro}
+        <div class="battle-hud battle-enemy-hud"></div>
+        <div class="battle-hud battle-player-hud"></div>
+        <div class="battle-mon battle-enemy"><img alt=""></div>
+        <div class="battle-mon battle-player"><img alt=""></div>
+        <div class="battle-fx"></div>
+      </div>
+      <div class="battle-box">
+        <div class="battle-copy" aria-live="polite"></div><div class="battle-controls"></div>
+      </div>
+    </section>`;
     this.root = o.layer.querySelector(".battle-scene")!;
     this.root.style.setProperty(
       "--battle-speed",
@@ -476,12 +536,16 @@ export class BattlePresenter {
     this.paint();
     const opening = o.snapshot.events as Event[];
     if (
-      opening.some((e) => e.Frontpic !== undefined || e.Message?.EnemySentOut)
+      trainer || opening.some((e) => e.Frontpic !== undefined || e.Message?.EnemySentOut || (e.Animation?.anim === 257 && e.Animation.user === "Enemy"))
     )
-      this.root.querySelector(".battle-enemy")!.classList.add("concealed");
-    if (opening.some((e) => e.Message?.PlayerSentOut))
-      this.root.querySelector(".battle-player")!.classList.add("concealed");
+      this.conceal("enemy");
+    if (opening.some((e) => e.Message?.PlayerSentOut || (e.Animation?.anim === 257 && e.Animation.user === "Player")))
+      this.conceal("player");
     this.enqueue(o.snapshot);
+  }
+  private conceal(side: "enemy" | "player", hidden = true) {
+    this.root.classList.toggle(`conceal-${side}`, hidden);
+    if (side === "enemy" && !hidden) this.root.querySelector(".battle-challenger")?.remove();
   }
   private initialMon(
     side: "player" | "enemy",
@@ -494,18 +558,25 @@ export class BattlePresenter {
       const mon = this.shown[side];
       const hud = this.root.querySelector<HTMLElement>(`.battle-${side}-hud`)!;
       const ratio = Math.max(0, Math.min(1, mon.hp / Math.max(1, mon.max_hp)));
-      const name = escapeHtml(this.o.species(mon.species).name);
-      hud.innerHTML = `<div class="battle-hud-top"><strong>${name}</strong><span>Lv${mon.level}</span></div><div class="battle-hp"><b>HP</b><div class="battle-hp-track"><i class="${ratio <= 0.2 ? "low" : ratio <= 0.5 ? "mid" : ""}" style="width:${ratio * 100}%"></i></div></div>${side === "player" ? `<div class="battle-hp-value">${mon.hp} / ${mon.max_hp}</div>` : ""}`;
       const image = this.root.querySelector<HTMLImageElement>(
         `.battle-${side} img`,
       )!;
-      image.src = this.o.sprite(mon.species, side === "player");
-      image.alt = name;
+      if (image.dataset.species !== String(mon.species)) {
+        image.dataset.species = String(mon.species);
+        image.src = this.o.sprite(mon.species, side === "player");
+        image.alt = this.o.species(mon.species).name;
+      }
+      const status = battleStatus(mon.status);
+      const badge = status
+        ? `<span class="battle-status ${status[0].toLowerCase()}" aria-label="${status[1]}" title="${status[1]}">${status[0]}</span>`
+        : "";
+      hud.innerHTML = `<div class="battle-hud-top"><strong>${escapeHtml(image.alt)}</strong><span>Lv${mon.level}</span></div><div class="battle-hp"><b>HP</b><div class="battle-hp-track"><i class="${ratio <= 0.2 ? "low" : ratio <= 0.5 ? "mid" : ""}" style="width:${ratio * 100}%"></i></div></div><div class="battle-hud-bottom">${badge}${side === "player" ? `<span class="battle-hp-value">${mon.hp} / ${mon.max_hp}</span>` : ""}</div>`;
     }
   }
   private enqueue(snapshot: BattleSnapshot) {
     this.snapshot = snapshot;
-    this.queue = [...snapshot.events] as Event[];
+    this.queue = groupExperience(snapshot.events as Event[]);
+    this.root.classList.remove("battle-choosing");
     this.root.querySelector(".battle-controls")!.innerHTML = "";
     this.next();
   }
@@ -521,20 +592,32 @@ export class BattlePresenter {
     if (this.disposed) return;
     const event = this.queue.shift();
     if (!event) {
-      this.shown = {
-        player: structuredClone(this.snapshot.state.player.active),
-        enemy: structuredClone(this.snapshot.state.enemy.active),
-      };
-      this.root
-        .querySelectorAll(".battle-mon")
-        .forEach((el) => el.classList.remove("faint", "withdraw"));
-      this.paint();
       if (this.snapshot.outcome && this.snapshot.result) {
         this.destroy();
         this.o.finish(this.snapshot);
         return;
       }
+      this.shown = {
+        player: structuredClone(this.snapshot.state.player.active),
+        enemy: structuredClone(this.snapshot.state.enemy.active),
+      };
+      for (const side of ["player", "enemy"] as const)
+        this.root.querySelector(`.battle-${side}`)?.classList.toggle("faint", this.shown[side].hp === 0);
+      if (this.snapshot.site === "OfferSwitch")
+        this.conceal("enemy");
+      else if (this.shown.enemy.hp > 0) this.conceal("enemy", false);
+      if (this.shown.player.hp > 0) this.conceal("player", false);
+      this.paint();
       this.menu();
+      return;
+    }
+    if (event.Experience) {
+      const [first, ...others] = event.Experience as Experience[];
+      const names = [first, ...others].map(({ mon, exp }) => `${mon} +${exp}`);
+      const text = others.length
+        ? `EXP · ${names.join(" · ")}`
+        : `${first.mon} gained ${first.exp} EXP!`;
+      this.say(text, true, true);
       return;
     }
     if (event.Message) {
@@ -553,9 +636,13 @@ export class BattlePresenter {
       }
       const kind =
         typeof message === "string" ? message : Object.keys(message)[0];
-      if (/Rain|Downpour|Sun|Sandstorm/.test(kind)) {
+      if (/^(Downpour|RainContinues|SunGotBright|SunlightIsStrong|SandstormBrewed|SandstormRages)$/.test(kind)) {
         this.root.classList.add("weather-flash");
-        this.delay(500, () => this.root.classList.remove("weather-flash"));
+        this.root.querySelector(".battle-field")?.addEventListener(
+          "animationend",
+          () => this.root.classList.remove("weather-flash"),
+          { once: true },
+        );
       }
       this.say(
         battleMessage(
@@ -565,6 +652,7 @@ export class BattlePresenter {
           this.o.trainerName,
           this.o.prizeMoney,
         ),
+        /^(UsedMove|StatRose|StatFell|GainedExp|GrewToLevel|LearnedMove|PartyGrewToLevel|CriticalHit|SuperEffective|NotVeryEffective)$/.test(kind),
       );
       return;
     }
@@ -579,7 +667,7 @@ export class BattlePresenter {
       return;
     }
     if (event.Frontpic !== undefined) {
-      this.root.querySelector(".battle-enemy")!.classList.remove("concealed");
+      this.conceal("enemy", false);
       this.o.cry(event.Frontpic);
       this.animate("enemy", "appear", 500);
       return;
@@ -613,7 +701,9 @@ export class BattlePresenter {
       return;
     }
     if (event.StatsBox) {
-      this.animate("player", "effect-heal", 500);
+      if (event.StatsBox.slot === this.snapshot.state.player.active_slot)
+        this.animate("player", "effect-heal", 500);
+      else this.next();
       return;
     }
     if (event.BallWobbles !== undefined && event.BallWobbles !== null) {
@@ -632,9 +722,7 @@ export class BattlePresenter {
       const a = event.Animation;
       const user = a.user === "Player" ? "player" : "enemy";
       if (a.anim === 257) {
-        this.root
-          .querySelector(`.battle-${user}`)!
-          .classList.remove("concealed");
+        this.conceal(user, false);
         this.shown[user] = this.initialMon(user, this.queue);
         this.paint();
         this.animate(user, "appear", 500);
@@ -681,12 +769,8 @@ export class BattlePresenter {
           name,
         );
       const side = (a.user === "Player") === self ? "player" : "enemy";
-      const following = this.queue.slice(
-        0,
-        this.queue.findIndex((e) => e.Message?.UsedMove) < 0
-          ? undefined
-          : this.queue.findIndex((e) => e.Message?.UsedMove),
-      );
+      const nextMove = this.queue.findIndex((e) => e.Message?.UsedMove);
+      const following = this.queue.slice(0, nextMove < 0 ? undefined : nextMove);
       const miss = following.some(
         (e) =>
           e.Message?.AttackMissed ||
@@ -739,7 +823,10 @@ export class BattlePresenter {
     max: number;
   }) {
     const side =
-      h.target === "Player" ? "player" : h.target === "Enemy" ? "enemy" : null;
+      h.target === "Player" ||
+      (typeof h.target === "object" && h.target.Party === this.snapshot.state.player.active_slot)
+        ? "player"
+        : h.target === "Enemy" ? "enemy" : null;
     if (!side) {
       this.next();
       return;
@@ -757,7 +844,7 @@ export class BattlePresenter {
     };
     requestAnimationFrame(step);
   }
-  private say(text: string) {
+  private say(text: string, routine = false, instant = false) {
     this.message = text;
     this.waiting = true;
     this.typing = true;
@@ -765,14 +852,22 @@ export class BattlePresenter {
     const controls = this.root.querySelector<HTMLElement>(".battle-controls")!;
     controls.innerHTML = `<button class="battle-continue" aria-label="Continue">▼</button>`;
     controls.querySelector("button")!.onclick = () => this.advance();
+    const quick = routine && this.o.speed > 1;
+    const settle = () => {
+      this.typing = false;
+      if (quick) this.delay(Math.max(720, text.length * 35), () => this.advance());
+    };
     let i = 0;
     const type = () => {
       if (!this.typing) return;
       copy.textContent = text.slice(0, ++i);
       if (i < text.length) this.delay(24, type);
-      else this.typing = false;
+      else settle();
     };
-    type();
+    if (instant) {
+      copy.textContent = text;
+      settle();
+    } else type();
   }
   advance() {
     if (!this.waiting) return;
@@ -782,12 +877,18 @@ export class BattlePresenter {
       this.root.querySelector(".battle-copy")!.textContent = this.message;
       return;
     }
+    clearTimeout(this.timer);
     this.waiting = false;
     this.root.querySelector(".battle-controls")!.innerHTML = "";
     this.next();
   }
   back() {
     if (this.waiting) return;
+    if (this.bagItem !== undefined) {
+      this.bagItem = undefined;
+      this.menu();
+      return;
+    }
     if (this.category) {
       this.category = "";
       this.menu();
@@ -821,28 +922,48 @@ export class BattlePresenter {
     const learn = (s.events as Event[])
       .map((x) => x.Message?.AskForgetMove)
       .find(Boolean);
+    const learningMon = s.state.player.party?.[s.learning_slot ?? s.state.player.active_slot] ?? active;
+    const memberName = (slot: number) => {
+      const saved = this.o.party()[slot];
+      const species = s.state.player.party?.[slot]?.species ?? saved?.species;
+      return saved?.nickname || (species ? this.o.species(species).name : "Pokémon");
+    };
+    const member = (slot: number) => {
+      const mon = s.state.player.party?.[slot];
+      if (!mon) return memberName(slot);
+      const status = battleStatus(mon.status);
+      return `${memberName(slot)} · Lv${mon.level} · ${mon.hp}/${mon.max_hp} HP${status ? ` · ${status[0]}` : ""}`;
+    };
+    const describeMove = (id: number, currentPp?: number) => {
+      const move = this.o.move(id);
+      const maxPp = move.pp != null && currentPp != null
+        ? Math.min(61, move.pp + Math.min(7, Math.floor(move.pp / 5)) * (currentPp >> 6))
+        : move.pp;
+      return [
+        typeNames[move.type ?? -1],
+        move.power != null && move.power > 1 ? `Pwr ${move.power}` : undefined,
+        currentPp != null ? `PP ${currentPp & 63}${maxPp ? `/${maxPp}` : ""}` : undefined,
+      ].filter(Boolean).join(" · ");
+    };
     const label = (v: any) => {
       const k = key(v),
         x = typeof v === "string" ? {} : v[k];
-      if (k === "Move")
-        return `${this.o.move(active.moves[x.slot]).name} · PP ${active.pp[x.slot]}`;
+      if (k === "Move") return this.o.move(active.moves[x.slot]).name;
       if (k === "Switch" || k === "ForcedSwitch")
-        return this.o.species(this.o.party()[x.slot]?.species || 1).name;
+        return member(x.slot);
       if (k === "Item") {
-        const mon = x.target == null ? undefined : this.o.party()[x.target];
-        const target = mon
-          ? mon.nickname || this.o.species(mon.species).name
-          : undefined;
-        return target
-          ? `${this.o.itemName(x.id)} → ${target}`
-          : this.o.itemName(x.id);
+        const target = x.target == null ? this.o.itemName(x.id) : member(x.target);
+        const targetMove = x.move_slot == null || x.target == null
+          ? undefined
+          : s.state.player.party?.[x.target]?.moves[x.move_slot];
+        return targetMove ? `${target} · ${this.o.move(targetMove).name}` : target;
       }
       if (k === "LearnMove")
         return x.slot === null
           ? "Keep current moves"
-          : `Forget ${this.o.move((this.o.party()[s.state.player.active_slot]?.moves || active.moves)[x.slot]).name}`;
+          : `Forget ${this.o.move(learningMon.moves[x.slot]).name}`;
       if (k === "OfferSwitch")
-        return x.keep ? "Keep battling" : "Switch Pokémon";
+        return x.keep ? "Keep battling" : member(x.slot);
       return (
         (
           { Fight: "Fight", Run: "Run", Cancel: "Back" } as Record<
@@ -853,11 +974,23 @@ export class BattlePresenter {
       );
     };
     const standard = s.site === "BattleMenu";
-    this.root.querySelector(".battle-copy")!.textContent = learn
-      ? `${learn.mon} wants to learn ${this.o.move(learn.mv).name}.`
-      : standard
-        ? `What will ${this.o.species(active.species).name} do?`
-        : "Choose an action.";
+    this.root.classList.toggle("battle-choosing", !standard || this.category !== "");
+    const copy = this.root.querySelector(".battle-copy")!;
+    if (learn) {
+      copy.textContent = `${learn.mon} wants to learn ${this.o.move(learn.mv).name}.\n${describeMove(learn.mv)}`;
+    } else if (s.site === "ForcedSwitch") {
+      copy.textContent = "Which Pokémon will battle next?";
+    } else if (s.site === "OfferSwitch") {
+      const enemy = this.o.species(s.state.enemy.active.species);
+      const types = [...new Set(enemy.types)].map((type) => typeNames[type]).filter(Boolean);
+      copy.textContent = `${this.o.trainerName || "The opposing trainer"} is sending out ${enemy.name}.${types.length ? `\n${types.join(" / ")}` : ""}`;
+    } else if (this.bagItem !== undefined) {
+      copy.textContent = `Use ${this.o.itemName(this.bagItem)} on which Pokémon?`;
+    } else {
+      copy.textContent = standard
+        ? `What will ${memberName(s.state.player.active_slot)} do?`
+        : "Choose a move.";
+    }
     const controls = this.root.querySelector<HTMLElement>(".battle-controls")!;
     const entries =
       standard && !this.category
@@ -865,16 +998,34 @@ export class BattlePresenter {
             (g) =>
               `<button data-group="${g}" aria-label="${g === "PARTY" ? "Pokémon" : g}"${actions.some((a) => group(a) === g) ? "" : " disabled"}>${g === "PARTY" ? "POKÉMON" : g}</button>`,
           )
-        : actions
+        : standard && this.category === "BAG" && this.bagItem === undefined
+          ? Array.from(new Set<number>(actions.flatMap((a) => a.Item ? [a.Item.id] : [])))
+              .map((id) => `<button data-item="${id}">${escapeHtml(this.o.itemName(id))}</button>`)
+          : actions
             .map((a, i) => ({ a, i }))
-            .filter(({ a }) => !standard || group(a) === this.category)
-            .map(
-              ({ a, i }) =>
-                `<button data-index="${i}" aria-label="${escapeHtml(label(a))}">${escapeHtml(label(a))}</button>`,
-            );
+            .filter(({ a }) => !standard || (this.bagItem !== undefined ? a.Item?.id === this.bagItem : group(a) === this.category))
+            .map(({ a, i }) => {
+              const detail = a.Move
+                ? describeMove(active.moves[a.Move.slot], active.pp[a.Move.slot])
+                : a.LearnMove?.slot != null
+                  ? describeMove(learningMon.moves[a.LearnMove.slot], learningMon.pp[a.LearnMove.slot])
+                  : "";
+              return `<button data-index="${i}">${escapeHtml(label(a))}${detail ? `<small>${escapeHtml(detail)}</small>` : ""}</button>`;
+            });
     if (standard && this.category)
       entries.push('<button data-back aria-label="Back">Back</button>');
     controls.innerHTML = entries.join("");
+    controls.querySelectorAll<HTMLButtonElement>("[data-item]").forEach((b) => {
+      b.onclick = () => {
+        const id = Number(b.dataset.item);
+        const noTarget = actions.findIndex((a) => a.Item?.id === id && a.Item.target == null);
+        if (noTarget >= 0) this.act(noTarget);
+        else {
+          this.bagItem = id;
+          this.menu();
+        }
+      };
+    });
     controls.querySelectorAll<HTMLButtonElement>("[data-group]").forEach(
       (b) =>
         (b.onclick = () => {
@@ -901,6 +1052,7 @@ export class BattlePresenter {
     this.root.querySelector(".battle-controls")!.innerHTML = "";
     try {
       this.category = "";
+      this.bagItem = undefined;
       this.enqueue(this.o.act(index));
     } catch (e) {
       this.destroy();

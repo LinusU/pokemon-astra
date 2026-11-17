@@ -1,6 +1,6 @@
 # Pokémon Astra
 
-A browser-native Pokémon adventure in the original Astra region, using the Crystal battle engine and assets decoded from the player's own cartridge. The current build is a playable alpha with a complete campaign progression graph; it has not had a full human campaign/balance playthrough.
+A browser-native Pokémon adventure in the original Astra region, using the Crystal battle engine and assets decoded from the player's own cartridge. The campaign runs from the choice of partner in Dewdrop through eight gyms, the Astral League and the Aurora Sanctuary. All three starters have cleared the League in seeded native battle simulations.
 
 ## Play locally
 
@@ -23,14 +23,14 @@ Production builds generate a versioned offline service worker covering the appli
 
 ## The adventure
 
-- Growlithe, Poliwag, or Bellsprout as your partner. Alder tutors Growlithe in Ember for an immediate Fire attack.
-- 12 settlements, 25 routes, 12 dungeons with three rooms each, eight gyms, and 108 connected maps in total.
+- Growlithe, Poliwag, or Bellsprout as your partner. Alder tutors Growlithe in Ember, Poliwag in Water Gun, or Bellsprout in Tackle. Robin raises the partner with a type advantage.
+- 12 settlements, 25 routes, 12 dungeons with three rooms each, eight gyms, and 112 connected maps in total, including five League chambers.
 - Professor Alder's beacon survey, Robin's changing relationship with Meridian, Director Vale's Celestial Engine, eight beacon keepers, the Elite Four, and Champion Mira.
 - 16 journal quests, optional trainers, evolution-item rewards, a postgame reserve, and retryable legendary encounters. All 251 species have an obtainable habitat, gift, or static encounter; no trade or event service is necessary.
 - Badge field abilities open return paths and hidden areas. Surf enables water traversal; Fly travels between visited settlements. Field abilities do not occupy Pokémon move slots.
 - Six-member party, storage, Pokédex habitat hints, native battles/catching/experience/move decisions, evolution stones and Link Cables, friendship/time/stat evolutions, shops, fishing, repels, healing, and autosave.
-- Smooth, animated movement with diagonal normalization, solid roaming NPCs, trainer sightlines and approaches, grass rustles, and continuous outdoor map boundaries. Dewdrop and Mossford have distinct authored layouts.
-- Fixed battle HUDs, A-acknowledged text, animated HP/experience, move effects, send-outs, fainting, and Poké Ball throws. Encounter transitions and battle exits preserve the overworld.
+- Smooth, animated movement with diagonal normalization, solid roaming NPCs, trainer sightlines and approaches, grass rustles, and continuous outdoor map boundaries. Outside the opening area, towns are 26×20 tiles, routes are 26×18, and dungeon rooms are 20×16. Regional palettes and landmarks distinguish each leg of the trip.
+- Trainer catch-up experience for healthy reserves, tiered medicine, scaled postgame rematches, and a Hall of Fame record. Staged battle introductions, A-acknowledged text, animated HP/experience, move effects, send-outs, fainting, and Poké Ball throws. Encounter transitions and battle exits preserve the overworld.
 - Self-hosted VT323 game text, ROM music/cries/sound effects, saved sound controls, and an explicit day/night camp option.
 
 The region plan is in [docs/DESIGN.md](docs/DESIGN.md); implemented content and contracts are in [docs/WORLD.md](docs/WORLD.md).
@@ -44,6 +44,8 @@ The region plan is in [docs/DESIGN.md](docs/DESIGN.md); implemented content and 
 | Standard gamepad / 8BitDo | D-pad or left stick | A (button 0) | B (button 1); Start (button 9) |
 
 Shift runs faster. Connect the FlipPad in a browser-supported Gamepad API mode, then press a button. The last actively used controller is selected so an idle receiver does not steal input. Standard mappings are implemented and tested with simulated pad events; physical FlipPad/iOS hardware has not been tested here.
+
+The field map marks your location and your next exit or objective. The journal records blocked routes, keeper challenges, and side quest rewards. Party details show current moves, PP and evolution methods.
 
 Saves and cartridge bytes stay in this browser's IndexedDB. **Settings & save → Export save** creates a portable JSON backup; importing validates native Pokémon data and repairs positions obstructed by map revisions. Clearing browser storage removes the cached cartridge and save. Export a backup before changing devices or clearing storage. A new adventure asks for confirmation.
 
@@ -64,10 +66,11 @@ npm test                 # world, actors, navigation, audio, battle and save che
 npm run typecheck
 npm run build
 npm run test:native      # Rust tests + local-ROM WASM integration smoke test
+npm run test:campaign    # repeatable local-ROM battle run for all three starters
 ```
 
 The native smoke check verifies wild/trainer battle results, PP and healing, forced switching, full-party capture into storage, 502 front/back pictures, music continuity, and cries. ROM-dependent tests are skipped when the local cartridge or built WASM is absent; the smoke command requires both. Browser QA covers ROM import/cache, starter selection, movement and map transitions, and actual trainer battles. See [docs/VERIFICATION.md](docs/VERIFICATION.md) for the final recorded checks.
 
 ## Current boundaries
 
-This is an alpha, not a claim of original-game production polish or proven superiority to Gen 1. Dungeon puzzles use interactable mechanisms and persistent conditions; some later habitats use broad reserve pools. Full-campaign difficulty, economy, device battery performance, Safari installation behavior, and a physical FlipPad still need longer playtesting. The upstream battle engine has explicit unported paths, including PP Up and contest-only mechanics; Astra does not offer those mechanics. Battle presentation is custom rather than a frame-perfect reproduction of Crystal's animation scripts.
+The scripted campaign uses informed capture, team and move choices. A first-time player’s pacing and understanding across an uninterrupted playthrough, physical FlipPad handling, and native phone installation still need hands-on testing. Habitat coverage and postgame gates have automated checks. Collecting all 251 species has not been timed in human play. Move effects use custom animations, and the upstream engine has unported paths including PP Up and contest-only mechanics.

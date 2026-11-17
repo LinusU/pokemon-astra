@@ -27,13 +27,19 @@ export interface BattleMon {
   hp: number;
   max_hp: number;
 }
+interface BattleSide {
+  active: BattleMon;
+  active_slot: number;
+  party?: BattleMon[];
+}
 export interface BattleSnapshot {
   site: string | null;
   legal: unknown[];
   state: {
-    player: { active: BattleMon; active_slot: number };
-    enemy: { active: BattleMon; active_slot: number };
+    player: BattleSide;
+    enemy: BattleSide;
   };
+  learning_slot?: number | null;
   events: unknown[];
   outcome: string | null;
   result: BattleResult | null;
@@ -54,6 +60,7 @@ export interface BattleOptions {
   items?: [number, number][];
   money?: number;
   badges?: number;
+  training?: boolean;
   seed?: number;
   seen?: number[];
   caught?: number[];
@@ -78,6 +85,8 @@ type Exports = {
   cry(p: number, n: number, id: number): number;
   sound_effect(p: number, n: number, id: number): number;
 };
+const TRAINING_LEVELS = [11, 17, 23, 28, 34, 40, 45, 50, 58];
+
 export class Engine {
   constructor(
     private wasm: Exports,
@@ -114,13 +123,14 @@ export class Engine {
     const p = 0x51424 + (id - 1) * 32;
     return { ...v, types: [this.rom[p + 7], this.rom[p + 8]] };
   }
-  move(id: number): { id: number; name: string; pp: number; type: number } {
+  move(id: number) {
     if (id < 1 || id > 251) throw Error("Invalid move");
     const move = this.call<{ id: number; name: string; pp: number }>({
       op: "move",
       id,
     });
-    return { ...move, type: this.rom[0x41afb + (id - 1) * 7 + 3] };
+    const offset = 0x41afb + (id - 1) * 7;
+    return { ...move, power: this.rom[offset + 2], type: this.rom[offset + 3] };
   }
   /** Original Crystal evolution records and level-up moves, read from the imported ROM. */
   evolutionData(id: number): {
@@ -212,6 +222,13 @@ export class Engine {
   makePokemon(id: number, level: number): Pokemon {
     return this.call({ op: "make", id, level });
   }
+  makeStarter(id: number): Pokemon {
+    const moves: Record<number, number> = { 58: 52, 60: 55, 69: 33 };
+    const move = moves[id];
+    if (!move) throw Error("Invalid Astra partner");
+    const mon = this.makePokemon(id, 6);
+    return this.teachMove(mon, move, mon.moves.indexOf(0));
+  }
   healPokemon(mon: Pokemon): Pokemon {
     return this.call({ op: "heal", mon });
   }
@@ -263,6 +280,10 @@ export class Engine {
         op: "start",
         setup,
         seed: options.seed ?? Math.floor(Math.random() * 0xffffffff),
+        training_level:
+          options.training && "Trainer" in opp
+            ? TRAINING_LEVELS[popcount(options.badges ?? 0)]
+            : 0,
       }),
     );
   }
@@ -546,6 +567,11 @@ export class Engine {
     );
     return new Float32Array(bytes.buffer, bytes.byteOffset, bytes.length / 4);
   }
+}
+function popcount(mask: number): number {
+  let count = 0;
+  for (let bits = mask & 255; bits; bits &= bits - 1) count++;
+  return count;
 }
 export class Battle {
   constructor(

@@ -39,8 +39,10 @@ describe("offline app cache", () => {
     const handlers: Record<string, Function> = {},
       data = new Map<string, string>();
     const cache = {
-      async addAll(urls: string[]) {
-        for (const url of urls)
+      async addAll(requests: Request[]) {
+        for (const request of requests) {
+          expect(request.cache).toBe("reload");
+          const url = request.url;
           data.set(
             url,
             await readFile(
@@ -48,6 +50,7 @@ describe("offline app cache", () => {
               "utf8",
             ),
           );
+        }
       },
       async match(url: string) {
         return data.get(url);
@@ -73,6 +76,7 @@ describe("offline app cache", () => {
     };
     runInNewContext(source, {
       URL,
+      Request,
       caches,
       fetch: () => {
         networkCalls++;

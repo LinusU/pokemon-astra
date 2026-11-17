@@ -1,6 +1,7 @@
 use crystal_battle::{
-    battle::{Battle, BattleSetup, Pokemon, Status},
+    battle::{Battle, BattleSetup, Pokemon, PromptSite, Status},
     data::{GameData, move_pp, names},
+    engine::sym::W_CUR_PARTY_MON,
 };
 use serde_json::{Value, json};
 use std::cell::RefCell;
@@ -37,7 +38,11 @@ fn snapshot(b: &Battle) -> Value {
             json!(outcome),
         ),
     };
-    json!({"site":site,"legal":legal,"state":state,"events":events,"outcome":outcome,"result":b.result()})
+    let learning_slot = b
+        .decision()
+        .filter(|d| d.site == PromptSite::LearnMove)
+        .map(|_| b.engine().engine().mem.rb(W_CUR_PARTY_MON));
+    json!({"site":site,"legal":legal,"state":state,"events":events,"outcome":outcome,"result":b.result(),"learning_slot":learning_slot})
 }
 fn run(v: Value) -> Result<Value, String> {
     match v["op"].as_str().unwrap_or("") {
@@ -77,8 +82,13 @@ fn run(v: Value) -> Result<Value, String> {
                 return Err("Party is empty".into());
             }
             setup.party.truncate(6);
-            let b = Battle::start(GameData::crystal(), &setup, v["seed"].as_u64().unwrap_or(1))
-                .map_err(|e| e.to_string())?;
+            let b = Battle::start_with_training(
+                GameData::crystal(),
+                &setup,
+                v["seed"].as_u64().unwrap_or(1),
+                v["training_level"].as_u64().unwrap_or(0).min(100) as u8,
+            )
+            .map_err(|e| e.to_string())?;
             let out = snapshot(&b);
             BATTLE.with(|slot| *slot.borrow_mut() = Some(b));
             Ok(out)

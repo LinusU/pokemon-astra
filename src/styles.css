@@ -556,3 +556,154 @@ canvas {
     animation: none;
   }
 }
+
+.objective {
+  margin: 8px 0 14px;
+  padding: 9px 12px;
+  background: #e4e4bf;
+  border-left: 4px solid #638267;
+  line-height: 1.05;
+}
+.objective strong,
+.journal-entries strong {
+  font-weight: 400;
+  color: #234f3c;
+}
+.journal-entries {
+  margin-bottom: 15px;
+}
+.journal-entries article {
+  padding: 7px 0;
+  border-bottom: 1px solid #ccc7a6;
+  line-height: 1;
+}
+.journal-entries article p {
+  margin: 3px 0;
+}
+.stock-count,
+.move-list span {
+  float: right;
+}
+.map-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.field-map {
+  width: 100%;
+  max-height: 190px;
+  height: auto;
+  object-fit: contain;
+  background: #d2ceaa;
+  border: 2px solid #71866a;
+}
+.map-key {
+  color: #3f5848;
+}
+.map-key b {
+  color: #a96c24;
+}
+.page-count {
+  align-self: center;
+}
+.speaker {
+  display: block;
+  color: #50715b;
+  font-weight: 400;
+  font-size: 0.8em;
+  margin-bottom: 3px;
+}
+.dialogue:after {
+  content: none;
+}
+.advance {
+  position: absolute;
+  bottom: 3px;
+  right: 10px;
+  font-size: 16px;
+  color: #53735c;
+}
+.party-summary {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.party-portrait {
+  width: 84px;
+  height: 84px;
+  image-rendering: pixelated;
+}
+.move-list {
+  margin: 0 0 14px;
+}
+.move-list div {
+  border-bottom: 1px solid #c1c2a2;
+  padding: 3px 0;
+}
+@media (max-width: 440px) {
+  .map-layout {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    gap: 6px;
+  }
+  .map-layout .objective {
+    font-size: 19px;
+    padding: 5px;
+  }
+}
+.hall-party {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 12px 0;
+  text-align: center;
+}
+.hall-party img {
+  display: block;
+  width: min(100%, 70px);
+  margin: auto;
+  image-rendering: pixelated;
+}
+.hall-party span {
+  font-size: 20px;
+  line-height: 1;
+}
+.champion-record {
+  text-align: center;
+  border-color: #8d783e;
+  background: linear-gradient(150deg, #f9f2d9, #eee3b7);
+}
+.champion-record h2 {
+  margin: 0;
+  color: #725a32;
+  font-size: clamp(25px, 4vw, 34px);
+}
+.champion-record .eyebrow {
+  display: none;
+}
+.champion-record p {
+  margin: 5px 0;
+}
+.champion-record .hall-party {
+  margin: 7px 0;
+  gap: 4px;
+  line-height: 1;
+}
+.champion-record .hall-party img {
+  height: clamp(28px, 8vw, 54px);
+  width: auto;
+}
+@media (max-width: 440px), (max-height: 550px) {
+  .champion-record .hall-party span {
+    font-size: 16px;
+  }
+  .champion-record p,
+  .champion-record .small {
+    font-size: 17px !important;
+  }
+  .champion-record button {
+    padding: 3px 12px;
+  }
+}

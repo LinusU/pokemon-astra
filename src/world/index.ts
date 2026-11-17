@@ -1,3 +1,6 @@
+import { composeGeography, dimensions, routeDirections } from "./geography";
+import { populateHabitats } from "./habitats";
+
 /** Pokémon Astra's authored campaign. Species numbers use the National Pokédex. */
 export type Ability =
   | "cut"
@@ -131,79 +134,21 @@ export const BADGES = [
 export const WORLD: Record<string, WorldMap> = {};
 export const QUESTS: Quest[] = [];
 
-// # is impassable; . is path/floor, g is encounter grass, ~ is decorative water.
-function terrain(
-  kind: WorldMap["kind"],
-  W: number,
-  H: number,
-  variant = 0,
-): string[] {
-  const rows: string[][] = Array.from({ length: H }, (_, y) =>
-    Array.from({ length: W }, (_, x) =>
-      x === 0 || y === 0 || x === W - 1 || y === H - 1 ? "#" : ".",
-    ),
-  );
-  if (kind === "route") {
-    for (let y = 2; y < H - 2; y++)
-      for (let x = 2; x < W - 2; x++) {
-        if (
-          (y < Math.floor(H / 2) - 3 || y > Math.floor(H / 2) + 3) &&
-          x > 3 &&
-          x < W - 4 &&
-          (x + y + variant) % 5 !== 0
-        )
-          rows[y][x] = "g";
-      }
-    for (let x = 3; x < W - 3; x++) {
-      rows[5][x] = ".";
-      rows[H - 6][x] = ".";
-    }
-  } else if (kind === "town") {
-    for (const [x, y] of [
-      [3, 5],
-      [W - 4, 5],
-      [3, H - 6],
-      [W - 4, H - 6],
-    ])
-      rows[y][x] = "f";
-  } else if (kind === "dungeon") {
-    for (let y = 3; y < H - 3; y++)
-      if (y !== Math.floor(H / 2) - 1 && y !== Math.floor(H / 2)) {
-        rows[y][5] = "#";
-        rows[y][W - 6] = "#";
-      }
-  }
-  return rows.map((row) => row.join(""));
-}
 function map(
   id: string,
   name: string,
   kind: WorldMap["kind"],
   palette: string,
-  variant = 0,
 ): WorldMap {
-  const [W, H] =
-    kind === "town"
-      ? variant % 3 === 2
-        ? [40, 32]
-        : [32, 28]
-      : kind === "route"
-        ? variant % 3 === 1
-          ? [28, 40]
-          : [40, 24]
-        : kind === "dungeon"
-          ? [28, 24]
-          : kind === "gym"
-            ? [28, 24]
-            : [24, 16];
+  const [width, height] = dimensions(id, kind);
   const value: WorldMap = {
     id,
     name,
     kind,
     palette,
-    width: W,
-    height: H,
-    tiles: terrain(kind, W, H, variant),
+    width,
+    height,
+    tiles: Array.from({ length: height }, () => ".".repeat(width)),
     exits: [],
     objects: [],
     encounters: [],
@@ -317,7 +262,7 @@ const townData: [string, string, string][] = [
   ["aster", "Aster City", "night"],
   ["crown", "Crown Summit", "mountain"],
 ];
-townData.forEach(([id, name, palette], i) => map(id, name, "town", palette, i));
+townData.forEach(([id, name, palette]) => map(id, name, "town", palette));
 const routeData: [string, string, string, string, string][] = [
   ["01", "Dewpath", "dewdrop", "mossford", "meadow"],
   ["02", "Orchard Lane", "mossford", "bramble", "orchard"],
@@ -345,8 +290,8 @@ const routeData: [string, string, string, string, string][] = [
   ["24", "Moonwater Reach", "tideglass", "bellweather", "coast"],
   ["25", "Aurora Trail", "dewdrop", "aurora_1", "night"],
 ];
-routeData.forEach(([n, name, , , palette], i) =>
-  map(`route${n}`, `Route ${n} · ${name}`, "route", palette, i),
+routeData.forEach(([n, name, , , palette]) =>
+  map(`route${n}`, `Route ${n} · ${name}`, "route", palette),
 );
 const dungeonData: [string, string, string, string, string, string][] = [
   [
@@ -453,7 +398,6 @@ dungeonData.forEach(([id, name, palette]) => {
       `${name} · ${["Entrance", "Depths", "Inner chamber"][i - 1]}`,
       "dungeon",
       palette,
-      i,
     );
 });
 const leaders: [string, string, string, TeamMember[]][] = [
@@ -593,6 +537,8 @@ obj("dewdrop", {
   dialogue:
     "The Aurora Current guides Pokémon across Astra. Let’s find out why the beacons are failing!",
   requires: { flags: ["partner"] },
+  lockedDialogue:
+    "Alder’s waiting at the lab by the north garden. Go pick your partner, then we can see what happened to the beacons.",
 });
 // Main road gates ensure each community's story is completed before leaving.
 const gates: Record<string, Requirement> = {
@@ -612,6 +558,23 @@ const gates: Record<string, Requirement> = {
   "24": { ability: "whirlpool", badges: 7 },
   "25": { flags: ["champion"] },
 };
+const roadAdvice: Record<string, string> = {
+  "01": "Visit Professor Alder at the north end of Dewdrop and choose your partner first.",
+  "04": "Rescue the surveyor in Lantern Wood, then earn Fern’s Canopy Badge.",
+  "06": "Restore the lighthouse signal in Undertow Cave and earn Marina’s Tidal Badge.",
+  "08": "Restore power in Copperworks and earn Volt’s Dynamo Badge.",
+  "10": "Recover the Hourglass lens and earn Sable’s Mirage Badge.",
+  "12": "Meet the ranger across the bridge in Bamboo Sanctuary to get the report.",
+  "14": "Free the captive Pokémon in Ember Mine and earn Flint’s Ember Badge.",
+  "16": "Open the pass through Frostvault and earn Neve’s Rime Badge.",
+  "18": "Follow the bells in Echo Bell Tower and earn Lyra’s Chime Badge.",
+  "20": "Earn the Astral Badge and shut down the Celestial Engine before climbing to Crown Summit.",
+  "21": "Fern’s Canopy Badge teaches Cut, which opens the overgrown trail.",
+  "22": "This crossing needs Surf. Sable’s Mirage Badge opens the far landing.",
+  "23": "This trail needs Strength. Flint’s Ember Badge opens the mine end of the quarry.",
+  "24": "Cross the whirlpool with Neve’s field ability after earning Lyra’s Chime Badge.",
+  "25": "The sanctuary researchers open this trail once you enter the Hall of Fame.",
+};
 for (const [n, name, a, b] of routeData) {
   const id = `route${n}`;
   connect(a, id, name, WORLD[a].name, gates[n]);
@@ -623,6 +586,11 @@ for (const [n, name, a, b] of routeData) {
     undefined,
     ["21", "22", "23", "24", "25"].includes(n) ? gates[n] : undefined,
   );
+  if (roadAdvice[n]) {
+    WORLD[a].exits.find((e) => e.to === id)!.lockedDialogue = roadAdvice[n];
+    const arrival = WORLD[b].exits.find((e) => e.to === id)!;
+    if (arrival.requires) arrival.lockedDialogue = roadAdvice[n];
+  }
 }
 connect("bellweather", "meridian_1", "Meridian HQ", "Bellweather", {
   flags: ["revelation"],
@@ -631,6 +599,10 @@ connect("crown", "victory_1", "Victory Ascent", "Crown Summit", {
   badges: 8,
   flags: ["engine_stopped"],
 });
+WORLD.bellweather.exits.find((e) => e.to === "meridian_1")!.lockedDialogue =
+  "The records office is closed to visitors. The keeper in Echo Bell Tower can tell you what Meridian is hiding.";
+WORLD.crown.exits.find((e) => e.to === "victory_1")!.lockedDialogue =
+  "The ascent wardens need all eight badges and confirmation that the Celestial Engine has shut down.";
 for (const [id, name, , mechanism, intermediate, final] of dungeonData) {
   connect(`${id}_1`, `${id}_2`, "Into the depths", "Entrance");
   connect(`${id}_2`, `${id}_3`, "Inner chamber", "Depths", {
@@ -650,7 +622,7 @@ for (const [id, name, , mechanism, intermediate, final] of dungeonData) {
     dialogue: `You complete the ${name} objective. The beacon's light grows steadier.`,
     setsFlag: final,
   });
-  // Inner chamber exit is a usable shortcut back to the entrance.
+  // Both ends of the return passage stay locked until the objective is done.
   connect(
     `${id}_3`,
     `${id}_1`,
@@ -670,6 +642,16 @@ const objectives = [
   "revelation",
   "last_lens",
 ];
+const keeperAdvice = [
+  "Bring the surveyor home from Lantern Wood and follow the seed, sprout and canopy trail in the gym.",
+  "Get the lighthouse signal working in Undertow Cave, then set the gym sluices from high tide to low.",
+  "Restore the town’s power in Copperworks and reconnect the relays in this room.",
+  "Find the lens in Hourglass Ruins and set the gym’s weights from lightest to heaviest.",
+  "Free the Pokémon in Ember Mine, then clear the gym furnace vents in order.",
+  "Open the Frostvault pass and thaw this room’s channels from spring to pool.",
+  "Listen to the memory in Echo Bell Tower, then ring the gym bells from low to high.",
+  "Recover the observatory lens and align these four stars in the order marked on the chart.",
+];
 const puzzles = [
   "leaf marker",
   "sluice",
@@ -683,7 +665,7 @@ const puzzles = [
 leaders.forEach(([name, type, , team], i) => {
   const id = `gym${i + 1}`;
   let previous: string | undefined;
-  for (let n = 1; n <= 3; n++) {
+  for (let n = 1; n <= (i === 7 ? 4 : 3); n++) {
     const flag = `gym${i + 1}_puzzle${n}`;
     obj(id, {
       id: flag,
@@ -702,76 +684,192 @@ leaders.forEach(([name, type, , team], i) => {
     name,
     dialogue: `I am ${name}, keeper of this beacon. Show me the bond you have built!`,
     requires: { flags: [objectives[i], previous!], badges: i },
-    lockedDialogue:
-      "Help the community and finish the gym puzzle before challenging the keeper.",
+    lockedDialogue: keeperAdvice[i],
     setsFlag: `badge${i + 1}`,
     reward: { badge: i + 1, ability: ABILITIES[i] },
     trainer: { id: `leader_${i + 1}`, name, team, reward: 1000 * (i + 1) },
   });
 });
-// Every habitat has a small, deterministic pool. All species are distributed across
-// the region, including evolved forms and otherwise trade-exclusive species.
 const habitats = routeData.map(([n]) => WORLD[`route${n}`]);
-// Early habitat pools are hand-selected for terrain and the opening level curve.
-// The reserve routes contain the remaining native and introduced species.
-const earlyPools: number[][] = [
-  [10, 13, 16, 19, 21, 25, 29, 32, 46, 163, 165, 167],
-  [43, 48, 69, 108, 161, 179, 187, 191, 209],
-  [23, 37, 41, 52, 60, 72, 98, 116, 118, 120, 170, 194],
-  [27, 39, 50, 56, 74, 77, 84, 95, 104, 111, 185, 207],
-  [58, 66, 81, 100, 109, 125, 137, 172, 179, 190, 204, 239],
-  [24, 28, 51, 75, 78, 82, 96, 101, 110, 112, 113, 143],
+populateHabitats(WORLD);
+const routeTrainers = [
+  "Scout Ari",
+  "Orchard hand Bea",
+  "Surveyor Cleo",
+  "Ferry hand Dara",
+  "Deckhand Emil",
+  "Lockkeeper Nessa",
+  "Mechanic Oren",
+  "Dune guide Iona",
+  "Glass apprentice May",
+  "Wader Taran",
+  "Ranger Kestrel",
+  "Kiln hand Bran",
+  "Prospector Luz",
+  "Climber Asa",
+  "Skater Sanna",
+  "Botanist Eira",
+  "Pilgrim Sol",
+  "Nightwatcher Hala",
+  "Lab aide Nico",
+  "Mountaineer Liv",
+  "Forester Fenn",
+  "Swimmer Keo",
+  "Excavator Esti",
+  "Diver Valea",
+  "Ecologist Ren",
 ];
-const legendaryIds = new Set([
-  144, 145, 146, 150, 151, 243, 244, 245, 249, 250, 251,
-]);
-const reserveStarters = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 152, 153, 154, 155, 156, 157, 158, 159, 160,
+const trailItems = [
+  [
+    "potion",
+    "Meadow first-aid tin",
+    "You find two Potions under the pond boardwalk.",
+  ],
+  [
+    "potion",
+    "Orchard kit",
+    "Someone left two Potions at the foot of the orchard bridge.",
+  ],
+  [
+    "potion",
+    "Surveyor supplies",
+    "The survey team left two spare Potions here.",
+  ],
+  ["potion", "Ford supplies", "A watertight pouch holds two Potions."],
+  [
+    "great_ball",
+    "Tidepool pouch",
+    "Two Great Balls are tucked in a dry cleft above the tide line.",
+  ],
+  [
+    "great_ball",
+    "Canal locker",
+    "You find two Great Balls left by the old lockkeeper.",
+  ],
+  [
+    "great_ball",
+    "Yard toolbox",
+    "A disused toolbox holds two clean Great Balls.",
+  ],
+  [
+    "great_ball",
+    "Dune cache",
+    "You brush the sand off a box containing two Great Balls.",
+  ],
+  [
+    "great_ball",
+    "Glassworks jar",
+    "Two Great Balls are wrapped in cloth inside the jar.",
+  ],
+  [
+    "great_ball",
+    "Reed bundle",
+    "You untie a bundle of reeds and find two Great Balls.",
+  ],
+  [
+    "great_ball",
+    "Ranger pack",
+    "A waterproof ranger pack holds two Great Balls.",
+  ],
+  [
+    "great_ball",
+    "Trail bivouac",
+    "You find two Great Balls in the shade of a lava shelf.",
+  ],
+  [
+    "ultra_ball",
+    "Miner’s pouch",
+    "A discarded ore pouch holds two Ultra Balls.",
+  ],
+  [
+    "ultra_ball",
+    "Climbing tin",
+    "A small tin by the cairn contains two Ultra Balls.",
+  ],
+  [
+    "ultra_ball",
+    "Winter stash",
+    "You lift the lid of an insulated box and find two Ultra Balls.",
+  ],
+  [
+    "ultra_ball",
+    "Gardener’s spare kit",
+    "A canvas roll tucked among the flowers holds two Ultra Balls.",
+  ],
+  [
+    "ultra_ball",
+    "Pilgrim’s supplies",
+    "Two Ultra Balls are tucked under a dry niche in the wall.",
+  ],
+  [
+    "ultra_ball",
+    "Lakeside parcel",
+    "You open a dry package in the reeds and find two Ultra Balls.",
+  ],
+  [
+    "ultra_ball",
+    "Maintenance box",
+    "Two Ultra Balls rattle in an old observatory maintenance box.",
+  ],
+  [
+    "ultra_ball",
+    "Summit trail cache",
+    "A climbing party left two Ultra Balls for the next traveler.",
+  ],
+  [
+    "ultra_ball",
+    "Grove supplies",
+    "A field kit protected by the old trees holds two Ultra Balls.",
+  ],
+  [
+    "ultra_ball",
+    "Flotsam pouch",
+    "A pouch washed up on the island contains two Ultra Balls.",
+  ],
+  [
+    "ultra_ball",
+    "Quarry locker",
+    "You find two Ultra Balls in a dry crevice above the fossil beds.",
+  ],
+  [
+    "ultra_ball",
+    "Beacon offering",
+    "Two Ultra Balls rest in a weatherproof box by the shrine.",
+  ],
+  [
+    "ultra_ball",
+    "Research supplies",
+    "The researchers left two Ultra Balls for sanctuary visitors.",
+  ],
 ];
-const assigned = new Set([...earlyPools.flat(), ...reserveStarters]);
-const reserve = Array.from({ length: 251 }, (_, i) => i + 1).filter(
-  (n) => !legendaryIds.has(n) && !assigned.has(n),
-);
-habitats.forEach((habitat, i) => {
-  const pool =
-    i < earlyPools.length
-      ? earlyPools[i]
-      : reserve.splice(0, Math.ceil(reserve.length / (habitats.length - i)));
-  const level = Math.min(48, 4 + i * 2);
-  if (i === habitats.length - 1) pool.push(...reserveStarters);
-  habitat.encounters = pool.map((species, j) => ({
-    species,
-    minLevel: level,
-    maxLevel: Math.min(52, level + 2),
-    weight: j < 4 ? 6 : 2,
-  }));
-});
 routeData.forEach(([n, name], i) => {
-  const id = `route${n}`,
-    level = Math.min(53, 7 + i * 2);
+  const id = `route${n}`;
+  const level = Math.min(53, 7 + i * 2);
+  const trainer = routeTrainers[i];
+  const [item, cache, description] = trailItems[i];
+  const team = habitats[i].encounters
+    .slice(0, i < 4 ? 1 : 2)
+    .map(({ species }) => ({ species, level }));
   obj(id, {
     id: `trainer_route${n}`,
     kind: "trainer",
-    name: `${["Scout", "Hiker", "Ranger", "Sailor", "Ace"][i % 5]} ${["Ari", "Bea", "Cleo", "Dara", "Emil"][i % 5]}`,
-    dialogue: `The path through ${name} is a good place to train!`,
+    name: trainer,
+    dialogue: `I know ${name} well. Let’s see how your team handles this stretch.`,
     setsFlag: `trainer_route${n}_won`,
     trainer: {
       id: `trainer_route${n}`,
-      name: `${["Scout", "Hiker", "Ranger", "Sailor", "Ace"][i % 5]} ${["Ari", "Bea", "Cleo", "Dara", "Emil"][i % 5]}`,
-      team: [{ species: habitats[i].encounters[0]?.species ?? 19, level }],
+      name: trainer,
+      team,
       reward: level * 40,
     },
   });
   obj(id, {
     id: `item_route${n}`,
     kind: "item",
-    name: "Hidden supply",
-    dialogue: "You found supplies tucked away beside the path.",
+    name: cache,
+    dialogue: description,
     setsFlag: `item_route${n}_found`,
-    reward: {
-      item: i < 4 ? "potion" : i < 12 ? "great_ball" : "ultra_ball",
-      amount: 2,
-    },
+    reward: { item, amount: 2 },
   });
 });
 // Robin's observations tie the communities together as the plot unfolds.
@@ -801,8 +899,25 @@ const scenes: [string, string, string, Requirement?][] = [
     { flags: ["vale_defeated"] },
   ],
 ];
+const robinAdvice: Record<string, string> = {
+  robin_mossford:
+    "Did you meet Alder yet? Head west down Dewpath to Dewdrop if you still need your first partner.",
+  robin_copperwick:
+    "I’m watching this power line. If you’re coming from the harbor, talk to Marina about the fog signal first.",
+  robin_bellweather:
+    "I heard odd things about the tower. Find the bells on Pilgrim Walk, then come back and tell me what they remember.",
+  robin_aster:
+    "Robin’s voice comes over the radio. “Try the records office in Bellweather. Vale has the clearance for the observatory door.”",
+};
 scenes.forEach(([where, id, dialogue, requires]) =>
-  obj(where, { id, kind: "person", name: "Robin", dialogue, requires }),
+  obj(where, {
+    id,
+    kind: id === "robin_aster" ? "sign" : "person",
+    name: id === "robin_aster" ? "Field radio" : "Robin",
+    dialogue,
+    requires,
+    lockedDialogue: robinAdvice[id],
+  }),
 );
 obj("reedhaven", {
   id: "ranger",
@@ -823,7 +938,7 @@ const observatory = WORLD.route19.exits.find((e) => e.to === "starfall_1");
 if (observatory) {
   observatory.requires = { flags: ["vale_defeated"] };
   observatory.lockedDialogue =
-    "Meridian security requires the headquarters keycard.";
+    "The observatory door needs Vale’s override. Confront him at Meridian HQ in Bellweather.";
 }
 // Vale's defeat opens the observatory; its lens earns Orion's trust before
 // the eight badges can be used to disable the Engine.
@@ -904,8 +1019,24 @@ const leagueTeam: [string, TeamMember[]][] = [
     ],
   ],
 ];
-leagueTeam.forEach(([name, team], i) =>
-  obj("league", {
+const leagueRooms = [
+  "league",
+  "league_petra",
+  "league_nyx",
+  "league_gale",
+  "league_mira",
+];
+leagueTeam.forEach(([name, team], i) => {
+  const room = leagueRooms[i];
+  if (i) {
+    map(room, `Astral League · ${name}`, "interior", "mountain");
+    connect(leagueRooms[i - 1], room, `${name}’s chamber`, "Previous chamber", {
+      flags: [`league_${i - 1}_won`],
+    });
+    const onward = WORLD[leagueRooms[i - 1]].exits.find((e) => e.to === room)!;
+    onward.lockedDialogue = "Defeat the specialist in this chamber to proceed.";
+  }
+  obj(room, {
     id: `league_${i}`,
     kind: "trainer",
     name,
@@ -913,10 +1044,24 @@ leagueTeam.forEach(([name, team], i) =>
     requires: i
       ? { flags: [`league_${i - 1}_won`] }
       : { flags: ["ascent_complete"], badges: 8 },
-    lockedDialogue: "Complete Victory Ascent and face the League in order.",
+    lockedDialogue: i
+      ? `Challenge ${leagueTeam[i - 1][0]} in the previous chamber first.`
+      : "Ask the wardens at Victory Ascent to open the summit gate before you challenge the League.",
     setsFlag: i === 4 ? "champion" : `league_${i}_won`,
     trainer: { id: `league_${i}`, name, team, reward: 5000 },
-  }),
+  });
+});
+connect(
+  "league_mira",
+  "league",
+  "Hall of Fame return",
+  "Hall of Fame",
+  {
+    flags: ["champion"],
+  },
+  {
+    flags: ["champion"],
+  },
 );
 const quests: [string, string, string, string, string, string, Requirement?][] =
   [
@@ -1109,8 +1254,21 @@ const legendary: [string, string, number, Requirement][] = [
   ["route24", "Suicune", 245, { flags: ["champion"] }],
   ["undertow_3", "Lugia", 249, { ability: "whirlpool" }],
   ["echo_3", "Ho-Oh", 250, { flags: ["champion"] }],
-  ["aurora_3", "Celebi", 251, { flags: ["champion"] }],
+  ["aurora_3", "Celebi", 251, { flags: ["champion", "aurora_restored"] }],
 ];
+const guardianAdvice: Record<number, string> = {
+  144: "A frozen cascade hides the roost. Lyra’s badge grants Waterfall and opens the way to Articuno.",
+  145: "The intake is still too unstable for Zapdos. The keepers will finish repairs after your League challenge.",
+  146: "The old ore vault is behind fractured rock. Return with Rock Smash from Flint.",
+  150: "The lab capsule is sealed. It can be opened once the League recognizes your work restoring the beacons.",
+  151: "The oldest tree stirs. Return with records of at least 100 different species from your journey.",
+  243: "The island beacon remains dark until a trainer from Astra enters the Hall of Fame.",
+  244: "Heat rises from the quarry stone. The beacon can call Entei once you reach the Hall of Fame.",
+  245: "The moonwater shrine needs a fully restored current. Return after the League challenge.",
+  249: "An eddy covers the deep tunnel. Neve’s badge teaches Whirlpool, which can calm it.",
+  250: "The top bell sounds only after the League recognizes the work of the eight keepers.",
+  251: "The grove is quiet. Complete the research seal and restore the sanctuary beacon to call Celebi.",
+};
 legendary.forEach(([where, name, species, requires]) =>
   obj(where, {
     id: `legendary_${species}`,
@@ -1118,7 +1276,7 @@ legendary.forEach(([where, name, species, requires]) =>
     name,
     dialogue: `${name} is waiting. The guardian will return if you cannot catch it.`,
     requires,
-    lockedDialogue: "The guardian has not yet appeared.",
+    lockedDialogue: guardianAdvice[species],
     setsFlag: `caught_legendary_${species}`,
     trainer: {
       id: `legendary_${species}`,
@@ -1275,95 +1433,6 @@ rivals.forEach(([where, id, level, bird, requires]) =>
   }),
 );
 
-// Town buildings have roofs, walls, and actual doorways linked to their interiors.
-// Main streets remain open across the centre, while gardens occupy the corners.
-for (const [id] of townData) {
-  const m = WORLD[id],
-    grid = m.tiles.map((r) => r.split(""));
-  const entrances = m.exits.filter((e) =>
-    ["interior", "gym"].includes(WORLD[e.to].kind),
-  );
-  const sites: [[number, number], ...[number, number][]] = [
-    [2, 2],
-    [11, 2],
-    [20, 2],
-    [2, m.height - 6],
-    [11, m.height - 6],
-    [20, m.height - 6],
-  ];
-  entrances.forEach((exit, i) => {
-    const siteIndex =
-      id === "dewdrop"
-        ? ((
-            { dewdrop_center: 0, lab: 1, dewdrop_mart: 2, home: 3 } as Record<
-              string,
-              number
-            >
-          )[exit.to] ?? i)
-        : id === "mossford"
-          ? ([2, 3][i] ?? i)
-          : i;
-    const [x, y] = sites[siteIndex];
-    for (let dx = 0; dx < 7; dx++) {
-      grid[y][x + dx] = "r";
-      grid[y + 1][x + dx] = "r";
-      grid[y + 2][x + dx] = "w";
-    }
-    const doorX = x + 3,
-      doorY = y + 2;
-    grid[doorY][doorX] = "d";
-    exit.x = doorX;
-    exit.y = doorY;
-    const back = WORLD[exit.to].exits.find((e) => e.to === id)!;
-    back.toX = doorX;
-    back.toY = doorY;
-  });
-  // Open approach to each door from the street and retain all object positions.
-  for (const entrance of entrances) {
-    const y = entrance.y < m.height / 2 ? entrance.y + 1 : entrance.y + 1;
-    grid[y][entrance.x] = ".";
-  }
-  for (const o of m.objects) grid[o.y][o.x] = ".";
-  for (const e of m.exits)
-    grid[e.y][e.x] =
-      e.to && ["interior", "gym"].includes(WORLD[e.to].kind) ? "d" : ".";
-  m.tiles = grid.map((r) => r.join(""));
-}
-
-// Route margins and side pockets use each landscape's own terrain, retaining a
-// continuous central road and a second walkable loop through the grass.
-routeData.forEach(([n, , , , palette], index) => {
-  const m = WORLD[`route${n}`],
-    grid = m.tiles.map((r) => r.split(""));
-  for (let x = 3; x < m.width - 3; x++) {
-    if (palette === "coast" && x % 5 !== 0) {
-      grid[2][x] = "~";
-      grid[m.height - 3][x] = "~";
-    } else if (
-      ["mountain", "snow", "volcanic"].includes(palette) &&
-      (x + index) % 4 === 0
-    ) {
-      grid[2][x] = "#";
-      grid[m.height - 3][x] = "#";
-    } else if (
-      ["orchard", "autumn", "meadow", "wetland"].includes(palette) &&
-      (x + index) % 3 === 0
-    ) {
-      grid[2][x] = "f";
-      grid[m.height - 3][x] = ",";
-    } else if (palette === "desert" && x % 4 === 0) {
-      grid[2][x] = "#";
-      grid[m.height - 3][x] = ",";
-    }
-  }
-  if (palette === "coast") {
-    grid[2][11] = "=";
-    grid[m.height - 3][12] = "=";
-  }
-  for (const e of m.exits) grid[e.y][e.x] = ".";
-  for (const o of m.objects) grid[o.y][o.x] = ".";
-  m.tiles = grid.map((r) => r.join(""));
-});
 // Each dungeon's mechanism names its actual steps and enforces their order.
 const dungeonSteps: Record<string, [string, string]> = {
   lantern: ["Read the first leaf trail", "Tie the survey rope"],
@@ -1383,20 +1452,20 @@ for (const [id] of dungeonData) {
   const m = WORLD[`${id}_2`],
     mechanism = m.objects.find((o) => o.id === `${id}_mechanism`)!;
   const [first, second] = dungeonSteps[id];
-  obj(m.id, {
+  obj(`${id}_1`, {
     id: `${id}_step1`,
     kind: "switch",
     name: first,
-    dialogue: `${first}: the mechanism responds.`,
+    dialogue: `${first}. The way into the next room opens.`,
     setsFlag: `${id}_step1`,
   });
   obj(m.id, {
     id: `${id}_step2`,
     kind: "switch",
     name: second,
-    dialogue: `${second}: the next mechanism is ready.`,
+    dialogue: `${second}. The mechanism at the far exit responds.`,
     requires: { flags: [`${id}_step1`] },
-    lockedDialogue: `First: ${first.toLowerCase()}.`,
+    lockedDialogue: `First ${first.toLowerCase()} in the previous room.`,
     setsFlag: `${id}_step2`,
   });
   mechanism.requires = { flags: [`${id}_step2`] };
@@ -1435,62 +1504,27 @@ const gymClues: [string, string[]][] = [
     ["Low bell", "Middle bell", "High bell"],
   ],
   [
-    "Trace the sky from horizon to zenith to dawn.",
-    ["Horizon star", "Zenith star", "Dawn star"],
+    "Trace one night from sunset to zenith to moonset to dawn.",
+    ["Sunset star", "Zenith star", "Moonset star", "Dawn star"],
   ],
 ];
 gymClues.forEach(([clue, labels], i) => {
-  const m = WORLD[`gym${i + 1}`],
-    positions: [[number, number], [number, number], [number, number]] = [
-      [11, 10],
-      [17, 10],
-      [14, 13],
-    ];
-  for (let n = 0; n < 3; n++) {
-    const o = m.objects.find((o) => o.id === `gym${i + 1}_puzzle${n + 1}`)!;
-    o.name = labels[n];
-    [o.x, o.y] = positions[(n + i + 1) % 3];
-    o.lockedDialogue = `The marker is still. ${clue}`;
-  }
+  const m = WORLD[`gym${i + 1}`];
+  labels.forEach((label, n) => {
+    const o = m.objects.find(
+      (object) => object.id === `gym${i + 1}_puzzle${n + 1}`,
+    )!;
+    o.name = label;
+    o.lockedDialogue = clue;
+  });
   obj(m.id, {
     id: `gym${i + 1}_clue`,
     kind: "sign",
     name: "Keeper’s clue",
     dialogue: clue,
-    x: 14,
-    y: 17,
   });
 });
 
-// Add optional side pockets and landmarks around the unobstructed road. Their
-// shape changes with each route, with a gap connecting every pocket to the road.
-for (const [n, , , , palette] of routeData) {
-  const m = WORLD[`route${n}`],
-    grid = m.tiles.map((r) => r.split("")),
-    v = Number(n) % 6;
-  const obstacle = ["coast"].includes(palette) ? "~" : "#";
-  for (let y = 3; y < 8; y++)
-    for (let x = 4; x < m.width - 4; x++) {
-      if ((x + v * 3) % 11 < 2 && y !== 5) grid[y][x] = obstacle;
-      if ((x + v * 2) % 13 < 2 && y !== 5) grid[m.height - 1 - y][x] = obstacle;
-    }
-  // A curved optional trail around each margin complements the central road.
-  for (let x = 4; x < m.width - 4; x++) {
-    grid[5][x] = ".";
-    grid[m.height - 6][x] = ".";
-  }
-  for (const e of m.exits) grid[e.y][e.x] = ".";
-  for (const o of m.objects) grid[o.y][o.x] = ".";
-  m.tiles = grid.map((r) => r.join(""));
-  const trainer = m.objects.find((o) => o.id === `trainer_route${n}`)?.trainer;
-  if (trainer && Number(n) > 4) {
-    const pool = m.encounters;
-    trainer.team.push({
-      species: pool[1]?.species ?? pool[0]?.species ?? 19,
-      level: trainer.team[0].level,
-    });
-  }
-}
 const townFlavor: Record<string, string> = {
   dewdrop:
     "Alder’s garden points toward the lab. The first beacon watches over the village.",
@@ -1504,9 +1538,9 @@ const townFlavor: Record<string, string> = {
   sunspire:
     "Glass catches the desert sun above the oasis. The old stones remember its path.",
   reedhaven:
-    "Rangers watch the bamboo bridges and count the reserve’s many inhabitants.",
+    "The market and camp sit on opposite sides of the reed beds. The sanctuary is on higher ground.",
   cinderfall:
-    "Warm springs flow below the mine. The furnaces need clean air and careful hands.",
+    "The washhouse stands below the springs. The mine trail climbs between the high roofs.",
   rimepeak:
     "The mountain pass glitters with snow. Travelers rest here before the ascent.",
   bellweather:
@@ -1523,113 +1557,6 @@ for (const [id] of townData)
     name: "Town guide",
     dialogue: townFlavor[id],
   });
-// Dungeon chambers have different wall breaks and side alcoves. Objective and
-// exit cells are always cleared, so the extra passages never trap the player.
-dungeonData.forEach(([id, , palette], di) => {
-  for (let room = 1; room <= 3; room++) {
-    const m = WORLD[`${id}_${room}`],
-      grid = m.tiles.map((r) => r.split(""));
-    const obstacle = ["coast", "wetland"].includes(palette) ? "~" : "#";
-    const north = 4 + ((di + room) % 3),
-      south = m.height - 5 - ((di + room) % 3);
-    for (let x = 7; x < m.width - 7; x++) {
-      if (x !== 9 + (di % 3) && x !== m.width - 10 - (room % 3)) {
-        grid[north][x] = obstacle;
-        grid[south][x] = obstacle;
-      }
-    }
-    for (const e of m.exits) grid[e.y][e.x] = ".";
-    for (const o of m.objects) grid[o.y][o.x] = ".";
-    m.tiles = grid.map((r) => r.join(""));
-  }
-});
-
-// Gardens and a narrow network of paths give each settlement a legible center.
-// Buildings remain solid; lawn and flowers remain walkable.
-townData.forEach(([id], index) => {
-  const m = WORLD[id],
-    grid = m.tiles.map((r) => r.split(""));
-  for (let y = 1; y < m.height - 1; y++)
-    for (let x = 1; x < m.width - 1; x++)
-      if (grid[y][x] === ".") grid[y][x] = ",";
-  const cx = Math.floor(m.width / 2),
-    cy = Math.floor(m.height / 2);
-  function path(x: number, y: number) {
-    for (const [dx, dy] of [
-      [0, 0],
-      [1, 0],
-    ] as const) {
-      const xx = x + dx;
-      if (
-        xx > 0 &&
-        xx < m.width - 1 &&
-        y > 0 &&
-        y < m.height - 1 &&
-        !["r", "w", "d"].includes(grid[y][xx])
-      )
-        grid[y][xx] = ".";
-    }
-  }
-  function connectPath(x: number, y: number) {
-    let px = x,
-      py = y;
-    while (py !== cy) {
-      path(px, py);
-      py += py < cy ? 1 : -1;
-    }
-    while (px !== cx) {
-      path(px, py);
-      px += px < cx ? 1 : -1;
-    }
-    path(cx, cy);
-  }
-  for (const e of m.exits) connectPath(e.x, e.y);
-  for (const o of m.objects) connectPath(o.x, o.y);
-  if (id === "dewdrop") connectPath(12, 8);
-  // Decorative trees and flowers occupy lawn pockets, never paths.
-  for (let y = 5; y < m.height - 4; y++)
-    for (let x = 2; x < m.width - 2; x++) {
-      if (grid[y][x] !== ",") continue;
-      if ((x * 7 + y * 11 + index * 3) % 47 === 0) grid[y][x] = "#";
-      else if ((x * 5 + y * 3 + index) % 13 === 0) grid[y][x] = "f";
-    }
-  for (const e of m.exits)
-    if (!["interior", "gym"].includes(WORLD[e.to].kind)) grid[e.y][e.x] = ".";
-  for (const o of m.objects) grid[o.y][o.x] = ".";
-  m.tiles = grid.map((r) => r.join(""));
-});
-// Route grass surrounds a three-tile winding road and short paths to landmarks.
-routeData.forEach(([n], i) => {
-  const m = WORLD[`route${n}`],
-    grid = m.tiles.map((r) => r.split("")),
-    cy = Math.floor(m.height / 2);
-  for (let y = 1; y < m.height - 1; y++)
-    for (let x = 1; x < m.width - 1; x++)
-      if (grid[y][x] === ".") grid[y][x] = ",";
-  const roadY = (x: number) => cy + Math.round(2 * Math.sin((x + i * 3) / 7));
-  for (let x = 1; x < m.width - 1; x++)
-    for (let dy = -1; dy <= 1; dy++) {
-      const y = roadY(x) + dy;
-      if (!"#~".includes(grid[y][x])) grid[y][x] = ".";
-    }
-  function approach(x: number, y: number) {
-    const target = roadY(x);
-    while (y !== target) {
-      if (!"#~".includes(grid[y][x])) grid[y][x] = ".";
-      y += y < target ? 1 : -1;
-    }
-  }
-  for (const e of m.exits) {
-    approach(e.x, e.y);
-    grid[e.y][e.x] = ".";
-  }
-  for (const o of m.objects) {
-    approach(o.x, o.y);
-    grid[o.y][o.x] = ".";
-  }
-  m.tiles = grid.map((r) => r.join(""));
-});
-
 // Optional trainers provide experience between each community and its keeper.
 // Their placement is selected from open cells after the authored terrain is built.
 const firstRival = WORLD.route02.objects.find((o) => o.id === "rival_1")!;
@@ -1708,7 +1635,16 @@ dungeonData.forEach(([id, name], i) => {
 // Entrances face the room from the south; every important counter has a clear
 // approach from that door. The symbols are impassable but never hide an object.
 for (const m of Object.values(WORLD).filter((m) => m.kind === "interior")) {
-  const grid = m.tiles.map((r) => r.split(""));
+  if (m.id === "league" || m.id.startsWith("league_")) continue;
+  const grid = m.tiles.map((row, y) =>
+    row
+      .split("")
+      .map((tile, x) =>
+        x === 0 || x === m.width - 1 || y === 0 || y === m.height - 1
+          ? "#"
+          : tile,
+      ),
+  );
   const entrance = m.exits[0];
   if (entrance) {
     const back = WORLD[entrance.to].exits.find(
@@ -1763,15 +1699,6 @@ for (const m of Object.values(WORLD).filter((m) => m.kind === "interior")) {
       put(x, y, "T");
     put(3, 12, "P");
     put(20, 12, "P");
-  } else if (m.id === "league") {
-    for (let x = 3; x < 21; x++) if (x !== 11 && x !== 12) put(x, 2, "B");
-    for (const [x, y] of [
-      [3, 5],
-      [20, 5],
-      [3, 11],
-      [20, 11],
-    ] as const)
-      put(x, y, "P");
   }
   m.tiles = grid.map((r) => r.join(""));
 }
@@ -1910,11 +1837,11 @@ leaders.forEach((_, i) => {
     (o) => o.id === `leader_${i + 1}`,
   )!.victoryDialogue = leaderVictory[i];
 });
-const champion = WORLD.league.objects.find((o) => o.id === "league_4")!;
+const champion = WORLD.league_mira.objects.find((o) => o.id === "league_4")!;
 champion.dialogue =
   "I am Mira, Champion of the Astral League. You brought the beacons together without asking Astra to stand still. Let us see the strength of the bond that carried you here.";
 champion.victoryDialogue =
-  "Champion Mira welcomes you to the Hall of Fame. Across Astra, the beacons glow with the changing sky. Robin and Alder await your next discovery: the restored Aurora Sanctuary and the living atlas of all 251 species.";
+  "Champion Mira welcomes you to the Hall of Fame. Across Astra, the beacons glow with the changing sky. Robin and Alder await your next discovery: the living atlas of all 251 species. Take Aurora Trail south from Dewdrop to reach the restored sanctuary.";
 const townVoices: Record<string, [string, string][]> = {
   dewdrop: [
     [
@@ -2101,16 +2028,7 @@ for (const [, id] of rivals) {
           : "We can protect Astra together. Let’s stop the Engine and meet again after the League.";
 }
 
-// Outdoor connections are roads, not interior warps. The main road travels east;
-// the two northern and southern branches leave their origin in those directions.
-// Each route carries that orientation through to its far end.
-const branchDirections: Record<string, Direction> = {
-  "21": "north",
-  "22": "south",
-  "23": "north",
-  "24": "south",
-  "25": "south",
-};
+// Orient each through-route across facing edges. The far shore turns west.
 const opposite: Record<Direction, Direction> = {
   north: "south",
   south: "north",
@@ -2133,56 +2051,14 @@ function roadEndpoint(m: WorldMap, direction: Direction): [number, number] {
         : [Math.floor(m.width / 2) + offset, m.height - 1];
 }
 function moveRoad(m: WorldMap, exit: Exit, direction: Direction) {
-  const old: [number, number] = [exit.x, exit.y];
-  const [x, y] = roadEndpoint(m, direction);
-  exit.x = x;
-  exit.y = y;
+  [exit.x, exit.y] = roadEndpoint(m, direction);
   exit.direction = direction;
   exit.span = 1;
-  // Find a corridor to the existing path without cutting through buildings.
-  const grid = m.tiles.map((row) => row.split(""));
-  const queue: [number, number][] = [[x, y]];
-  const previous = new Map<string, string | null>([[`${x},${y}`, null]]);
-  for (let i = 0; i < queue.length; i++) {
-    const [cx, cy] = queue[i];
-    if (cx === old[0] && cy === old[1]) break;
-    for (const [nx, ny] of [
-      [cx + 1, cy],
-      [cx - 1, cy],
-      [cx, cy + 1],
-      [cx, cy - 1],
-    ]) {
-      const key = `${nx},${ny}`;
-      if (
-        nx < 0 ||
-        ny < 0 ||
-        nx >= m.width ||
-        ny >= m.height ||
-        previous.has(key)
-      )
-        continue;
-      if (
-        (nx === 0 || ny === 0 || nx === m.width - 1 || ny === m.height - 1) &&
-        !(nx === x && ny === y)
-      )
-        continue;
-      if ("rwd".includes(grid[ny][nx])) continue;
-      previous.set(key, `${cx},${cy}`);
-      queue.push([nx, ny]);
-    }
-  }
-  let key: string | null = `${old[0]},${old[1]}`;
-  if (!previous.has(key)) throw Error(`No road to ${m.id} ${exit.label}`);
-  while (key !== null) {
-    const [px, py] = key.split(",").map(Number);
-    grid[py][px] = grid[py][px] === "~" ? "=" : ".";
-    key = previous.get(key)!;
-  }
-  m.tiles = grid.map((row) => row.join(""));
 }
+
 for (const [n, , a, b] of routeData) {
   const route = WORLD[`route${n}`],
-    outward = branchDirections[n] ?? "east";
+    outward = routeDirections[n] ?? "east";
   const start = WORLD[a].exits.find((e) => e.to === route.id)!;
   const back = route.exits.find((e) => e.to === a)!;
   moveRoad(WORLD[a], start, outward);
@@ -2201,115 +2077,6 @@ for (const [n, , a, b] of routeData) {
     arrival.toX = forward.x;
     arrival.toY = forward.y;
   }
-}
-
-// Irregular groves frame the roads, while the first settlements have their own
-// landmarks: Dewdrop's pond and flower garden, Mossford's orchard and stream.
-for (const m of Object.values(WORLD).filter(
-  (m) => m.kind === "town" || m.kind === "route",
-)) {
-  const grid = m.tiles.map((row) => row.split(""));
-  const protectedCell = (x: number, y: number) =>
-    m.exits.some((e) => Math.abs(e.x - x) + Math.abs(e.y - y) <= 2) ||
-    m.objects.some((o) => Math.abs(o.x - x) + Math.abs(o.y - y) <= 1);
-  const seed = [...m.id].reduce((sum, c) => sum + c.charCodeAt(0), 0);
-  for (let y = 1; y < m.height - 1; y++)
-    for (let x = 1; x < m.width - 1; x++) {
-      const fringe = Math.min(x, y, m.width - 1 - x, m.height - 1 - y);
-      if (
-        fringe <= 2 &&
-        grid[y][x] === "," &&
-        !protectedCell(x, y) &&
-        (x * 13 + y * 7 + seed) % 11 < (fringe === 1 ? 6 : 3)
-      )
-        grid[y][x] = "#";
-    }
-  if (m.id === "dewdrop") {
-    for (let y = 18; y <= 20; y++)
-      for (let x = 23; x <= 27; x++)
-        if (grid[y][x] === "," && !protectedCell(x, y)) grid[y][x] = "~";
-    for (let y = 8; y <= 10; y++)
-      for (let x = 3; x <= 7; x++) if (grid[y][x] === ",") grid[y][x] = "f";
-  }
-  if (m.id === "route01") {
-    // A meadow pond nestles north of the path; flowers mark its bank.
-    for (let y = 3; y <= 5; y++)
-      for (let x = 25; x <= 31; x++)
-        if ((grid[y][x] === "," || grid[y][x] === "g") && !protectedCell(x, y))
-          grid[y][x] = y === 3 && (x === 25 || x === 31) ? "f" : "~";
-    for (let x = 23; x <= 32; x++) if (grid[6][x] === ",") grid[6][x] = "f";
-  }
-  if (m.id === "route02") {
-    // Orchard rows run alongside the lane, with grassy clearings between them.
-    for (let y = 4; y < m.height - 4; y += 5)
-      for (const x of [4, 8, m.width - 9, m.width - 5])
-        if ((grid[y][x] === "," || grid[y][x] === "g") && !protectedCell(x, y))
-          grid[y][x] = "#";
-  }
-  if (m.id === "mossford") {
-    for (let y = 6; y < m.height - 5; y += 4)
-      for (let x = m.width - 8; x < m.width - 2; x += 3)
-        if (grid[y][x] === "," && !protectedCell(x, y)) grid[y][x] = "#";
-    for (let x = 2; x < m.width - 2; x++)
-      if (grid[m.height - 3][x] === "," && !protectedCell(x, m.height - 3))
-        grid[m.height - 3][x] = "~";
-  }
-  m.tiles = grid.map((row) => row.join(""));
-}
-for (const m of Object.values(WORLD))
-  for (const o of m.objects) {
-    if (["person", "healer", "shop", "starter"].includes(o.kind)) {
-      o.facing = "down";
-      if (o.kind === "person" && o.id.startsWith("resident_")) o.roam = 1;
-    }
-    if (o.kind === "trainer") {
-      o.facing = "down";
-      o.sightRange = 3;
-    }
-  }
-// Ensure every landmark joins the street network even where a grove meets a door.
-for (const m of Object.values(WORLD).filter(
-  (m) => m.kind === "town" || m.kind === "route",
-)) {
-  const grid = m.tiles.map((row) => row.split(""));
-  const origin = m.exits[0];
-  for (const target of [...m.exits, ...m.objects]) {
-    const queue: [number, number][] = [[origin.x, origin.y]];
-    const prev = new Map<string, string | null>([
-      [`${origin.x},${origin.y}`, null],
-    ]);
-    for (let i = 0; i < queue.length; i++) {
-      const [x, y] = queue[i];
-      if (x === target.x && y === target.y) break;
-      for (const [nx, ny] of [
-        [x + 1, y],
-        [x - 1, y],
-        [x, y + 1],
-        [x, y - 1],
-      ]) {
-        const k = `${nx},${ny}`;
-        if (nx < 0 || ny < 0 || nx >= m.width || ny >= m.height || prev.has(k))
-          continue;
-        if (
-          (nx === 0 || ny === 0 || nx === m.width - 1 || ny === m.height - 1) &&
-          !(nx === target.x && ny === target.y)
-        )
-          continue;
-        if ("rw".includes(grid[ny][nx])) continue;
-        prev.set(k, `${x},${y}`);
-        queue.push([nx, ny]);
-      }
-    }
-    let key: string | null = `${target.x},${target.y}`;
-    if (!prev.has(key)) throw Error(`No path to ${m.id} ${key}`);
-    while (key !== null) {
-      const [x, y] = key.split(",").map(Number);
-      if ("#~".includes(grid[y][x]))
-        grid[y][x] = grid[y][x] === "~" ? "=" : ".";
-      key = prev.get(key)!;
-    }
-  }
-  m.tiles = grid.map((row) => row.join(""));
 }
 
 // The opening is hand-composed as a village, riverside orchard town and two
@@ -2529,6 +2296,7 @@ function openingMap(id: string, base: string) {
     rect(8, 6, 17, 9, "f");
     rect(7, 16, 16, 18, "g");
     rect(23, 15, 33, 18, "g");
+    rect(9, 4, 16, 5, "g");
     road(
       [
         [0, 12],
@@ -2563,46 +2331,49 @@ function openingMap(id: string, base: string) {
       route01_optional_1: [18, 17],
     });
   } else {
-    // Long orchard lane: the path bends around the stream and through two groves.
-    rect(1, 1, 5, 8, "#");
-    rect(20, 1, 26, 8, "#");
-    rect(1, 30, 6, 38, "#");
-    rect(21, 30, 26, 38, "#");
-    for (const y of [5, 10, 15, 25, 30, 35])
+    // Two orchard terraces surround a short detour to the stream and bridge.
+    rect(1, 1, 5, 7, "#");
+    rect(20, 1, 26, 4, "#");
+    rect(1, 24, 6, 26, "#");
+    rect(21, 24, 26, 26, "#");
+    rect(24, 22, 26, 23, "#");
+    for (const y of [3, 8, 18, 22, 25])
       for (const x of [7, 11, 18, 22]) rect(x, y, x + 1, y + 1, "#");
-    rect(1, 25, 26, 27, "~");
-    rect(1, 24, 8, 26, "~");
-    rect(3, 10, 5, 15, "f");
-    rect(22, 12, 25, 17, "g");
-    rect(4, 31, 12, 34, "g");
+    rect(1, 19, 26, 21, "~");
+    rect(1, 18, 8, 20, "~");
+    rect(3, 5, 5, 9, "f");
+    rect(5, 7, 11, 10, "g");
+    rect(22, 6, 25, 11, "g");
+    rect(22, 17, 25, 18, "g");
+    rect(4, 23, 12, 25, "g");
     road(
       [
-        [0, 20],
-        [7, 20],
-        [7, 17],
+        [0, 14],
+        [7, 14],
+        [7, 11],
+        [14, 11],
         [14, 17],
-        [14, 23],
-        [20, 23],
-        [20, 20],
-        [27, 20],
+        [20, 17],
+        [20, 14],
+        [27, 14],
       ],
       1,
     );
     road(
       [
+        [14, 17],
         [14, 23],
-        [14, 29],
-        [20, 29],
+        [20, 23],
       ],
       1,
     );
     place({
-      trainer_route02: [10, 15],
-      item_route02: [20, 29],
-      rival_1: [17, 20],
-      route02_optional_0: [12, 22],
-      route02_optional_1: [22, 18],
-      evolution_supply_0: [8, 23],
+      trainer_route02: [10, 9],
+      item_route02: [20, 23],
+      rival_1: [17, 14],
+      route02_optional_0: [12, 16],
+      route02_optional_1: [22, 12],
+      evolution_supply_0: [8, 17],
     });
   }
   // Map-edge road mouths use the full width of their connected lanes.
@@ -2617,26 +2388,58 @@ function openingMap(id: string, base: string) {
 }
 openingMap("dewdrop", ",");
 openingMap("mossford", ",");
-openingMap("route01", "g");
-openingMap("route02", "g");
+openingMap("route01", ",");
+openingMap("route02", ",");
+obj("route01", {
+  id: "sign_route01",
+  name: "Dewpath marker",
+  kind: "sign",
+  x: 6,
+  y: 10,
+  dialogue:
+    "Dewdrop lies west and Mossford east. Follow the dry road, or explore the grass south of the pond.",
+});
+obj("route02", {
+  id: "sign_route02",
+  name: "Orchard marker",
+  kind: "sign",
+  x: 5,
+  y: 12,
+  dialogue:
+    "Follow Orchard Lane east to Bramble. The market footbridge crosses the stream to the south.",
+});
+composeGeography(WORLD);
+
+const facings = ["down", "left", "up", "right"] as const;
+for (const m of Object.values(WORLD)) {
+  m.objects.forEach((o, i) => {
+    if (["person", "healer", "shop", "starter"].includes(o.kind)) {
+      o.facing ??= facings[(i + m.id.length) % facings.length];
+      if (o.kind === "person" && o.id.startsWith("resident_")) o.roam = 1;
+    }
+    if (o.kind === "trainer") {
+      o.facing ??= facings[(i + m.id.length) % facings.length];
+      o.sightRange ??=
+        o.id.includes("_optional_") || o.id.endsWith("_guardian_trainer")
+          ? 2
+          : 3;
+    }
+  });
+}
 
 for (const m of Object.values(WORLD))
   for (const e of m.exits) {
     if (e.direction) continue;
     const dest = WORLD[e.to];
     e.entrance =
-      m.kind === "dungeon" && dest.kind === "dungeon"
+      (m.id.startsWith("league") && dest.id.startsWith("league")) ||
+      (m.kind === "dungeon" && dest.kind === "dungeon")
         ? "stairs"
         : m.kind === "dungeon" || dest.kind === "dungeon"
           ? "cave"
           : "door";
   }
 // Directions describe a person's pose or a trainer's actual line of sight.
-const facings = ["down", "left", "up", "right"] as const;
-for (const m of Object.values(WORLD))
-  m.objects.forEach((o, i) => {
-    if (o.facing) o.facing = facings[(i + m.id.length) % facings.length];
-  });
 for (const [mapId, id, facing] of [
   ["route01", "trainer_route01", "down"],
   ["route01", "route01_optional_0", "down"],

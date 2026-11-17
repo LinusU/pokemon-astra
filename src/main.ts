@@ -1,11 +1,15 @@
 import { Input } from "./game/input";
 import { Renderer } from "./game/render";
-import { WorldActors, interactionDistance } from "./game/actors";
+import { WorldActors, interactionTarget } from "./game/actors";
 import {
   connectionAt,
   connectedBlocked,
   crossConnection,
 } from "./game/navigation";
+import { directions, bearings } from "./game/journal";
+import { drawFieldMap } from "./ui/field-map";
+import { MenuInput } from "./ui/menu-input";
+import { MEDICINE, isMedicine, useMedicine } from "./game/medicine";
 import { GameAudio } from "./game/audio";
 import { BattlePresenter } from "./ui/battle";
 import { get, set, download } from "./game/storage";
@@ -31,6 +35,7 @@ import "./styles.css";
 const input = new Input(),
   { canvas, layer } = createShell(input),
   renderer = new Renderer(canvas),
+  menuInput = new MenuInput(),
   actors = new WorldActors();
 let battlePresenter: BattlePresenter | undefined;
 let engine: Engine,
@@ -141,7 +146,7 @@ document.querySelector("#sound-toggle")?.addEventListener("click", () => {
 });
 function scene() {
   if (mode === "battle" || mode === "encounter")
-    return battleObject?.trainer
+    return battleObject?.trainer && battleObject.kind !== "legendary"
       ? battleObject.name === "Champion Mira"
         ? "champion"
         : "trainer"
@@ -161,9 +166,25 @@ const flag = (f?: string) => {
   if (f && !save.flags.includes(f)) save.flags.push(f);
 };
 function persist() {
-  void set("save", save);
+  if (!engine || ["welcome", "loading", "title", "intro"].includes(mode))
+    return;
+  void set("save", save).catch(() => {
+    const status = document.querySelector(".statusbar > span");
+    if (status)
+      status.textContent = "Save unavailable · export a backup in Settings";
+  });
 }
-function message(text: string, callback?: () => void) {
+function restoreSession(data: Save) {
+  save = normalizeSavePosition(data);
+  actors.reset();
+  encounterDistance = 0;
+  encounterTarget = 6;
+  lastAutosave = save.steps;
+  exitLock = true;
+  renderer.setNight(!!save.settings.night);
+  sound.attach(engine, save.settings.music !== false);
+}
+function message(text: string, callback?: () => void, speaker?: string) {
   const words = text.trim().split(/\s+/),
     pages: string[] = [];
   let page = "";
@@ -178,7 +199,7 @@ function message(text: string, callback?: () => void) {
     mode = "dialogue";
     const next = pages.shift() || "";
     dialogueCallback = pages.length ? show : callback;
-    layer.innerHTML = `<div class="dialogue" role="status">${escapeHtml(next)}</div>`;
+    layer.innerHTML = `<div class="dialogue" role="status">${speaker ? `<strong class="speaker">${escapeHtml(speaker)}</strong>` : ""}${escapeHtml(next)}<span class="advance">A ▸</span></div>`;
     layer.querySelector(".dialogue")?.addEventListener("click", advance);
   }
   show();
@@ -196,9 +217,10 @@ function welcome(error = "") {
   const p = panel(
     layer,
     "A new adventure awaits",
-    `<p>The beacons of Astra are fading. Choose a partner, explore a new region, and follow the light of the Aurora Current.</p><div class="drop" id="drop"><p><strong>Bring your own Pokémon Crystal ROM</strong><br><span class="small muted">Your ROM stays in this browser, stored locally. It is never uploaded.</span></p><label class="file-label">Choose ROM<input id="rom" type="file" accept=".gbc,application/octet-stream"></label><p class="small muted">or drop your file here</p></div>${error ? `<p class="error">${escapeHtml(error)}</p>` : ""}<p class="small muted">A compatible Pokémon Crystal ROM is required to play.</p>`,
+    `<p>The beacons of Astra are fading. Choose a partner, explore a new region, and follow the light of the Aurora Current.</p><div class="drop" id="drop"><p><strong>Bring your own Pokémon Crystal ROM</strong><br><span class="small muted">Your ROM stays in this browser, stored locally. It is never uploaded.</span></p><button id="choose-rom">Choose ROM</button><input hidden id="rom" type="file" accept=".gbc,application/octet-stream"><p class="small muted">or drop your file here</p></div>${error ? `<p class="error">${escapeHtml(error)}</p>` : ""}<p class="small muted">Use the English release, revision 1.1 (.gbc).</p>`,
   );
   const file = p.querySelector<HTMLInputElement>("#rom")!;
+  p.querySelector("#choose-rom")!.addEventListener("click", () => file.click());
   file.onchange = () => {
     if (file.files?.[0]) void loadRom(file.files[0]);
   };
@@ -233,10 +255,35 @@ async function start(bytes: Uint8Array) {
   actors.reset();
   const existing = await get<Save>("save");
   if (isValidSave(existing)) {
-    save = normalizeSavePosition(existing);
-    renderer.setNight(!!save.settings.night);
-    sound.attach(engine, save.settings.music !== false);
+    restoreSession(existing);
     title();
+  } else if (existing !== undefined) {
+    mode = "recovery";
+    const p = panel(
+      layer,
+      "Recover your journey",
+      '<p>This browser save could not be read. Export it for safekeeping or import a working backup to continue.</p><div class="buttons"><button id="export">Export current save</button><button id="choose">Choose backup</button><input hidden type="file" accept=".json"></div>',
+    );
+    p.querySelector("#export")!.addEventListener("click", () =>
+      download("pokemon-astra-recovery.json", existing),
+    );
+    const input = p.querySelector("input")!;
+    p.querySelector("#choose")!.addEventListener("click", () => input.click());
+    input.onchange = async () => {
+      try {
+        const file = input.files?.[0];
+        if (!file) return;
+        const data = JSON.parse(await file.text());
+        if (!isValidSave(data)) throw Error();
+        restoreSession(data);
+        await set("save", save);
+        title();
+      } catch {
+        input.value = "";
+        p.querySelector("p")!.textContent =
+          "That backup could not be read. Choose an Astra JSON save.";
+      }
+    };
   } else {
     save = freshSave();
     sound.attach(engine, true);
@@ -263,7 +310,7 @@ function title() {
     );
     confirm.querySelector("#cancel")!.addEventListener("click", title);
     confirm.querySelector("#confirm")!.addEventListener("click", () => {
-      save = freshSave();
+      restoreSession(freshSave());
       intro();
     });
   });
@@ -273,14 +320,24 @@ function intro() {
   const p = panel(
     layer,
     "The Astra region",
-    `<p>Eight ancient beacons guide Pokémon along the Aurora Current. Lately, their lights have begun to fail.</p><p>Professor Alder is waiting in the lab. Find a partner and begin your survey.</p><div class="buttons"><button id="begin">Begin adventure</button></div>`,
+    `<p>Eight ancient beacons guide Pokémon along the Aurora Current. Lately, their lights have begun to fail.</p><p>Leave home and follow the village path to Alder’s lab. Open the menu for a field map, and face people to speak with them.</p><div class="buttons"><button id="begin">Begin adventure</button><button id="how" class="secondary">How to play</button></div>`,
   );
+  p.querySelector("#how")!.addEventListener("click", () => fieldBasics(intro));
   p.querySelector("#begin")!.addEventListener("click", () => {
     mode = "world";
     layer.innerHTML = "";
     void sound.unlock();
     persist();
   });
+}
+function fieldBasics(back: () => void) {
+  mode = "guide";
+  const p = panel(
+    layer,
+    "Field basics",
+    `<div class="journal-entries"><article><strong>Find your way</strong><p>Walk with the D-pad, arrows or WASD. Face a person or object and press A or Z. Open Menu with Start or M to see your next stop on the map.</p></article><article><strong>Build your team</strong><p>Walk through tall grass to find Pokémon. Weaken a wild Pokémon, then choose Bag and throw a Poké Ball. Extra catches go to Storage.</p></article><article><strong>Train and recover</strong><p>Trainer battles help healthy teammates catch up. The Party screen shows moves and evolution hints. A red-roofed Center restores HP, status and all move uses.</p></article><article><strong>Follow the beacons</strong><p>Your journal follows the survey and records blocked paths. Each badge unlocks a field ability you can use without teaching a move.</p></article></div><button class="secondary" id="back">Back</button>`,
+  );
+  p.querySelector("#back")!.addEventListener("click", back);
 }
 function starter() {
   mode = "starter";
@@ -293,24 +350,55 @@ function starter() {
     (b) =>
       (b.onclick = () => {
         const id = Number(b.dataset.id);
-        save.party = [engine.makePokemon(id, 6)];
-        if (id === 58) {
-          const slot = save.party[0].moves.findIndex(
-            (move: number) => move === 0,
-          );
-          if (slot >= 0)
-            save.party[0] = engine.teachMove(save.party[0], 52, slot);
-        }
+        save.party = [engine.makeStarter(id)];
+        flag("starter_" + id);
         cry(id);
         save.seen.push(id);
         save.caught.push(id);
         flag("partner");
         persist();
         message(
-          `${engine.species(id).name} joined your party! Alder tutored your partner and gave you Poké Balls, Potions, running shoes and a journal.`,
+          `${engine.species(id).name} joined your party! You received 10 Poké Balls and 5 Potions. Follow Dewpath east to Mossford. Look in the tall grass for wild Pokémon.`,
         );
       }),
   );
+}
+function itemName(key: string) {
+  const name =
+    (isMedicine(key) ? MEDICINE[key].name : undefined) ??
+    (
+      {
+        poke_ball: "Poké Ball",
+        great_ball: "Great Ball",
+        ultra_ball: "Ultra Ball",
+        master_ball: "Master Ball",
+        kings_rock: "King’s Rock",
+        exp_share: "Exp. Share",
+        up_grade: "Up-Grade",
+      } as Record<string, string>
+    )[key];
+  return (
+    name ||
+    key
+      .split("_")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ")
+  );
+}
+function rewardReceipt(r?: Reward) {
+  if (!r) return "";
+  const items = [...(r.items || [])];
+  if (r.item && r.item !== "starter_supplies")
+    items.push({ item: r.item, amount: r.amount });
+  const lines = items.map(
+    (grant) => itemName(grant.item) + " × " + (grant.amount || 1),
+  );
+  if (r.species)
+    lines.push(
+      engine.species(r.species).name +
+        (save.party.length >= 6 ? " joined storage" : " joined your party"),
+    );
+  return lines.join(" · ");
 }
 function applyReward(r?: Reward) {
   if (!r) return;
@@ -343,17 +431,9 @@ function interact() {
   actors.enter(map);
   const tx = save.x + dx * 0.75,
     ty = save.y + dy * 0.75;
-  const o = map.objects
-    .filter(
-      (o) =>
-        !(
-          ["item", "legendary"].includes(o.kind) &&
-          save.flags.includes(o.setsFlag || o.id)
-        ),
-    )
-    .map((o) => ({ o, d: interactionDistance(map, save, actors.position(o)) }))
-    .filter((v) => Number.isFinite(v.d))
-    .sort((a, b) => a.d - b.d)[0]?.o;
+  const o = interactionTarget(map, save, new Set(save.flags), (o) =>
+    actors.position(o),
+  );
   if (!o) {
     if (
       save.flags.includes("quest_angler_complete") &&
@@ -369,12 +449,42 @@ function interact() {
       );
       return;
     }
-    message("There is nothing to inspect here.");
+    // A stray confirm while walking should leave movement uninterrupted.
     return;
   }
   actors.face(o, save.x, save.y);
+  // Finished errands remain finished even after a party or held item changes.
+  if (o.setsFlag && save.flags.includes(o.setsFlag) && !o.repeatable) {
+    if (
+      save.flags.includes("champion") &&
+      (o.kind === "leader" || o.id.startsWith("league_"))
+    ) {
+      offerRematch(o);
+      return;
+    }
+    const finished = o.quest ? QUESTS.find((q) => q.id === o.quest) : undefined;
+    message(
+      finished
+        ? `${finished.name} complete. Thank you for your help!`
+        : o.kind === "starter"
+          ? "Your partner looks happy. Check the beacon journal whenever you need a lead."
+          : o.victoryDialogue ||
+            (o.kind === "switch"
+              ? "It’s already in place."
+              : o.trainer
+                ? "Good match! I’ll be cheering for you on the beacon trail."
+                : o.dialogue),
+      undefined,
+      o.name,
+    );
+    return;
+  }
   if (!has(o.requires)) {
-    message(o.lockedDialogue || "There is more to do before this opens.");
+    message(
+      o.lockedDialogue || "There is more to do before this opens.",
+      undefined,
+      o.name,
+    );
     return;
   }
   if (o.kind === "starter" && !save.flags.includes("partner")) {
@@ -386,7 +496,11 @@ function interact() {
     save.center = save.map;
     save.party = save.party.map((m) => engine.healPokemon(m));
     persist();
-    message("Your Pokémon are fully rested. Take care out there!");
+    message(
+      "Your team’s HP, moves and status are fully restored. If your team faints, we’ll bring you back here.",
+      undefined,
+      o.name,
+    );
     return;
   }
   if (o.kind === "shop") {
@@ -401,38 +515,108 @@ function interact() {
     }
   }
   if (o.trainer && !save.flags.includes(o.setsFlag || o.id)) {
-    if (!save.party.length) {
-      message("Visit Professor Alder and choose a partner first.");
+    if (!save.party.some((m) => m.hp > 0)) {
+      message(
+        save.party.length
+          ? "Your team needs a Pokémon Center before it can battle."
+          : "Visit Professor Alder and choose a partner first.",
+      );
       return;
     }
-    if (o.id === "league_0" && !save.flags.includes("league_0_won"))
-      save.party = save.party.map((m) => engine.healPokemon(m));
-    message(o.dialogue, () =>
-      startBattle(o.trainer!.team[0].species, o.trainer!.team[0].level, o),
+    if (o.id === "league_0") {
+      mode = "menu";
+      const p = panel(
+        layer,
+        "Enter the Astral League?",
+        `<p>Your team will be fully healed for Rowan. Bring enough medicine for four specialists and Mira. Leaving the League restarts the challenge.</p><div class="buttons"><button id="enter">Face Rowan</button><button class="secondary" id="back">Prepare first</button></div>`,
+      );
+      p.querySelector("#back")!.addEventListener("click", close);
+      p.querySelector("#enter")!.addEventListener("click", () => {
+        save.party = save.party.map((m) => engine.healPokemon(m));
+        startBattle(o.trainer!.team[0].species, o.trainer!.team[0].level, o);
+      });
+      return;
+    }
+    message(
+      o.dialogue,
+      () =>
+        startBattle(o.trainer!.team[0].species, o.trainer!.team[0].level, o),
+      o.name,
     );
     return;
   }
-  if (o.kind === "legendary" && !save.flags.includes(o.setsFlag || o.id)) {
-    const species = o.reward?.species;
-    if (species) {
-      message(o.dialogue, () => startBattle(species, o.reward?.level || 50, o));
-      return;
-    }
-  }
-  if (o.setsFlag && save.flags.includes(o.setsFlag) && !o.repeatable) {
-    message(o.victoryDialogue || o.dialogue);
+  if (o.id === "quest_fossil") {
+    mode = "menu";
+    const p = panel(
+      layer,
+      "Revive a fossil",
+      '<p>The excavator can revive one of two fossils for you.</p><div class="buttons"><button data-fossil="138">Helix · Omanyte</button><button data-fossil="140">Dome · Kabuto</button><button class="secondary" id="back">Decide later</button></div>',
+    );
+    p.querySelector("#back")!.addEventListener("click", close);
+    p.querySelectorAll<HTMLButtonElement>("[data-fossil]").forEach(
+      (b) =>
+        (b.onclick = () =>
+          finishErrand(o, { ...o.reward, species: Number(b.dataset.fossil) })),
+    );
     return;
   }
+  finishErrand(o, o.reward);
+}
+function finishErrand(o: WorldObject, reward?: Reward) {
+  const receipt = rewardReceipt(reward);
   flag(o.setsFlag);
-  applyReward(o.reward);
+  applyReward(reward);
   persist();
-  message(o.dialogue);
+  message(
+    o.dialogue,
+    receipt ? () => message(receipt, undefined, "Received") : undefined,
+    o.name,
+  );
+}
+function offerRematch(o: WorldObject) {
+  const team = o.trainer!.team.map((m) => ({
+    ...m,
+    level: Math.min(
+      80,
+      Math.max(
+        60,
+        o.trainer!.team.at(-1)!.level + 5,
+        ...save.party.map((p) => p.level),
+      ) +
+        m.level -
+        o.trainer!.team.at(-1)!.level,
+    ),
+  }));
+  mode = "menu";
+  const p = panel(
+    layer,
+    `${o.name}’s rematch`,
+    `<p>Face ${escapeHtml(o.name)} again at Lv ${team[0].level}–${team.at(-1)!.level}. Prize money is ₽${o.trainer!.reward}.</p><div class="buttons"><button id="fight">Battle</button><button class="secondary" id="back">Later</button></div>`,
+  );
+  p.querySelector("#fight")!.addEventListener("click", () =>
+    startBattle(team[0].species, team[0].level, {
+      ...o,
+      id: "rematch_" + o.id,
+      setsFlag: "rematch_" + o.id,
+      reward: undefined,
+      victoryDialogue: "You keep finding new ways to surprise me, Champion.",
+      trainer: { ...o.trainer!, team },
+    }),
+  );
+  p.querySelector("#back")!.addEventListener("click", close);
 }
 function shop() {
   mode = "menu";
   const stock: [string, string, number, number][] = [
     ["poke_ball", "Poké Ball", 200, 0],
-    ["potion", "Potion", 300, 0],
+    ...Object.entries(MEDICINE).map(
+      ([key, m]): [string, string, number, number] => [
+        key,
+        m.name,
+        m.price,
+        m.badges,
+      ],
+    ),
     ["repel", "Repel", 350, 0],
     ["great_ball", "Great Ball", 600, 2],
     ["ultra_ball", "Ultra Ball", 1200, 5],
@@ -455,7 +639,7 @@ function shop() {
       .filter((v) => save.badges >= v[3])
       .map(
         ([id, name, cost]) =>
-          `<button data-item="${id}" data-cost="${cost}">${name} · ₽${cost}</button>`,
+          `<button data-item="${id}" data-cost="${cost}">${name} · ₽${cost}<span class="stock-count">Bag ${save.items[id] || 0}</span></button>`,
       )
       .join("")}</div><button class="secondary" id="back">Leave</button>`,
   );
@@ -482,63 +666,39 @@ function close() {
   layer.innerHTML = "";
   persist();
 }
-function nextObjective() {
-  if (!save.flags.includes("partner"))
-    return "Meet Professor Alder in the Dewdrop lab and choose a partner.";
-  const story: [string, string][] = [
-    [
-      "surveyor",
-      "Rescue the surveyor in Lantern Wood, then challenge Fern in Bramble.",
-    ],
-    [
-      "fog_signal",
-      "Repair the fog signal in Undertow Cave, then challenge Marina in Tideglass.",
-    ],
-    [
-      "power_restored",
-      "Investigate the power theft in Copperworks, then challenge Volt in Copperwick.",
-    ],
-    [
-      "lens_restored",
-      "Restore the lens in Hourglass Ruins, then challenge Sable in Sunspire.",
-    ],
-    [
-      "pokemon_freed",
-      "Help the Reedhaven ranger, free the Pokémon in Ember Mine, then challenge Flint.",
-    ],
-    [
-      "pass_open",
-      "Reopen Frostvault passage, then challenge Neve in Rimepeak.",
-    ],
-    [
-      "revelation",
-      "Discover the truth in Echo Bell Tower, then challenge Lyra in Bellweather.",
-    ],
-    [
-      "engine_stopped",
-      "Stop the Celestial Engine at Starfall Observatory, then challenge Orion in Aster.",
-    ],
-  ];
-  if (save.badges < 8) {
-    const [flagName, text] = story[save.badges];
-    return save.flags.includes(flagName)
-      ? `Complete the gym puzzle and challenge ${["Fern in Bramble", "Marina in Tideglass", "Volt in Copperwick", "Sable in Sunspire", "Flint in Cinderfall", "Neve in Rimepeak", "Lyra in Bellweather", "Orion in Aster"][save.badges]}.`
-      : text;
-  }
-  if (!save.flags.includes("ascent_complete"))
-    return "Reach Crown Summit and complete Victory Ascent.";
-  if (!save.flags.includes("champion"))
-    return "Challenge the Astral League at Crown Summit.";
-  if (!save.flags.includes("aurora_restored"))
-    return "Explore Aurora Sanctuary and restore the Aurora Current.";
-  return "Complete the Living Atlas and discover Astra’s remaining secrets.";
+function duringLeagueChallenge() {
+  return (
+    save.map.startsWith("league") &&
+    save.flags.includes("league_0_won") &&
+    !save.flags.includes("champion")
+  );
 }
-function menu() {
+function depart(destination: string, move: () => void) {
+  if (!duringLeagueChallenge() || destination.startsWith("league")) {
+    move();
+    return;
+  }
   mode = "menu";
   const p = panel(
     layer,
+    "Leave the League?",
+    '<p>Your party, experience and prizes stay with you. Your next League challenge will begin with Rowan.</p><div class="buttons"><button id="back">Stay here</button><button class="secondary" id="leave">Leave challenge</button></div>',
+  );
+  p.querySelector("#back")!.addEventListener("click", close);
+  p.querySelector("#leave")!.addEventListener("click", () => {
+    save.flags = save.flags.filter((f) => !/^league_[0-3]_won$/.test(f));
+    mode = "world";
+    layer.innerHTML = "";
+    move();
+  });
+}
+function menu() {
+  mode = "menu";
+  const goal = directions(save, has);
+  const p = panel(
+    layer,
     "Your journey",
-    `<p>${escapeHtml(WORLD[save.map].name)} · ${save.badges} / 8 badges · ₽${save.money}</p><div class="menu-grid"><button data-view="party">Party</button><button data-view="bag">Bag</button><button data-view="dex">Pokédex</button><button data-view="journal">Journal</button><button data-view="map">Map &amp; travel</button><button data-view="storage">Storage</button><button data-view="settings">Settings &amp; save</button><button data-view="close">Resume</button></div>`,
+    `<p>${escapeHtml(WORLD[save.map].name)} · ${save.badges} / 8 badges · ₽${save.money}</p><div class="objective"><strong>${escapeHtml(goal.title)}</strong><br>${escapeHtml(goal.hint)}</div><div class="menu-grid"><button data-view="party">Party</button><button data-view="bag">Bag</button><button data-view="dex">Pokédex</button><button data-view="journal">Journal</button><button data-view="map">Map &amp; travel</button><button data-view="storage">Storage</button><button data-view="settings">Settings &amp; save</button><button data-view="close">Resume</button></div>`,
   );
   p.querySelectorAll<HTMLButtonElement>("[data-view]").forEach(
     (b) =>
@@ -549,8 +709,15 @@ function menu() {
       }),
   );
 }
-function view(v: string) {
+function view(v: string, pageIndex = 0, missingOnly = false) {
   mode = "menu";
+  if (v === "storage" && duringLeagueChallenge()) {
+    message(
+      "Your League team is registered. Storage reopens when you leave the challenge.",
+      menu,
+    );
+    return;
+  }
   let title = "",
     body = "";
   if (v === "party") {
@@ -559,53 +726,121 @@ function view(v: string) {
       ? save.party
           .map(
             (m, i) =>
-              `<button data-switch="${i}">${escapeHtml(engine.species(m.species).name)} · Lv ${m.level}<br><span class="small">HP ${m.hp} / ${m.stats?.[0] ?? "?"}</span></button>`,
+              `<button data-switch="${i}"><img class="mini-sprite" alt="" src="${sprite(m.species)}"> ${escapeHtml(engine.species(m.species).name)} · Lv ${m.level}<br><span class="small">${i === 0 ? "Lead · " : ""}HP ${m.hp} / ${m.stats[0]}</span></button>`,
           )
           .join("")
       : "<p>Your party is empty. Visit Alder in the lab.</p>";
-    body = `<p class="small">Select a Pokémon to move it to the front.</p><div class="list">${body}</div>`;
+    body = `<p class="small">Select a Pokémon to inspect its moves or change your lead.</p><div class="list">${body}</div>`;
   } else if (v === "bag") {
     title = "Your bag";
-    body = `<p class="small">Choose a Potion, evolution stone or Link Cable to use it.</p><div class="list">${Object.entries(
+    body = `<p class="small">Select an item to use it or read what it does.</p><div class="list">${Object.entries(
       save.items,
     )
       .filter(([, n]) => n > 0)
       .map(
         ([k, n]) =>
-          `<button data-use="${escapeHtml(k)}">${escapeHtml(k.replaceAll("_", " "))} × ${n}</button>`,
+          `<button data-use="${escapeHtml(k)}">${escapeHtml(itemName(k))} × ${n}</button>`,
       )
       .join("")}</div>`;
   } else if (v === "dex") {
     title = `Pokédex · ${save.caught.length} / 251`;
-    body = `<p class="small">Seen ${save.seen.length} · Caught ${save.caught.length}</p><div class="list">${Array.from(
-      { length: 251 },
-      (_, i) => {
-        const id = i + 1;
-        return `<div>${String(id).padStart(3, "0")} &nbsp; ${save.seen.includes(id) ? escapeHtml(engine.species(id).name) : "— — —"} ${save.caught.includes(id) ? "✦" : ""} ${
-          save.seen.includes(id)
-            ? `<span class="small muted">${escapeHtml(
-                Object.values(WORLD)
-                  .filter((m) => m.encounters.some((e) => e.species === id))
-                  .slice(0, 3)
-                  .map((m) => m.name)
-                  .join(", ") || "Special encounter",
-              )}</span>`
-            : ""
-        }</div>`;
-      },
-    ).join("")}</div>`;
+    const ids = Array.from({ length: 251 }, (_, i) => i + 1).filter(
+      (id) => !missingOnly || !save.caught.includes(id),
+    );
+    const perPage = 12;
+    const pages = Math.max(1, Math.ceil(ids.length / perPage));
+    body = `<div class="buttons"><button id="filter">${missingOnly ? "Show all" : "Show missing"}</button><button id="prev" ${pageIndex === 0 ? "disabled" : ""}>◂</button><span class="page-count">${pageIndex + 1} / ${pages}</span><button id="next" ${pageIndex + 1 >= pages ? "disabled" : ""}>▸</button></div><div class="journal-entries">${
+      ids
+        .slice(perPage * pageIndex, perPage * (pageIndex + 1))
+        .map((id) => {
+          const maps = Object.values(WORLD).filter(
+            (m) =>
+              m.encounters.some((e) => e.species === id) ||
+              m.objects.some(
+                (o) =>
+                  (o.kind === "legendary" &&
+                    o.trainer?.team[0].species === id) ||
+                  o.reward?.species === id,
+              ),
+          );
+          const name = save.seen.includes(id)
+            ? escapeHtml(engine.species(id).name)
+            : "Unknown";
+          return `<article><strong>${String(id).padStart(3, "0")} · ${name}${save.caught.includes(id) ? " ✓" : ""}</strong><br><span class="small muted">${escapeHtml(
+            maps
+              .slice(0, 3)
+              .map((m) => m.name)
+              .join(", ") || "Alder’s lab",
+          )}</span></article>`;
+        })
+        .join("") || "<p>You’ve caught every species!</p>"
+    }</div>`;
   } else if (v === "journal") {
     title = "Beacon journal";
-    body = `<p><strong>Next objective</strong><br>${escapeHtml(nextObjective())}</p><p>${save.badges ? BADGES.slice(0, save.badges).join(" · ") : save.flags.includes("partner") ? "Your beacon survey is underway. First stop: Bramble Gym." : "Begin your survey with Professor Alder."}</p><div class="list">${QUESTS.map((q) => `<div><strong>${save.flags.includes(q.completedFlag) ? "✓" : "○"} ${escapeHtml(q.name)}</strong><br><span class="small muted">${escapeHtml(q.id === "parcel" && save.flags.includes("found_parcel") && !save.flags.includes(q.completedFlag) ? "Parcel received. Follow Orchard Lane east and deliver it to the Bramble courier for Great Balls." : q.description)}</span></div>`).join("")}</div>`;
+    const goal = directions(save, has);
+    const gates = Object.values(WORLD)
+      .flatMap((m) =>
+        m.exits
+          .filter((e) => save.flags.includes(`gate_${m.id}_${e.to}`))
+          .map(
+            (e) =>
+              `<article><strong>${escapeHtml(WORLD[e.to].name)}</strong> · ${escapeHtml(m.name)}<p class="small">${has(e.requires) ? "The way is open." : escapeHtml(e.lockedDialogue || "Check the next beacon objective.")}</p></article>`,
+          ),
+      )
+      .join("");
+    const entries = QUESTS.map((q) => {
+      const who = Object.values(WORLD).find((m) =>
+        m.objects.some((o) => o.quest === q.id),
+      )!;
+      const npc = who.objects.find((o) => o.quest === q.id)!;
+      const done = save.flags.includes(q.completedFlag);
+      let clue = npc.lockedDialogue || q.description;
+      if (q.id === "parcel")
+        clue = save.flags.includes("found_parcel")
+          ? "Take the parcel to the Bramble courier."
+          : "Speak to the Mossford courier.";
+      const ready =
+        !done &&
+        (q.id === "parcel"
+          ? save.flags.includes("found_parcel")
+          : has(npc.requires));
+      return {
+        done,
+        ready,
+        local: who.id === save.map,
+        html: `<article><strong>${done ? "✓ " : ""}${escapeHtml(q.name)}</strong><p class="small">${escapeHtml(done ? "Received " + q.reward : ready ? "Return to " + npc.name + " in " + who.name + "." : clue)}</p>${done || ready ? "" : `<span class="small muted">${escapeHtml(who.name)} · ${escapeHtml(q.reward)}</span>`}</article>`,
+      };
+    }).sort(
+      (a, b) =>
+        Number(a.done) - Number(b.done) ||
+        Number(b.ready) - Number(a.ready) ||
+        Number(b.local) - Number(a.local),
+    );
+    body = `<div class="objective"><strong>${escapeHtml(goal.title)}</strong><br>${escapeHtml(goal.hint)}</div><h3>Beacon badges</h3><p>${save.badges ? BADGES.slice(0, save.badges).join(" · ") : "Your first keeper is Fern in Bramble."}</p>${save.hallOfFame ? '<button id="hall">Hall of Fame</button>' : ""}${gates ? `<h3>Paths to revisit</h3><div class="journal-entries">${gates}</div>` : ""}<h3>Field requests</h3><div class="journal-entries">${entries.map((e) => e.html).join("")}</div>`;
   } else if (v === "map") {
-    title = "Astra region";
-    body = `<p class="small">Places visited: ${save.visited.length}. ${save.abilities.includes("fly") ? "Choose a place to fly." : ""}</p><div class="list">${save.visited.map((id) => `<button data-travel="${id}" ${save.abilities.includes("fly") ? "" : "disabled"}>${escapeHtml(WORLD[id]?.name || id)}</button>`).join("")}</div>`;
+    const map = WORLD[save.map],
+      goal = directions(save, has);
+    title = map.name;
+    body = `<div class="map-layout"><canvas class="field-map" aria-label="Local terrain map with your position and next destination"></canvas><div><div class="map-key small">● You &nbsp; <b>■</b> Objective &nbsp; ▪ Exit</div><div class="objective"><strong>${escapeHtml(goal.title)}</strong><br>${escapeHtml(goal.hint)}</div>${goal.fly ? `<button data-travel="${goal.fly}">Fly to ${escapeHtml(WORLD[goal.fly].name)}</button>` : ""}</div></div><h3>Ways out</h3><div class="journal-entries">${map.exits.map((e) => `<article><strong>${escapeHtml(WORLD[e.to].name)}</strong> · ${bearings(save.x, save.y, e)}${has(e.requires) ? "" : `<p class="small muted">${escapeHtml(e.lockedDialogue || "Currently closed.")}</p>`}</article>`).join("")}</div>${
+      save.abilities.includes("fly")
+        ? `<h3>Fly to a town</h3><div class="list">${save.visited
+            .filter(
+              (id) =>
+                WORLD[id].kind === "town" && id !== save.map && id !== goal.fly,
+            )
+            .map(
+              (id) =>
+                `<button data-travel="${id}">${escapeHtml(WORLD[id].name)}</button>`,
+            )
+            .join("")}</div>`
+        : ""
+    }`;
   } else if (v === "storage") {
     title = "Pokémon storage";
     body = `<p class="small">Deposit a party member to make room for captures. Select a stored Pokémon to withdraw it.</p><strong>Party</strong><div class="list">${save.party.map((m, i) => `<button data-deposit="${i}">Deposit ${escapeHtml(engine.species(m.species).name)} · Lv ${m.level}</button>`).join("")}</div><strong>Storage</strong><div class="list">${save.storage.map((m, i) => `<button data-store="${i}">Withdraw ${escapeHtml(engine.species(m.species).name)} · Lv ${m.level}</button>`).join("") || "<p>No Pokémon in storage yet.</p>"}</div>`;
   } else {
     title = "Settings & save";
-    body = `<p>Battle speed: ${save.settings.battleSpeed}×</p><div class="buttons"><button id="speed">Change speed</button><button id="time">${save.settings.night ? "Switch to day" : "Camp until night"}</button><button id="music">${sound.enabled ? "Mute sound" : "Play sound"}</button><button id="export">Export save</button><label class="file-label">Import save<input id="import" type="file" accept="application/json,.json"></label></div><p class="small muted">Controller: ${escapeHtml(
+    body = `<p>Battle speed: ${save.settings.battleSpeed}×</p><div class="buttons"><button id="speed">Change speed</button><button id="time">${save.settings.night ? "Switch to day" : "Camp until night"}</button><button id="music">${sound.enabled ? "Mute sound" : "Play sound"}</button><button id="how">How to play</button><button id="export">Export save</button><button id="choose-save">Import save</button><input hidden id="import" type="file" accept="application/json,.json"></div><p class="small muted">Controller: ${escapeHtml(
       Array.from(navigator.getGamepads?.() || [])
         .filter((p): p is Gamepad => !!p)
         .map((p) => p.id)
@@ -617,6 +852,27 @@ function view(v: string) {
     title,
     `${body}<div class="buttons"><button class="secondary" id="back">Back</button></div>`,
   );
+  p
+    .querySelector("#filter")
+    ?.addEventListener("click", () => view(v, 0, !missingOnly));
+  p
+    .querySelector("#prev")
+    ?.addEventListener("click", () => view(v, pageIndex - 1, missingOnly));
+  p
+    .querySelector("#next")
+    ?.addEventListener("click", () => view(v, pageIndex + 1, missingOnly));
+  p
+    .querySelector("#hall")
+    ?.addEventListener("click", () => hallOfFame(() => view("journal")));
+  const chart = p.querySelector<HTMLCanvasElement>(".field-map");
+  if (chart)
+    drawFieldMap(
+      chart,
+      WORLD[save.map],
+      save.x,
+      save.y,
+      directions(save, has).marker,
+    );
   p.querySelector("#back")!.addEventListener("click", menu);
   p.querySelectorAll<HTMLButtonElement>("[data-use]").forEach(
     (b) => (b.onclick = () => useItem(b.dataset.use!)),
@@ -624,17 +880,19 @@ function view(v: string) {
   p.querySelectorAll<HTMLButtonElement>("[data-switch]").forEach(
     (b) =>
       (b.onclick = () => {
-        const i = Number(b.dataset.switch);
-        [save.party[0], save.party[i]] = [save.party[i], save.party[0]];
-        persist();
-        view(v);
+        partyDetails(Number(b.dataset.switch));
       }),
   );
   p.querySelectorAll<HTMLButtonElement>("[data-deposit]").forEach(
     (b) =>
       (b.onclick = () => {
-        if (save.party.length <= 1) {
-          message("Keep at least one Pokémon in your party.", () =>
+        if (
+          save.party.length <= 1 ||
+          !save.party.some(
+            (m, i) => i !== Number(b.dataset.deposit) && m.hp > 0,
+          )
+        ) {
+          message("Keep at least one healthy Pokémon in your party.", () =>
             view("storage"),
           );
           return;
@@ -658,15 +916,23 @@ function view(v: string) {
   );
   p.querySelectorAll<HTMLButtonElement>("[data-travel]").forEach(
     (b) =>
-      (b.onclick = () => {
-        save.map = b.dataset.travel!;
-        save.x = 12.5;
-        save.y = 8.5;
-        save = normalizeSavePosition(save);
-        exitLock = true;
-        close();
-      }),
+      (b.onclick = () =>
+        depart(b.dataset.travel!, () => {
+          save.map = b.dataset.travel!;
+          const door = WORLD[save.map].exits.find((e) =>
+            e.to.endsWith("_center"),
+          )!;
+          save.x = door.x + 0.5;
+          save.y = door.y + 1.5;
+          save.facing = "down";
+          save = normalizeSavePosition(save);
+          exitLock = true;
+          close();
+        })),
   );
+  p
+    .querySelector("#how")
+    ?.addEventListener("click", () => fieldBasics(() => view("settings")));
   p.querySelector("#speed")?.addEventListener("click", () => {
     save.settings.battleSpeed = (save.settings.battleSpeed % 3) + 1;
     persist();
@@ -688,6 +954,11 @@ function view(v: string) {
       download("pokemon-astra-save.json", save),
     );
   p
+    .querySelector("#choose-save")
+    ?.addEventListener("click", () =>
+      p.querySelector<HTMLInputElement>("#import")?.click(),
+    );
+  p
     .querySelector<HTMLInputElement>("#import")
     ?.addEventListener("change", async (e) => {
       try {
@@ -695,9 +966,7 @@ function view(v: string) {
         if (!f) return;
         const data = JSON.parse(await f.text()) as Save;
         if (!isValidSave(data)) throw Error("Invalid save");
-        save = normalizeSavePosition(data);
-        renderer.setNight(!!save.settings.night);
-        exitLock = true;
+        restoreSession(data);
         persist();
         message("Save imported successfully.");
       } catch {
@@ -707,9 +976,125 @@ function view(v: string) {
       }
     });
 }
+const heldItems: Record<string, number> = {
+  exp_share: 57,
+  metal_coat: 143,
+  dragon_scale: 151,
+  kings_rock: 82,
+  up_grade: 172,
+};
+function partyDetails(index: number) {
+  const mon = save.party[index];
+  const name = engine.species(mon.species).name;
+  const held = Object.keys(heldItems).find(
+    (key) => heldItems[key] === mon.item,
+  );
+  const status =
+    mon.hp === 0
+      ? "Fainted"
+      : mon.status & 7
+        ? "Asleep"
+        : mon.status & 8
+          ? "Poisoned"
+          : mon.status & 16
+            ? "Burned"
+            : mon.status & 32
+              ? "Frozen"
+              : mon.status & 64
+                ? "Paralyzed"
+                : "Healthy";
+  const evolutions = engine.evolutionData(mon.species).evolutions.map((e) => {
+    const stones: Record<number, string> = {
+      8: "Moon Stone",
+      22: "Fire Stone",
+      23: "Thunder Stone",
+      24: "Water Stone",
+      34: "Leaf Stone",
+      169: "Sun Stone",
+    };
+    const heldName = Object.keys(heldItems).find(
+      (key) => heldItems[key] === e.parameter,
+    );
+    const method =
+      e.method === 1
+        ? "Lv " + e.parameter
+        : e.method === 2
+          ? stones[e.parameter]
+          : e.method === 3
+            ? "Link Cable" +
+              (heldName ? " while holding " + itemName(heldName) : "")
+            : e.method === 4
+              ? "High friendship" +
+                (e.parameter === 2
+                  ? " by day"
+                  : e.parameter === 3
+                    ? " at night"
+                    : "")
+              : "Lv " +
+                e.parameter +
+                " · Attack " +
+                ({ 1: ">", 2: "<", 3: "=" }[e.condition as 1 | 2 | 3] || "=") +
+                " Defense";
+    return escapeHtml(engine.species(e.species).name + " · " + method);
+  });
+  const p = panel(
+    layer,
+    name,
+    `<div class="party-summary"><img class="party-portrait" src="${sprite(mon.species)}" alt=""><div>Lv ${mon.level} · ${status}<br>HP ${mon.hp} / ${mon.stats[0]}${held ? "<br>Holding " + itemName(held) : ""}</div></div><h3>Moves</h3><div class="move-list">${mon.moves.map((id, i) => (id ? `<div>${escapeHtml(engine.move(id).name)} <span>${mon.pp[i] & 63} PP</span></div>` : "")).join("")}</div>${evolutions.length ? `<h3>Evolution</h3><p class="small">${evolutions.join("<br>")}</p>` : ""}<div class="buttons">${index ? '<button id="lead">Make lead</button>' : ""}${held ? '<button id="take">Take held item</button>' : ""}<button class="secondary" id="back">Back</button></div>`,
+  );
+  p.querySelector("#lead")?.addEventListener("click", () => {
+    [save.party[0], save.party[index]] = [mon, save.party[0]];
+    persist();
+    view("party");
+  });
+  p.querySelector("#take")?.addEventListener("click", () => {
+    if (!held) return;
+    if ((save.items[held] || 0) >= 99) {
+      message("Your bag already holds 99 of those.", () => partyDetails(index));
+      return;
+    }
+    mon.item = 0;
+    save.items[held] = (save.items[held] || 0) + 1;
+    persist();
+    partyDetails(index);
+  });
+  p.querySelector("#back")!.addEventListener("click", () => view("party"));
+}
+function rivalSpecies(o: WorldObject, slot: number, original: number) {
+  if (!o.id.startsWith("rival_") || slot !== o.trainer!.team.length - 1)
+    return original;
+  // Older journeys store the original starter as the first species caught.
+  const partner =
+    [58, 60, 69].find((id) => save.flags.includes("starter_" + id)) ??
+    save.caught[0];
+  const families: Record<number, number[]> = {
+    58: [60, 61, 62, 62],
+    60: [69, 70, 71, 71],
+    69: [58, 58, 59, 59],
+  };
+  return families[partner]?.[Number(o.id.slice(6)) - 1] ?? original;
+}
 function useItem(item: string) {
   if ((save.items[item] || 0) < 1) return;
+  if (item in ballIds || item === "aurora_certificate") {
+    message(
+      item === "aurora_certificate"
+        ? "Professor Alder awarded this certificate for recording every species in Astra."
+        : "Open the Bag during a wild battle to throw a " +
+            itemName(item) +
+            ".",
+      () => view("bag"),
+    );
+    return;
+  }
   if (item === "rare_lure") {
+    if (save.flags.includes("lure_ready")) {
+      message(
+        "Your lure is already set. Walk through tall grass to attract a Pokémon.",
+        () => view("bag"),
+      );
+      return;
+    }
     save.items[item]--;
     flag("lure_ready");
     encounterTarget = 1;
@@ -721,6 +1106,10 @@ function useItem(item: string) {
     return;
   }
   if (item === "repel") {
+    if (save.repel) {
+      message("Your Repel is still working.", () => view("bag"));
+      return;
+    }
     save.items.repel--;
     save.repel = 100;
     persist();
@@ -749,13 +1138,6 @@ function useItem(item: string) {
       (b.onclick = () => {
         const index = Number(b.dataset.target),
           mon = save.party[index];
-        const held: Record<string, number> = {
-          exp_share: 57,
-          metal_coat: 143,
-          dragon_scale: 151,
-          kings_rock: 82,
-          up_grade: 172,
-        };
         if (item === "friendship_charm") {
           mon.happiness = Math.min(255, mon.happiness + 80);
           save.items[item]--;
@@ -766,14 +1148,14 @@ function useItem(item: string) {
           );
           return;
         }
-        if (held[item]) {
+        if (heldItems[item]) {
           if (mon.item) {
             message("This Pokémon is already holding an item.", () =>
               view("bag"),
             );
             return;
           }
-          mon.item = held[item];
+          mon.item = heldItems[item];
           save.items[item]--;
           persist();
           message(
@@ -782,15 +1164,21 @@ function useItem(item: string) {
           );
           return;
         }
-        if (item === "potion") {
-          if (mon.hp <= 0 || mon.hp >= mon.stats[0]) {
-            message("That Pokémon cannot use a Potion now.", () => view("bag"));
+        if (isMedicine(item)) {
+          const healed = useMedicine(item, mon, engine);
+          if (!healed) {
+            message("That Pokémon does not need this medicine.", () =>
+              view("bag"),
+            );
             return;
           }
-          mon.hp = Math.min(mon.stats[0], mon.hp + 20);
+          save.party[index] = healed;
           save.items[item]--;
           persist();
-          message("HP was restored.", () => view("bag"));
+          message(
+            `${engine.species(mon.species).name} used the ${itemName(item)}. HP ${healed.hp}/${healed.stats[0]}.`,
+            () => view("bag"),
+          );
           return;
         }
         const evo = engine
@@ -828,8 +1216,8 @@ function startBattle(species: number, level: number, o?: WorldObject) {
     const opponent =
       o?.trainer && o.kind !== "legendary"
         ? {
-            party: o.trainer.team.map((m) =>
-              engine.makePokemon(m.species, m.level),
+            party: o.trainer.team.map((m, i) =>
+              engine.makePokemon(rivalSpecies(o, i, m.species), m.level),
             ),
           }
         : { species, level };
@@ -839,7 +1227,11 @@ function startBattle(species: number, level: number, o?: WorldObject) {
       balls: Object.entries(ballIds).map(
         ([key, id]) => [id, save.items[key] || 0] as [number, number],
       ),
-      items: [[18, save.items.potion || 0]],
+      items: Object.entries(MEDICINE).map(([key, m]) => [
+        m.id,
+        save.items[key] || 0,
+      ]),
+      training: !!o?.trainer && o.kind !== "legendary",
       money: save.money,
       badges: (1 << save.badges) - 1,
       seen: save.seen,
@@ -868,8 +1260,9 @@ function showBattle() {
     for (const [key, id] of Object.entries(ballIds))
       save.items[key] =
         result.bag.balls.find((v: [number, number]) => v[0] === id)?.[1] || 0;
-    save.items.potion =
-      result.bag.items.find((v: [number, number]) => v[0] === 18)?.[1] || 0;
+    for (const [key, m] of Object.entries(MEDICINE))
+      save.items[key] =
+        result.bag.items.find((v: [number, number]) => v[0] === m.id)?.[1] || 0;
     save.seen = result.world.seen;
     save.caught = result.world.caught;
     if (caughtSpecies && !save.caught.includes(caughtSpecies))
@@ -890,12 +1283,16 @@ function showBattle() {
         );
       applyReward(battleObject.reward);
     }
-    if (
+    const blackout =
       !won &&
-      ["lose", "loss", "lost", "defeat"].includes(s.outcome.toLowerCase())
-    ) {
+      (["lose", "loss", "lost", "defeat"].includes(s.outcome.toLowerCase()) ||
+        !save.party.some((m) => m.hp > 0));
+    if (blackout) {
       save.party = save.party.map((m) => engine.healPokemon(m));
-      if (battleObject?.id.startsWith("league_"))
+      if (
+        battleObject?.id.startsWith("league_") &&
+        !save.flags.includes("champion")
+      )
         save.flags = save.flags.filter((f) => !/^league_[0-3]_won$/.test(f));
       save.map =
         save.center && WORLD[save.center] ? save.center : "dewdrop_center";
@@ -904,30 +1301,49 @@ function showBattle() {
       save = normalizeSavePosition(save);
       exitLock = true;
     }
+    if (won && battleObject?.id === "league_4")
+      save.hallOfFame = save.party.map(({ species, level }) => ({
+        species,
+        level,
+      }));
     persist();
     const victory = won ? battleObject?.victoryDialogue : undefined;
+    const wrapUp = () => {
+      if (won && battleObject?.id === "league_4")
+        hallOfFame(() => postBattle(result.may_evolve));
+      else postBattle(result.may_evolve);
+    };
+    if (won) {
+      if (victory) message(victory, wrapUp, battleObject?.name);
+      else wrapUp();
+      return;
+    }
     message(
       caughtSpecies
-        ? `${engine.species(caughtSpecies).name} was caught!`
-        : won
-          ? battleObject?.trainer
-            ? `You defeated ${battleObject.trainer.name || battleObject.name}!`
-            : "You won the battle!"
-          : ["lose", "loss", "lost", "defeat"].includes(s.outcome.toLowerCase())
-            ? "You have no Pokémon left to battle!"
-            : "Got away safely!",
-      () =>
-        victory
-          ? message(victory, () => postBattle(result.may_evolve))
-          : postBattle(result.may_evolve),
+        ? `${engine.species(caughtSpecies).name} joined ${result.caught >= 6 ? "your storage" : "your party"}!`
+        : blackout
+          ? `Your team was exhausted. You returned to ${WORLD[save.map].name}, where your Pokémon were healed.`
+          : s.outcome.toLowerCase() === "draw"
+            ? "The battle ended in a draw."
+            : s.outcome.toLowerCase().includes("enemy")
+              ? "The wild Pokémon fled."
+              : "Got away safely!",
+      wrapUp,
     );
     return;
   }
   battlePresenter = new BattlePresenter({
     layer,
-    trainerName: battleObject?.trainer
-      ? battleObject.trainer.name || battleObject.name
-      : undefined,
+    trainerName:
+      battleObject?.trainer && battleObject.kind !== "legendary"
+        ? battleObject.trainer.name || battleObject.name
+        : undefined,
+    arena: battleObject?.id.endsWith("league_4")
+      ? "champion"
+      : battleObject?.id.includes("league_")
+        ? "league"
+        : undefined,
+    wildEncounter: battleObject?.kind === "legendary" ? "legendary" : undefined,
     prizeMoney: battleObject?.trainer?.reward ?? 0,
     snapshot: s,
     act: (index) => battle.act(index),
@@ -945,7 +1361,9 @@ function showBattle() {
           5: "Poké Ball",
           18: "Potion",
         }) as Record<number, string>
-      )[id] || "item",
+      )[id] ||
+      Object.values(MEDICINE).find((m) => m.id === id)?.name ||
+      "item",
     party: () => save.party,
     speed: save.settings.battleSpeed,
     finish: () => {
@@ -955,6 +1373,16 @@ function showBattle() {
     error: (e) =>
       message(`Battle error: ${e instanceof Error ? e.message : String(e)}`),
   });
+}
+function hallOfFame(done: () => void) {
+  mode = "ceremony";
+  const p = panel(
+    layer,
+    "Hall of Fame",
+    `<p>The team that brought the dawn back to Astra.</p><div class="hall-party">${(save.hallOfFame || save.party).map((m) => `<div><img alt="" src="${sprite(m.species)}"><span>${escapeHtml(engine.species(m.species).name)}<br>Lv ${m.level}</span></div>`).join("")}</div><p class="small">The Aurora Trail is open south of Dewdrop Village.</p><button id="continue">Continue exploring</button>`,
+    "champion-record",
+  );
+  p.querySelector("#continue")!.addEventListener("click", done);
 }
 function postBattle(evolvable: number[]) {
   const tasks: (() => void)[] = [];
@@ -1024,8 +1452,10 @@ function challengeTrainer(o: WorldObject) {
         : actors.position(o).y < save.y
           ? "up"
           : "down";
-  message(o.dialogue, () =>
-    startBattle(o.trainer!.team[0].species, o.trainer!.team[0].level, o),
+  message(
+    o.dialogue,
+    () => startBattle(o.trainer!.team[0].species, o.trainer!.team[0].level, o),
+    o.name,
   );
 }
 function update(dt: number) {
@@ -1041,7 +1471,10 @@ function update(dt: number) {
     const noticed = actors.spotTrainer(
       currentMap,
       save,
-      (o) => !save.flags.includes(o.setsFlag || o.id) && has(o.requires),
+      (o) =>
+        !o.id.startsWith("league_") &&
+        !save.flags.includes(o.setsFlag || o.id) &&
+        has(o.requires),
     );
     if (noticed) {
       sound.cue("notice");
@@ -1056,8 +1489,10 @@ function update(dt: number) {
     menu();
     return;
   }
-  let dx = Number(input.held("right")) - Number(input.held("left")),
-    dy = Number(input.held("down")) - Number(input.held("up"));
+  const moving = (a: "right" | "left" | "down" | "up") =>
+    Number(input.held(a) || input.hit(a));
+  let dx = moving("right") - moving("left"),
+    dy = moving("down") - moving("up");
   if (!dx && !dy) return;
   const len = Math.hypot(dx, dy);
   dx /= len;
@@ -1108,26 +1543,41 @@ function update(dt: number) {
       );
     });
   if (!exit) exitLock = false;
-  else if (!exitLock) {
+  else if (!exitLock || (exit.direction && has(exit.requires))) {
     exitLock = true;
     if (!has(exit.requires)) {
-      message(exit.lockedDialogue || "The way is closed.");
+      const key = `gate_${map.id}_${exit.to}`,
+        newlyFound = !save.flags.includes(key);
+      flag(key);
+      persist();
+      message(
+        (exit.lockedDialogue || "The way is closed.") +
+          (newlyFound ? " Marked in your journal." : ""),
+      );
       return;
     }
-    const arrival = crossConnection(map, exit, save.x, save.y);
-    save.map = exit.to;
-    save.x = arrival.x;
-    save.y = arrival.y;
-    actors.enter(WORLD[save.map]);
-    if (!exit.direction) save = normalizeSavePosition(save);
-    if (!save.visited.includes(save.map) && WORLD[save.map].kind === "town")
-      save.visited.push(save.map);
-    renderer.cameraX = 0;
-    renderer.cameraY = 0;
-    persist();
+    depart(exit.to, () => {
+      const arrival = crossConnection(map, exit, save.x, save.y);
+      save.map = exit.to;
+      save.x = arrival.x;
+      save.y = arrival.y;
+      actors.enter(WORLD[save.map]);
+      if (!exit.direction) save = normalizeSavePosition(save);
+      if (!save.visited.includes(save.map) && WORLD[save.map].kind === "town")
+        save.visited.push(save.map);
+
+      persist();
+    });
     return;
   }
-  if (save.repel) save.repel = Math.max(0, save.repel - moved);
+  if (save.repel) {
+    save.repel = Math.max(0, save.repel - moved);
+    if (!save.repel) {
+      persist();
+      message("The Repel wore off. Pokémon can appear in tall grass again.");
+      return;
+    }
+  }
   if (
     map.tiles[Math.floor(save.y)]?.[Math.floor(save.x)] === "g" &&
     save.party.length &&
@@ -1164,24 +1614,14 @@ function frame(now: number) {
   input.update();
   const wasWorld = mode === "world";
   if (mode === "dialogue" && (input.hit("a") || input.hit("b"))) advance();
-  else if (mode === "menu" && input.hit("b")) close();
+  else if ((mode === "menu" || mode === "guide") && input.hit("b")) {
+    const back = layer.querySelector<HTMLButtonElement>("#back, #later");
+    if (back) back.click();
+    else close();
+  } else if (mode === "menu" && input.hit("menu")) close();
   else if (mode === "battle" && input.hit("b")) battlePresenter?.back();
   else if (!["world", "loading", "dialogue"].includes(mode)) {
-    const buttons = Array.from(
-      layer.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"),
-    );
-    if (buttons.length) {
-      const current = buttons.indexOf(
-        document.activeElement as HTMLButtonElement,
-      );
-      if (input.hit("down") || input.hit("right"))
-        buttons[(current + 1) % buttons.length].focus();
-      if (input.hit("up") || input.hit("left"))
-        buttons[
-          (current < 0 ? 0 : current - 1 + buttons.length) % buttons.length
-        ].focus();
-      if (input.hit("a")) buttons[current < 0 ? 0 : current]?.click();
-    }
+    menuInput.update(layer, input, now, mode === "battle");
   }
   if (wasWorld) update(dt);
   const screen = canvas.parentElement!;
@@ -1209,11 +1649,19 @@ if ("serviceWorker" in navigator) {
     status.setAttribute("role", "status");
     status.textContent = "Saving for offline play…";
     document.querySelector(".statusbar > span")?.replaceWith(status);
+    const hadController = !!navigator.serviceWorker.controller;
+    let updateReady = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (!hadController) return;
+      updateReady = true;
+      status.textContent = "Update ready · reload to play";
+    });
     void navigator.serviceWorker
       .register("/sw.js", { updateViaCache: "none" })
-      .then(async () => {
+      .then(async (registration) => {
+        if (hadController) void registration.update().catch(() => {});
         await navigator.serviceWorker.ready;
-        status.textContent = "✓ Offline ready";
+        if (!updateReady) status.textContent = "✓ Offline ready";
       })
       .catch((error) => {
         status.textContent = "Offline setup unavailable — retry online";
