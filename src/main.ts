@@ -712,6 +712,18 @@ function view(v: string) {
     });
 }
 function useItem(item: string) {
+  if ((save.items[item] || 0) < 1) return;
+  if (item === "rare_lure") {
+    save.items[item]--;
+    flag("lure_ready");
+    encounterTarget = 1;
+    persist();
+    message(
+      "The lure will attract one of this habitat's rarer Pokémon on your next grass encounter.",
+      () => view("bag"),
+    );
+    return;
+  }
   if (item === "repel") {
     save.items.repel--;
     save.repel = 100;
@@ -742,11 +754,22 @@ function useItem(item: string) {
         const index = Number(b.dataset.target),
           mon = save.party[index];
         const held: Record<string, number> = {
+          exp_share: 57,
           metal_coat: 143,
           dragon_scale: 151,
           kings_rock: 82,
           up_grade: 172,
         };
+        if (item === "friendship_charm") {
+          mon.happiness = Math.min(255, mon.happiness + 80);
+          save.items[item]--;
+          persist();
+          message(
+            `${engine.species(mon.species).name} feels much closer to you.`,
+            () => view("bag"),
+          );
+          return;
+        }
         if (held[item]) {
           if (mon.item) {
             message("This Pokémon is already holding an item.", () =>
@@ -829,6 +852,7 @@ function startBattle(species: number, level: number, o?: WorldObject) {
       seen: save.seen,
       caught: save.caught,
     });
+    playBattleCries(battle.snapshot());
     showBattle();
   } catch (e) {
     message(
@@ -866,6 +890,14 @@ function battleText(event: any) {
   if (kind === "EnemySentOut") return `The trainer sent out ${data.mon}!`;
   if (kind === "PlayerSentOut") return `Go, ${data.mon}!`;
   return kind.replace(/([a-z])([A-Z])/g, "$1 $2");
+}
+function playBattleCries(snapshot: any) {
+  const cries = snapshot.events.flatMap((event: any) =>
+    typeof event.Cry === "number" ? [event.Cry] : [],
+  );
+  cries.forEach((species: number, i: number) =>
+    window.setTimeout(() => cry(species), i * 400),
+  );
 }
 function showBattle() {
   mode = "battle";
@@ -1017,6 +1049,7 @@ function showBattle() {
       (b.onclick = () => {
         try {
           battle.act(Number(b.dataset.actionIndex));
+          playBattleCries(battle.snapshot());
           battleCategory = "";
           showBattle();
         } catch (e) {
@@ -1159,10 +1192,15 @@ function update(dt: number) {
     if (encounterDistance >= encounterTarget && map.encounters.length) {
       encounterDistance = 0;
       encounterTarget = 8 + Math.random() * 14;
-      const total = map.encounters.reduce((n, e) => n + e.weight, 0);
+      const lured = save.flags.includes("lure_ready");
+      const minWeight = Math.min(...map.encounters.map((e) => e.weight));
+      const pool = lured
+        ? map.encounters.filter((e) => e.weight === minWeight)
+        : map.encounters;
+      if (lured) save.flags = save.flags.filter((f) => f !== "lure_ready");
+      const total = pool.reduce((n, e) => n + e.weight, 0);
       let roll = Math.random() * total;
-      const e =
-        map.encounters.find((e) => (roll -= e.weight) < 0) || map.encounters[0];
+      const e = pool.find((e) => (roll -= e.weight) < 0) || pool[0];
       startBattle(
         e.species,
         e.minLevel + Math.floor(Math.random() * (e.maxLevel - e.minLevel + 1)),
