@@ -219,6 +219,11 @@ impl Engine {
         }
     }
 
+    fn exp_threshold(&mut self, level: u8) -> u32 {
+        self.calc_exp_at_level(level);
+        u32::from_be_bytes([0, self.mem.rb(H_PRODUCT + 1), self.mem.rb(H_PRODUCT + 2), self.mem.rb(H_PRODUCT + 3)])
+    }
+
     /// `CalcExpAtLevel.LevelSquared`.
     fn level_squared(&mut self, d: u8) {
         self.mem.wb(H_MULTIPLICAND, 0);
@@ -344,14 +349,13 @@ impl Engine {
             return Ok(()); // fainted
         }
         let participated = self.small_far_flag_action(W_BATTLE_PARTICIPANTS_NOT_FAINTED, cur, FlagAction::Check);
-        let training = self.training_exp(bc);
-        if !participated && training == 0 {
+        if !participated {
             return Ok(());
         }
-        let gained = if participated { self.participation_exp(bc) } else {
-            self.mem.wb(W_STRING_BUFFER2 + 2, 0); // regular, non-traded message
-            0
-        }.max(training);
+        let gained = self.participation_exp(bc).max(self.training_exp(bc));
+        if gained == 0 {
+            return Ok(());
+        }
         let [q2, q3] = gained.to_be_bytes();
         self.mem.wb(W_STRING_BUFFER2 + 1, q3);
         self.mem.wb(W_STRING_BUFFER2, q2);
@@ -366,7 +370,7 @@ impl Engine {
     }
 
     /// Training uses the member's growth curve and only brings them toward
-    /// local readiness. Benched members receive EXP without stat EXP.
+    /// local readiness after they participate in battle.
     fn training_exp(&self, bc: u16) -> u16 {
         let level = self.mem.rb(bc + u16::from(MON_LEVEL));
         let enemy_level = self.mem.rb(W_ENEMY_MON_LEVEL);
@@ -387,7 +391,11 @@ impl Engine {
         let exp = bc + u16::from(MON_EXP);
         let current = i32::from_be_bytes([0, self.mem.rb(exp), self.mem.rb(exp + 1), self.mem.rb(exp + 2)]);
         let step = exp_at(level + 1) - exp_at(level);
-        let award = if goal - level >= 5 { step } else { step * 2 / 3 };
+        let award = match goal - level {
+            7.. => exp_at(level + 2) - current,
+            3..=6 => step,
+            _ => step * 2 / 3,
+        };
         award.min(exp_at(goal) - current).clamp(0, 65535) as u16
     }
 
@@ -615,15 +623,27 @@ impl Engine {
         let p3 = self.mem.rb(H_PRODUCT + 3);
         self.mem.wb(W_EXPERIENCE_GAINED + 2, p3);
         let p2 = self.mem.rb(H_PRODUCT + 2);
-        let slot = self.mem.rb(W_CUR_PARTY_MON);
-        self.show(crate::battle::Event::ExpBar { slot, gained: u16::from(p2) << 8 | u16::from(p3) });
         self.mem.wb(W_EXPERIENCE_GAINED + 1, p2);
         self.mem.wb(W_EXPERIENCE_GAINED, 0);
         self.mem.wb(W_MON_TYPE, PARTYMON);
         self.copy_mon_to_temp_mon();
         let mut e = self.mem.rb(W_TEMP_MON_LEVEL);
-        // CalcExpBar (HRAM scratch only)
         let exp = W_TEMP_MON_EXP;
+        let total_exp = u32::from_be_bytes([0, self.mem.rb(exp), self.mem.rb(exp + 1), self.mem.rb(exp + 2)]);
+        let gained = u16::from_be_bytes([p2, p3]);
+        let bottom = if e == 1 { 0 } else { self.exp_threshold(e) };
+        let top = self.exp_threshold(e + 1);
+        let progress = |total: u32| -> u8 {
+            let span = top.saturating_sub(bottom).max(1);
+            (total.saturating_sub(bottom).min(span) * 100 / span) as u8
+        };
+        let slot = self.mem.rb(W_CUR_PARTY_MON);
+        self.show(crate::battle::Event::ExpBar {
+            slot,
+            gained,
+            from: progress(total_exp),
+            to: progress(total_exp + u32::from(gained)),
+        });
         let (v, carry) = self.mem.rb(W_EXPERIENCE_GAINED + 2).overflowing_add(self.mem.rb(exp + 2));
         self.mem.wb(exp + 2, v);
         let (v, carry) = adc(self.mem.rb(W_EXPERIENCE_GAINED + 1), self.mem.rb(exp + 1), carry);

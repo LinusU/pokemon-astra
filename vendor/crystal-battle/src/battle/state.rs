@@ -209,6 +209,14 @@ fn stats(cpu: &impl ReadMem, addr: u16) -> [u16; 5] {
 }
 
 impl BattleMon {
+    pub(crate) fn active(cpu: &impl ReadMem, side: super::Side) -> (u8, Self) {
+        let addresses = match side {
+            super::Side::Player => &PLAYER,
+            super::Side::Enemy => &ENEMY,
+        };
+        (cpu.read_byte(addresses.cur_slot), Self::read(cpu, addresses.mon))
+    }
+
     fn read(cpu: &impl ReadMem, base: u16) -> Self {
         BattleMon {
             species: cpu.read_byte(base),

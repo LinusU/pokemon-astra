@@ -113,3 +113,18 @@ it("recovers a v1 adventure beyond the edge of a resized route", () => {
   expect(repaired.party).toEqual(original.party);
   expect(repaired.flags).toEqual(original.flags);
 });
+
+it("recovers an old save on a newly planted Cut tree without awarding the badge or clearing the trail", () => {
+  const exit = WORLD.bramble.exits.find((e) => e.to === "route04")!;
+  const old = {
+    ...populated(),
+    map: "bramble",
+    x: exit.x + 0.5,
+    y: exit.y + 0.5,
+  };
+  const recovered = normalizeSavePosition(old);
+  expect(recovered.x).toBeLessThan(exit.x);
+  expect(recovered.flags).toEqual(old.flags);
+  expect(recovered.badges).toBe(0);
+  expect(normalizeSavePosition(recovered)).toBe(recovered);
+});

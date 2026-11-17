@@ -1,7 +1,7 @@
-import { WORLD, type WorldMap, type WorldObject } from "../world";
+import { WORLD, type Exit, type WorldMap, type WorldObject } from "../world";
 import type { Engine } from "../engine";
 import { interactionTarget, objectVisible } from "./actors";
-import { connectionOffset } from "./navigation";
+import { barrierTarget, barrierTiles, connectionOffset } from "./navigation";
 
 export interface RendererVisualState {
   npcs?: Record<
@@ -15,6 +15,7 @@ export interface RendererVisualState {
     }
   >;
   hideHud?: boolean;
+  exitOpen?: (exit: Exit) => boolean;
 }
 
 type Palette = {
@@ -215,6 +216,7 @@ function buildingType(id: string) {
   if (id.endsWith("_center")) return "center";
   if (id.endsWith("_mart")) return "mart";
   if (id.startsWith("gym")) return "gym";
+  if (id.endsWith("_house")) return "home";
   return id;
 }
 
@@ -649,17 +651,34 @@ export class Renderer {
       if (ch === "B") {
         c.fillStyle = "#555a46";
         c.fillRect(px, py, 16, 16);
-        c.fillStyle = "#b89868";
+        c.fillStyle = type === "mart" ? "#beb58b" : "#b89868";
         c.fillRect(px + 1, py + 1, 14, 13);
-        for (let row = 0; row < 2; row++) {
-          c.fillStyle = "#514e40";
-          c.fillRect(px + 2, py + 2 + row * 7, 12, 5);
-          for (let book = 0; book < 4; book++) {
-            c.fillStyle = ["#9fae7a", "#648e91", "#be7b64", "#e0c294"][
-              (book + row + x) % 4
-            ];
-            const h = type === "mart" ? 3 + ((x + row + book) % 2) : 5;
-            c.fillRect(px + 3 + book * 3, py + 7 + row * 7 - h, 2, h);
+        if (type === "mart") {
+          c.fillStyle = "#506777";
+          c.fillRect(px + 2, py + 3, 12, 5);
+          c.fillRect(px + 2, py + 9, 12, 4);
+          for (let col = 0; col < 3; col++) {
+            const left = px + 2 + col * 4;
+            c.fillStyle = "#dfa0a1";
+            c.fillRect(left + 1, py + 3, 2, 1);
+            c.fillRect(left, py + 4, 4, 2);
+            c.fillStyle = "#eee4cc";
+            c.fillRect(left + 1, py + 6, 2, 1);
+            c.fillStyle = ["#9acaad", "#e4c67d", "#99b8d3"][(x + y + col) % 3];
+            c.fillRect(left + 1, py + 9, 2, 3);
+            c.fillStyle = "#e4ddd0";
+            c.fillRect(left + 1, py + 8, 2, 1);
+          }
+        } else {
+          for (let row = 0; row < 2; row++) {
+            c.fillStyle = "#514e40";
+            c.fillRect(px + 2, py + 2 + row * 7, 12, 5);
+            for (let book = 0; book < 4; book++) {
+              c.fillStyle = ["#9fae7a", "#648e91", "#be7b64", "#e0c294"][
+                (book + row + x) % 4
+              ];
+              c.fillRect(px + 3 + book * 3, py + 2 + row * 7, 2, 5);
+            }
           }
         }
       } else if (ch === "P") {
@@ -673,7 +692,39 @@ export class Renderer {
         c.fillStyle = "#87ac6b";
         c.fillRect(px + 4, py + 3, 4, 3);
         c.fillRect(px + 9, py + 6, 3, 2);
-      } else if (ch === "T" && type === "home" && x >= 17) {
+      } else if (ch === "T" && type === "center") {
+        c.fillStyle = "#806361";
+        c.fillRect(px, py + 4, 16, 10);
+        c.fillStyle = "#b77b79";
+        c.fillRect(px, py + 4, 16, 3);
+        c.fillStyle = "#e5ac9b";
+        c.fillRect(px + 1, py + 7, 14, 5);
+        c.fillStyle = "#efd4b6";
+        c.fillRect(px + 2, py + 7, 12, 1);
+      } else if (ch === "S" && type === "center") {
+        const monitor = m.tiles[y][x - 1] !== "S";
+        c.fillStyle = "#635a63";
+        c.fillRect(px, py + 3, 16, 12);
+        c.fillStyle = "#dfb8ae";
+        c.fillRect(px, py + 4, 16, 9);
+        if (monitor) {
+          c.fillStyle = "#3f5561";
+          c.fillRect(px + 3, py + 1, 11, 8);
+          c.fillStyle = "#9bd0b1";
+          c.fillRect(px + 4, py + 2, 9, 5);
+          c.fillStyle = "#4a7a77";
+          paintGlyph(c, ["0001000", "0010100", "1100011"], px + 5, py + 3);
+        } else {
+          c.fillStyle = "#86757e";
+          c.fillRect(px + 1, py + 6, 14, 5);
+          for (let slot = 2; slot < 14; slot += 4) {
+            c.fillStyle = "#ca6869";
+            c.fillRect(px + slot, py + 6, 3, 2);
+            c.fillStyle = "#f6e7d6";
+            c.fillRect(px + slot, py + 8, 3, 1);
+          }
+        }
+      } else if (ch === "T" && type === "home" && x >= 7) {
         c.fillStyle = "#754e45";
         c.fillRect(px, py + 2, 16, 13);
         c.fillStyle = "#e7d3a9";
@@ -837,17 +888,17 @@ export class Renderer {
   private landmarkFoot(map: WorldMap) {
     if (
       map.id === "mossford" &&
-      map.tiles[9][9] === "#" &&
-      map.tiles[10][10] === "#"
+      map.tiles[2][8] === "#" &&
+      map.tiles[3][9] === "#"
     )
-      return 174 / 16;
-    if (map.id === "tideglass" && map.tiles[17][22] === "#") return 285 / 16;
+      return 4;
+    if (map.id === "tideglass" && map.tiles[15][20] === "#") return 16;
     return undefined;
   }
   private freestandingLandmark(c: CanvasRenderingContext2D, map: WorldMap) {
     if (map.id === "mossford") {
-      const x = 160,
-        y = 158;
+      const x = 144,
+        y = 47;
       c.fillStyle = "#5c5746";
       c.fillRect(x - 10, y - 11, 20, 27);
       c.fillRect(x - 7, y - 17, 14, 11);
@@ -873,8 +924,8 @@ export class Renderer {
       c.fillRect(x - 2, y - 12, 4, 4);
     }
     if (map.id === "tideglass") {
-      const x = 360,
-        y = 284;
+      const x = 328,
+        y = 255;
       c.fillStyle = "#39576a";
       c.fillRect(x - 12, y - 4, 24, 5);
       c.fillRect(x - 9, y - 41, 18, 41);
@@ -981,15 +1032,18 @@ export class Renderer {
         ctx.fillStyle = p.path;
         for (let step = 0; step < 4; step++)
           ctx.fillRect(px + 3, py + 3 + step * 3, 10, 1);
-      } else if (!this.outdoor(m) && e.entrance === "door") {
+      } else if (e.entrance === "mat") {
         const [floor, highlight, trim] = this.room(m);
         ctx.fillStyle = trim;
-        ctx.fillRect(px + 1, py + 3, 14, 13);
-        ctx.fillStyle = highlight;
-        ctx.fillRect(px + 2, py + 4, 12, 1);
-        ctx.fillRect(px + 2, py + 13, 12, 1);
+        ctx.fillRect(px + 1, py - 4, 14, 17);
         ctx.fillStyle = floor;
-        paintGlyph(ctx, ["00100", "01110", "11111", "00100"], px + 6, py + 7);
+        ctx.fillRect(px + 3, py - 2, 10, 13);
+        ctx.fillStyle = highlight;
+        ctx.fillRect(px + 3, py - 1, 10, 1);
+        ctx.fillRect(px + 3, py + 9, 10, 1);
+        for (let i = 3; i <= 13; i += 2) ctx.fillRect(px + i, py - 5, 1, 1);
+        ctx.fillStyle = "#473e3b";
+        ctx.fillRect(px, py + 13, 16, 3);
       }
       if (m.tiles[e.y]?.[e.x] === "d") {
         const label = e.to.endsWith("_center")
@@ -1194,6 +1248,113 @@ export class Renderer {
     c.fillStyle = "#efa779";
     c.fillRect(left + 4, deck + 6, width - 8, 2);
   }
+  private roadBarriers(
+    c: CanvasRenderingContext2D,
+    map: WorldMap,
+    isOpen: (exit: Exit) => boolean,
+  ) {
+    const p = PALETTES[map.palette] || PALETTES.meadow;
+    for (const e of map.exits) {
+      if (!e.barrier || isOpen(e)) continue;
+      const { kind } = e.barrier;
+      for (const { x, y } of barrierTiles(e)) {
+        const px = x * 16,
+          py = y * 16;
+        const middle = e.x === x && e.y === y;
+        if (kind === "cut") {
+          c.fillStyle = "#40563a";
+          c.fillRect(px + 1, py + 4, 14, 10);
+          c.fillRect(px + 3, py + 1, 10, 14);
+          c.fillStyle = "#6a8b50";
+          c.fillRect(px + 2, py + 4, 12, 6);
+          c.fillRect(px + 5, py + 2, 7, 9);
+          c.fillStyle = "#a5b668";
+          c.fillRect(px + 4, py + 5, 4, 2);
+          c.fillRect(px + 10, py + 8, 3, 2);
+          c.fillStyle = "#775440";
+          c.fillRect(px + 7, py + 10, 2, 5);
+        } else if (kind === "strength" || kind === "rockSmash") {
+          this.rock(c, px, py, p, map.palette);
+          if (kind === "rockSmash") {
+            c.fillStyle = p.ink;
+            paintGlyph(
+              c,
+              ["1100", "0110", "0011", "0110", "1100"],
+              px + 7,
+              py + 4,
+            );
+          }
+        } else if (
+          kind === "surf" ||
+          kind === "whirlpool" ||
+          kind === "waterfall"
+        ) {
+          c.fillStyle = p.water;
+          c.fillRect(px, py, 16, 16);
+          c.fillStyle = "#b5dcea";
+          if (kind === "waterfall") {
+            c.fillRect(px + 2, py, 2, 13);
+            c.fillRect(px + 7, py + 4, 2, 11);
+            c.fillRect(px + 12, py, 2, 12);
+            c.fillRect(px + 1, py + 14, 14, 1);
+          } else if (kind === "whirlpool") {
+            paintGlyph(
+              c,
+              [
+                "00111100",
+                "01000010",
+                "10011001",
+                "10110001",
+                "10000010",
+                "01111100",
+              ],
+              px + 4,
+              py + 5,
+            );
+          } else {
+            c.fillRect(px + 1, py + 10, 5, 1);
+            c.fillRect(px + 11, py + 4, 4, 1);
+            c.fillStyle = "#e9d39b";
+            c.fillRect(px + 6, py + 7, 4, 3);
+            c.fillStyle = "#ad686b";
+            c.fillRect(px + 7, py + 4, 2, 4);
+          }
+        } else if (kind === "flash") {
+          c.fillStyle = p.shade;
+          c.fillRect(px, py + 3, 16, 13);
+          c.fillStyle = "#1e2832";
+          c.fillRect(px + 1, py + 6, 14, 10);
+          c.fillRect(px + 3, py + 3, 10, 5);
+          c.fillStyle = "#56636c";
+          c.fillRect(px + 4, py + 2, 8, 2);
+          c.fillRect(px, py + 6, 2, 9);
+          c.fillRect(px + 14, py + 6, 2, 9);
+        } else {
+          c.fillStyle = "#4b3d3a";
+          const vertical = e.direction === "east" || e.direction === "west";
+          if (vertical) {
+            c.fillRect(px + 6, py, 4, 16);
+            c.fillRect(px + 4, py + 6, 8, 4);
+            c.fillStyle = "#d1a471";
+            c.fillRect(px + 6, py, 2, 16);
+          } else {
+            c.fillRect(px, py + 6, 16, 7);
+            c.fillRect(px + 6, py + 4, 4, 11);
+            c.fillStyle = "#d1a471";
+            c.fillRect(px, py + 7, 16, 2);
+          }
+          if (middle) {
+            c.fillStyle = "#604e3f";
+            c.fillRect(px + 3, py + 2, 10, 8);
+            c.fillStyle = "#e3be80";
+            c.fillRect(px + 4, py + 3, 8, 5);
+            c.fillStyle = "#63443e";
+            c.fillRect(px + 7, py + 4, 2, 3);
+          }
+        }
+      }
+    }
+  }
   private object(
     c: CanvasRenderingContext2D,
     map: WorldMap,
@@ -1326,17 +1487,41 @@ export class Renderer {
     const previous = this.currentMap;
     const changed = previous?.id !== map.id;
     const outside = this.outdoor(map);
-    const axis = (position: number, size: number, screen: number) => {
+    // Frame the town itself at its edges. Pan across a connecting road as the
+    // player approaches its mouth so the next route scrolls into view.
+    const axis = (
+      position: number,
+      size: number,
+      screen: number,
+      horizontal: boolean,
+    ) => {
       const target = position * WORLD_SCALE - screen / 2;
       const extra = size * WORLD_SCALE - screen;
-      return outside
-        ? target
-        : extra < 0
-          ? extra / 2
-          : Math.max(0, Math.min(extra, target));
+      if (extra < 0) return extra / 2;
+      const bounded = Math.max(0, Math.min(extra, target));
+      if (!outside || target === bounded) return bounded;
+      const side = horizontal
+        ? target < 0
+          ? "west"
+          : "east"
+        : target < 0
+          ? "north"
+          : "south";
+      let blend = 0;
+      for (const exit of map.exits) {
+        if (exit.direction !== side) continue;
+        const lateral = Math.abs(
+          horizontal ? y - exit.y - 0.5 : x - exit.x - 0.5,
+        );
+        blend = Math.max(
+          blend,
+          Math.min(1, ((exit.span ?? 1) + 4 - lateral) / 3),
+        );
+      }
+      return bounded + (target - bounded) * blend;
     };
-    const targetX = axis(x, map.width, WIDTH);
-    const targetY = axis(y, map.height, HEIGHT);
+    const targetX = axis(x, map.width, WIDTH, true);
+    const targetY = axis(y, map.height, HEIGHT, false);
     let dx = x - this.lastX;
     let dy = y - this.lastY;
     let continuous = !changed;
@@ -1483,6 +1668,7 @@ export class Renderer {
         }
     }
     const done = new Set(flags);
+    const isOpen = visualState.exitOpen ?? ((e: Exit) => !e.barrier);
     if (this.outdoor(map)) {
       for (const e of map.exits) {
         const neighbor = WORLD[e.to];
@@ -1500,6 +1686,7 @@ export class Renderer {
         c.save();
         c.translate(ox, oy);
         c.drawImage(this.terrainFor(neighbor), 0, 0);
+        this.roadBarriers(c, neighbor, isOpen);
         if (this.landmarkFoot(neighbor) !== undefined)
           this.freestandingLandmark(c, neighbor);
         for (const o of neighbor.objects
@@ -1516,6 +1703,7 @@ export class Renderer {
     }
     c.drawImage(terrain, 0, 0);
     this.animateGround(c, map, time);
+    this.roadBarriers(c, map, isOpen);
     const objects = map.objects.filter((o) => objectVisible(o, done));
     const actors = objects.map((o) => ({
       y: visualState.npcs?.[o.id]?.y ?? o.y + 0.5,
@@ -1615,14 +1803,18 @@ export class Renderer {
       done,
       (o) => visualState.npcs?.[o.id] ?? { x: o.x + 0.5, y: o.y + 0.5 },
     );
+    const barrier = barrierTarget(map, { x, y, facing }, isOpen);
     const exit = map.exits
+      .filter(isOpen)
       .map((e) => ({ e, distance: Math.hypot(e.x + 0.5 - x, e.y + 0.5 - y) }))
       .filter(({ distance }) => distance < 2.25)
       .sort((a, b) => a.distance - b.distance)[0]?.e;
-    if (target || exit) {
-      const hint = target
-        ? `A · ${target.name}`
-        : `${exit!.direction ? DIRECTION_ARROW[exit!.direction] : "→"} ${exit!.label}`;
+    if (barrier || target || exit) {
+      const hint = barrier
+        ? `A · Inspect ${barrier.label}`
+        : target
+          ? `A · ${target.name}`
+          : `${exit!.direction ? DIRECTION_ARROW[exit!.direction] : "→"} ${exit!.label}`;
       const w = Math.ceil(Math.min(300, c.measureText(hint).width + 16));
       const left = Math.floor((WIDTH - w) / 2);
       c.fillStyle = "#263a36e8";

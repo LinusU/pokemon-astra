@@ -168,7 +168,7 @@ pub fn generate(config: &BattleConfig, seed: u64) -> Result<(BattleSetup, u64), 
         mom_saving: engine.mem.rb(W_MOM_SAVING_MONEY),
         mom_money: engine.money_at(W_MOMS_MONEY),
     };
-    let bag = Bag { items: engine.read_pocket(W_NUM_ITEMS), balls: engine.read_pocket(W_NUM_BALLS) };
+    let bag = engine.bag();
     let opponent = match config.battle.kind {
         BattleKind::WildEncounter => {
             Opponent::Wild { species: engine.mem.rb(W_TEMP_WILD_MON_SPECIES), level: engine.mem.rb(W_CUR_PARTY_LEVEL) }
@@ -222,6 +222,10 @@ impl Engine {
             .collect()
     }
 
+    pub fn bag(&self) -> Bag {
+        Bag { items: self.read_pocket(W_NUM_ITEMS), balls: self.read_pocket(W_NUM_BALLS) }
+    }
+
     fn read_pocket(&self, num: u16) -> Vec<(u8, u8)> {
         (0..u16::from(self.mem.rb(num))).map(|i| (self.mem.rb(num + 1 + 2 * i), self.mem.rb(num + 2 + 2 * i))).collect()
     }
@@ -246,7 +250,7 @@ impl Engine {
             money: self.money_at(W_MONEY),
             mom_money: self.money_at(W_MOMS_MONEY),
             pay_day: self.money_at(W_PAY_DAY_MONEY),
-            bag: Bag { items: self.read_pocket(W_NUM_ITEMS), balls: self.read_pocket(W_NUM_BALLS) },
+            bag: self.bag(),
             may_evolve: flags(W_EVOLVABLE_FLAGS, u16::from(PARTY_LENGTH)).into_iter().map(usize::from).collect(),
             world: self.read_world(),
         }

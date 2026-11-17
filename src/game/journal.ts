@@ -153,7 +153,7 @@ export function directions(
     if (fly)
       return {
         title: goal.title,
-        hint: "Fly to " + WORLD[fly].name + " from Map & travel.",
+        hint: "Fly to " + WORLD[fly].name + " from the Map menu.",
         fly,
       };
   }

@@ -56,23 +56,35 @@ export function interactionDistance(
   map: WorldMap,
   player: { x: number; y: number; facing: string },
   target: { x: number; y: number },
+  options: { acrossCounter?: boolean; allowWaterTarget?: boolean } = {},
 ) {
   const [fx, fy] = DELTA[player.facing as Facing] || DELTA.down;
   const dx = target.x - player.x,
     dy = target.y - player.y,
     distance = Math.hypot(dx, dy);
   if (
-    distance > 1.75 ||
+    distance > (options.acrossCounter ? 2.35 : 1.75) ||
     dx * fx + dy * fy < 0.1 ||
     Math.abs(dx * fy - dy * fx) > 0.95
   )
     return Infinity;
   for (let d = 0.25; d < distance - 0.3; d += 0.2) {
-    const tile =
-      map.tiles[Math.floor(player.y + (dy / distance) * d)]?.[
-        Math.floor(player.x + (dx / distance) * d)
-      ];
-    if (!tile || "#rw~".includes(tile)) return Infinity;
+    const x = Math.floor(player.x + (dx / distance) * d);
+    const y = Math.floor(player.y + (dy / distance) * d);
+    const tile = map.tiles[y]?.[x];
+    if (
+      tile === "~" &&
+      options.allowWaterTarget &&
+      x === Math.floor(target.x) &&
+      y === Math.floor(target.y)
+    )
+      continue;
+    if (
+      !tile ||
+      "#rw~BPTS".includes(tile) ||
+      (tile === "C" && !options.acrossCounter)
+    )
+      return Infinity;
   }
   return distance;
 }
@@ -95,7 +107,13 @@ export function interactionTarget(
   let distance = Infinity;
   for (const object of map.objects) {
     if (!objectVisible(object, flags)) continue;
-    const reach = interactionDistance(map, player, position(object));
+    const target = position(object);
+    const acrossCounter =
+      (object.kind === "healer" || object.kind === "shop") &&
+      player.facing === "up" &&
+      player.y > target.y &&
+      map.tiles[object.y + 1]?.[object.x] === "C";
+    const reach = interactionDistance(map, player, target, { acrossCounter });
     if (reach < distance) {
       nearest = object;
       distance = reach;

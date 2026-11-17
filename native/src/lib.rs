@@ -42,7 +42,7 @@ fn snapshot(b: &Battle) -> Value {
         .decision()
         .filter(|d| d.site == PromptSite::LearnMove)
         .map(|_| b.engine().engine().mem.rb(W_CUR_PARTY_MON));
-    json!({"site":site,"legal":legal,"state":state,"events":events,"outcome":outcome,"result":b.result(),"learning_slot":learning_slot})
+    json!({"site":site,"bag":b.engine().engine().bag(),"legal":legal,"state":state,"events":events,"outcome":outcome,"result":b.result(),"learning_slot":learning_slot})
 }
 fn run(v: Value) -> Result<Value, String> {
     match v["op"].as_str().unwrap_or("") {

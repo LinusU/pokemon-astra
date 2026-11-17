@@ -1,4 +1,5 @@
-import { ABILITIES, WORLD, type Ability } from "../world";
+import { ABILITIES, WORLD, type Ability, type Requirement } from "../world";
+import { barrierAt, exitOpen } from "./navigation";
 import type { Pokemon } from "../engine";
 
 export type Save = {
@@ -26,17 +27,17 @@ export type Save = {
 export const freshSave = (): Save => ({
   version: 1,
   map: "dewdrop",
-  x: 6.5,
-  y: 24.5,
-  facing: "down",
+  x: 4.5,
+  y: 16.5,
+  facing: "up",
   party: [],
   storage: [],
-  flags: [],
+  flags: ["starter_supplies_pending"],
   abilities: [],
   badges: 0,
   seen: [],
   caught: [],
-  items: { poke_ball: 10, potion: 5 },
+  items: {},
   money: 3000,
   visited: ["dewdrop"],
   steps: 0,
@@ -140,6 +141,42 @@ export function isValidSave(x: any): x is Save {
     (x.settings.music === undefined || typeof x.settings.music === "boolean")
   );
 }
+export function meetsRequirement(
+  save: Save,
+  requirement?: Requirement,
+  typesOf?: (species: number) => number[],
+) {
+  if (!requirement) return true;
+  const {
+    flags = [],
+    badges = 0,
+    ability,
+    caught = 0,
+    items = [],
+    species,
+    types = [],
+  } = requirement;
+  const typeIds: Record<string, number> = {
+    bug: 7,
+    water: 21,
+    grass: 22,
+    fire: 20,
+  };
+  return (
+    flags.every((f) => save.flags.includes(f)) &&
+    save.badges >= badges &&
+    (!ability || save.abilities.includes(ability)) &&
+    save.caught.length >= caught &&
+    items.every((key) => save.items[key] > 0) &&
+    (!species || save.party.some((mon) => species.includes(mon.species))) &&
+    types.every(
+      (t) =>
+        save.caught.filter((id) => typesOf?.(id).includes(typeIds[t.type]))
+          .length >= t.count,
+    )
+  );
+}
+
 /** Move a valid save out of an obstructed position, e.g. after a map update. */
 export function normalizeSavePosition(save: Save): Save {
   const map = WORLD[save.map];
@@ -158,6 +195,9 @@ export function normalizeSavePosition(save: Save): Save {
       [-0.22, 0.22],
       [0.22, 0.22],
     ].every(([dx, dy]) => {
+      const gate = barrierAt(map, x + dx, y + dy);
+      if (gate && !exitOpen(gate, (r) => meetsRequirement(save, r), save.flags))
+        return false;
       const tile = map.tiles[Math.floor(y + dy)]?.[Math.floor(x + dx)];
       return (
         !!tile &&
@@ -168,7 +208,13 @@ export function normalizeSavePosition(save: Save): Save {
   // Map revisions can also strand a player on an otherwise walkable island.
   // Only relocate into the same walkable component as an entrance.
   const accessible = new Set<number>();
-  const queue = map.exits.map((e) => [e.x, e.y]);
+  const queue = map.exits.flatMap(({ x, y }) => [
+    [x, y],
+    [x - 1, y],
+    [x + 1, y],
+    [x, y - 1],
+    [x, y + 1],
+  ]);
   for (let i = 0; i < queue.length; i++) {
     const [x, y] = queue[i];
     if (x < 0 || x >= map.width || y < 0 || y >= map.height) continue;

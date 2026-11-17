@@ -28,6 +28,8 @@ pub enum Event {
     /// move, Present's, a ball's shakes, …). The animation's own sounds and
     /// cries are part of it.
     Animation { anim: u16, user: Side, param: u8 },
+    /// The battler being sent out at this point in a turn.
+    SendOut { side: Side, slot: u8, mon: super::state::BattleMon },
     /// A sound effect (`SFX_*`) the battle plays outside animations and text.
     Sound(u16),
     /// The cry of a species (a mon fainting, a wild mon appearing, …).
@@ -38,8 +40,8 @@ pub enum Event {
     SlideOut(Side),
     /// The enemy trainer slides back onto the screen (after the battle).
     TrainerSlidesIn,
-    /// The active mon (party slot `slot`)'s experience bar fills by `gained`.
-    ExpBar { slot: u8, gained: u16 },
+    /// The active mon's progress toward the next level, as percentages.
+    ExpBar { slot: u8, gained: u16, from: u8, to: u8 },
     /// The stats box of party mon `slot` (after a level-up).
     StatsBox { slot: u8 },
     /// The enemy mon's front picture animates, with its cry (it appears).

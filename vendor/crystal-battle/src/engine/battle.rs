@@ -259,8 +259,13 @@ impl Engine {
     /// `wBattleAnimParam`.
     pub fn play_battle_anim(&mut self) {
         let anim = self.mem.rw_le(W_FX_ANIM_ID);
-        let event = crate::battle::Event::Animation { anim, user: self.turn_side(), param: self.mem.rb(W_BATTLE_ANIM_PARAM) };
-        self.show(event);
+        let user = self.turn_side();
+        let param = self.mem.rb(W_BATTLE_ANIM_PARAM);
+        if self.events.is_some() && anim == crate::defs::ANIM_SEND_OUT_MON && param == 0 {
+            let (slot, mon) = crate::battle::state::BattleMon::active(&self.mem, user);
+            self.show(crate::battle::Event::SendOut { side: user, slot, mon });
+        }
+        self.show(crate::battle::Event::Animation { anim, user, param });
     }
 
     /// `text`, for a text whose `text_asm` choices the battle code computed

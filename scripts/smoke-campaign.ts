@@ -31,9 +31,9 @@ assert.equal(
 const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"));
 const engine = new Engine(instance.exports as never, rom);
 const pokeballId = 5;
-const ultraballId = 2;
+const ballStock = [[5, "poke_ball", 200, 0], [4, "great_ball", 600, 2], [2, "ultra_ball", 1200, 5]] as const;
 type Medicine = Parameters<typeof useMedicine>[0];
-const leagueSupplies = { hyper_potion: 12, full_restore: 3, revive: 6, max_elixer: 4 } as const;
+const leagueSupplies = { hyper_potion: 10, super_potion: 6, full_restore: 1, revive: 5, max_elixer: 2 } as const;
 
 const rivalPartners: Record<number, number[]> = {
   58: [60, 61, 62, 62],
@@ -41,9 +41,9 @@ const rivalPartners: Record<number, number[]> = {
   69: [58, 58, 59, 59],
 };
 const targetSpecies: Record<number, number[]> = {
-  1: [16, 19], 2: [179], 3: [194], 4: [27], 6: [78, 75],
-  9: [55], 10: [64, 59], 13: [94, 105], 15: [131], 16: [135],
-  17: [149], 19: [181], 20: [196],
+  1: [16, 19], 2: [179], 3: [194], 4: [27], 5: [170], 6: [75, 51],
+  8: [105, 229], 9: [55], 10: [64], 11: [71], 13: [105], 14: [215], 15: [131], 16: [135],
+  17: [149], 19: [181], 20: [248],
 };
 const detours: Record<number, string[]> = {
   3: ["lantern_1", "gym1"], 5: ["undertow_1", "gym2"],
@@ -89,8 +89,9 @@ type LegalAction = "Fight" | "Run" | {
 
 // Used to choose actions only. The actual outcome, PP, health and all rewards
 // come from the native battle engine.
-function damageEstimate(user: Combatant, target: Combatant, moveId: number): number {
+function damageEstimate(user: Combatant, target: Combatant, moveId: number, ignoreAccuracy = false): number {
   const { power, type } = move(moveId);
+  const estimatedPower = moveId === 222 ? 71 : power;
   const special = type >= 20;
   const accuracy = rom[0x41afb + (moveId - 1) * 7 + 4] / 255;
   const effectiveness = types(target.species).reduce(
@@ -99,18 +100,18 @@ function damageEstimate(user: Combatant, target: Combatant, moveId: number): num
   );
   const attack = user.stats[special ? 3 : 0];
   const defense = target.stats[special ? 4 : 1];
-  const standard = ((2 * user.level / 5 + 2) * power * attack) / Math.max(1, defense) / 50 + 2;
+  const standard = ((2 * user.level / 5 + 2) * estimatedPower * attack) / Math.max(1, defense) / 50 + 2;
   const specialDamage: Record<number, number> = {
     49: 20, 69: user.level, 101: user.level, 162: target.hp / 2, 237: 40,
   };
   const damage = specialDamage[moveId] ?? (power ? standard : 0);
-  return damage * effectiveness * accuracy * (types(user.species).includes(type) ? 1.5 : 1);
+  return damage * effectiveness * (ignoreAccuracy ? 1 : accuracy) * (types(user.species).includes(type) ? 1.5 : 1);
 }
 
-function threat(user: Combatant, target: Combatant) {
+function threat(user: Combatant, target: Combatant, ignoreAccuracy = false) {
   return Math.max(
     0,
-    ...user.moves.map((id, slot) => id && (user.pp[slot] & 63) ? damageEstimate(user, target, id) : 0),
+    ...user.moves.map((id, slot) => id && (user.pp[slot] & 63) ? damageEstimate(user, target, id, ignoreAccuracy) : 0),
   );
 }
 
@@ -120,6 +121,7 @@ function chooseAction(
   catching: boolean,
   early: boolean,
   ballId: number,
+  league: boolean,
 ): number {
   const { player, enemy } = snap.state;
   const active = player.active as Combatant;
@@ -127,8 +129,15 @@ function chooseAction(
   const party = player.party as Combatant[];
   const legal = snap.legal as LegalAction[];
   const indexed = legal.map((action, index) => ({ action, index }));
-  const score = (mon: Combatant) =>
-    threat(mon, target) * 1.6 - threat(target, mon) * 0.8 + (mon.hp / mon.max_hp) * 5;
+  const score = (mon: Combatant) => {
+    const damage = threat(mon, target);
+    if (!league) return damage * 1.6 - threat(target, mon) * 0.8 + (mon.hp / mon.max_hp) * 5;
+    const danger = threat(target, mon, true);
+    const movesFirst = !(mon.status & 64) && mon.stats[2] > target.stats[2];
+    const requiredTurns = target.hp / Math.max(1, damage) - Number(movesFirst);
+    const margin = mon.hp / Math.max(1, danger) - requiredTurns;
+    return damage / target.hp * 80 + Math.max(-4, Math.min(4, margin)) * 27 + mon.hp / mon.max_hp * 8;
+  };
 
   if (snap.site === "LearnMove") {
     const request = (snap.events as { Message?: { AskForgetMove?: { mv: number } } }[])
@@ -167,14 +176,38 @@ function chooseAction(
     legal.findIndex((action) => typeof action === "object" && action.Item && predicate(action.Item));
 
   if (catching) {
-    const ball = item((choice) => choice.id === ballId);
+    const ball = [ballId, ...ballStock.map(([id]) => id).reverse()]
+      .map((id) => item((choice) => choice.id === id)).find((index) => index >= 0) ?? -1;
     if (ball >= 0) {
-      const weakMove = attacks.filter(({ damage }) => damage > 0 && damage < target.hp * 0.82).at(-1);
+      const weakMove = attacks.filter(({ index, damage }) => {
+        const action = legal[index];
+        const moveId = typeof action === "object" && action.Move ? active.moves[action.Move.slot] : 0;
+        return damage > 0 && damage < target.hp * (moveId === 222 ? 0.55 : 0.80);
+      }).at(-1);
       const weakened = target.hp / target.max_hp < (early ? 0.66 : 0.42);
-      return weakened || !weakMove || turn > 5 ? ball : weakMove.index;
+      return weakened || !weakMove || turn > 3 ? ball : weakMove.index;
     }
   } else {
-    const danger = threat(target, active);
+    const danger = threat(target, active, league);
+    const first = !(active.status & 64) && active.stats[2] > target.stats[2];
+    if (league && attacks[0]?.damage >= target.hp * 1.1 && (first || active.hp > danger))
+      return attacks[0].index;
+    if (league && party.filter((mon) => mon.hp > 0).length <= 3) {
+      const revival = indexed.flatMap(({ action, index }) => {
+        if (typeof action !== "object" || action.Item?.id !== MEDICINE.revive.id || action.Item.target == null)
+          return [];
+        const mon = party[action.Item.target];
+        return [{ index, margin: score({ ...mon, hp: Math.floor(mon.max_hp / 2) }) - score(active) }];
+      }).sort((a, b) => b.margin - a.margin)[0];
+      if (revival && revival.margin > 30 && target.hp > (attacks[0]?.damage ?? 0) * 2)
+        return revival.index;
+    }
+    if (!target.status && target.hp > (attacks[0]?.damage ?? 0) * 2
+        && active.hp < danger * 3.5) {
+      const sleep = indexed.find(({ action }) => typeof action === "object" &&
+        action.Move && [47, 79, 95, 142, 147].includes(active.moves[action.Move.slot]));
+      if (sleep) return sleep.index;
+    }
     if (active.hp > danger * 1.4 && threat(active, target) < target.hp * 0.7
         && party.filter((mon) => mon.hp > 0).length <= 2) {
       const revive = indexed.flatMap(({ action, index }) => {
@@ -185,13 +218,22 @@ function chooseAction(
       }).sort((a, b) => b.priority - a.priority)[0];
       if (revive) return revive.index;
     }
-    if (active.hp > danger * 1.15 && active.hp < active.max_hp * 0.65) {
-      const restorative = item(({ id, target }) =>
-        target === player.active_slot &&
-        (id === MEDICINE.hyper_potion.id || (id === MEDICINE.full_restore.id && active.status !== 0)),
-      );
-      if (restorative >= 0) return restorative;
+    const hpMissing = active.max_hp - active.hp;
+    if (league && active.status && hpMissing >= 40) {
+      const fullRestore = item(({ id, target }) => id === MEDICINE.full_restore.id && target === player.active_slot);
+      if (fullRestore >= 0) return fullRestore;
     }
+    const healingMoves = [
+      [MEDICINE.potion.id, 20], [MEDICINE.super_potion.id, 50],
+      [MEDICINE.hyper_potion.id, 200], [MEDICINE.full_restore.id, 999],
+    ];
+    const recovery = healingMoves.find(([id, hp]) =>
+      hpMissing >= Math.min(25, hp / 2) &&
+      Math.min(active.max_hp, active.hp + hp) > danger * 1.1 &&
+      item((choice) => choice.id === id && choice.target === player.active_slot) >= 0,
+    );
+    if (recovery && active.hp <= danger * 1.5 && (target.hp > attacks[0]?.damage || active.stats[2] <= target.stats[2]))
+      return item(({ id, target }) => id === recovery[0] && target === player.active_slot);
     const replacement = indexed.flatMap(({ action, index }) => {
       if (typeof action !== "object" || !action.Switch) return [];
       const next = party[action.Switch.slot];
@@ -200,8 +242,9 @@ function chooseAction(
     if (replacement && replacement.score > score(active) + Math.max(8, active.level / 2))
       return replacement.index;
   }
-  if (active.hp > threat(target, active) * 1.1
-      && active.max_hp - active.hp >= 18 && active.hp < active.max_hp * 0.4) {
+  if (active.max_hp - active.hp >= 10
+      && active.hp <= threat(target, active) * 1.6
+      && Math.min(active.max_hp, active.hp + 20) > threat(target, active) * 1.3) {
     const potion = item(({ id, target }) => id === MEDICINE.potion.id && target === player.active_slot);
     if (potion >= 0) return potion;
   }
@@ -239,12 +282,20 @@ function preMiraSave(save: Save, opponent: WorldObject): Save {
 function runCampaign(starter: number) {
   const save = freshSave();
   save.party = [engine.makeStarter(starter)];
+  save.items.poke_ball = 10;
+  save.items.potion = 5;
   save.flags = ["partner", `starter_${starter}`];
   save.caught = [starter];
   save.seen = [starter];
+  // Show Growlithe to the Dewdrop elder for the Fire Stone before leaving.
+  if (starter === 58) evolve(0, 59);
+  let bestBall = pokeballId;
+  const partnerFamily = new Set(starter === 58 ? [58, 59] : starter === 60 ? [60, 61, 62, 186] : [69, 70, 71]);
   let seed = 105;
   let captures = 0;
   let trainerWins = 0;
+  let practiceWins = 0;
+  const routePractice: WorldObject[] = [];
 
   function record(species: number) {
     if (!save.seen.includes(species)) save.seen.push(species);
@@ -268,13 +319,12 @@ function runCampaign(starter: number) {
     const battle = engine.startBattle({
       party: save.party,
       opponent,
-      training: true,
       seen: save.seen,
       caught: save.caught,
       seed: seed++,
       badges: (1 << save.badges) - 1,
       money: save.money,
-      balls: [[pokeballId, save.items.poke_ball ?? 0], [ultraballId, save.items.ultra_ball ?? 0]],
+      balls: ballStock.map(([id, key]) => [id, save.items[key] ?? 0]),
       items: Object.entries(MEDICINE).map(([key, item]) => [item.id, save.items[key] ?? 0]),
     });
     for (let turn = 0; turn < 170; turn++) {
@@ -288,8 +338,8 @@ function runCampaign(starter: number) {
         save.seen = result.world.seen;
         for (const [key, item] of Object.entries(MEDICINE))
           save.items[key] = result.bag.items.find(([id]) => id === item.id)?.[1] ?? 0;
-        save.items.poke_ball = result.bag.balls.find(([id]) => id === pokeballId)?.[1] ?? 0;
-        save.items.ultra_ball = result.bag.balls.find(([id]) => id === ultraballId)?.[1] ?? 0;
+        for (const [ballId, key] of ballStock)
+          save.items[key] = result.bag.balls.find(([id]) => id === ballId)?.[1] ?? 0;
         if (result.caught !== null) {
           record(result.party[result.caught].species);
           captures++;
@@ -303,20 +353,75 @@ function runCampaign(starter: number) {
         }
         return result.outcome;
       }
-      battle.act(chooseAction(snapshot, turn, catching, seed < 130, save.items.ultra_ball ? ultraballId : pokeballId));
+      battle.act(chooseAction(snapshot, turn, catching, save.badges < 2, bestBall, save.badges === 8));
     }
     throw Error("Battle exceeded 170 decisions");
   }
 
-  function challenge(object: WorldObject, requireVictory: boolean) {
-    const trainer = object.trainer!;
-    const roster = trainer.team.map(({ species, level }, index) => {
+  function makeRoster(object: WorldObject) {
+    return object.trainer!.team.map(({ species, level }, index) => {
       const rival = /^rival_([1-4])$/.exec(object.id);
-      const partner = rival && index === trainer.team.length - 1
+      const partner = rival && index === object.trainer!.team.length - 1
         ? rivalPartners[starter][Number(rival[1]) - 1] : species;
       return engine.makePokemon(partner, level);
     });
-    const outcome = fight({ party: roster });
+  }
+
+  function makeLead(slot: number) {
+    if (slot > 0) [save.party[0], save.party[slot]] = [save.party[slot], save.party[0]];
+  }
+
+  function practice(object: WorldObject, lead?: number) {
+    makeLead(lead ?? 0);
+    save.party = save.party.map((mon) => engine.healPokemon(mon));
+    const outcome = fight({ party: makeRoster(object) });
+    if (outcome === "win") {
+      practiceWins++;
+      save.money += Math.floor((object.trainer?.reward ?? 0) / 2);
+    }
+    console.log(`Practice against ${object.trainer!.name}: ${outcome}, party levels ${save.party.map((mon) => mon.level).join(", ")}`);
+  }
+
+  function challenge(object: WorldObject, requireVictory: boolean) {
+    const trainer = object.trainer!;
+    const roster = makeRoster(object);
+    if (save.badges > 0) {
+      const battleMon = (mon: Save["party"][number]): Combatant => ({
+        ...mon,
+        max_hp: mon.stats[0],
+        stats: mon.stats.slice(1),
+      });
+      const ranked = save.party.map((mon, slot) => {
+        const actor = battleMon(mon);
+        const ratings = roster.map((enemy) => {
+          const target = battleMon(enemy);
+          return threat(actor, target) / target.hp - threat(target, actor) / actor.hp;
+        });
+        return { slot, rating: ratings[0] * 1.4 + Math.max(...ratings) * 0.4 };
+      }).sort((a, b) => b.rating - a.rating);
+      const preferred = ranked[0].slot;
+      const viablePractice = save.badges < 8 && object.kind !== "leader"
+        ? ranked.filter(({ rating }) => rating > 0.05 && rating >= ranked[0].rating - 0.16)
+          .sort((a, b) => save.party[a.slot].level - save.party[b.slot].level)[0]?.slot
+        : undefined;
+      const training = save.badges === 1 && object.kind !== "leader"
+        ? save.party.findIndex((mon) => types(mon.species).includes(22) && mon.level < 16)
+        : save.badges === 2 && object.kind !== "leader"
+          ? save.party.findIndex((mon) => [38, 51].includes(mon.species) && mon.level < 20)
+          : save.badges === 4 && object.kind !== "leader"
+            ? save.party.findIndex((mon) => types(mon.species).includes(21) && mon.level >= 16 && mon.level < 32)
+            : -1;
+      const lead = training >= 0 ? training : viablePractice ?? preferred;
+      makeLead(lead);
+    }
+    let outcome = fight({ party: roster });
+    if (requireVictory && save.badges < 8 && outcome !== "win") {
+      const lead = save.party[0];
+      for (const previous of routePractice.slice(-2)) practice(previous);
+      save.party = save.party.map((mon) => engine.healPokemon(mon));
+      makeLead(save.party.findIndex((mon) => mon.species === lead.species));
+      outcome = fight({ party: roster });
+    }
     if (outcome === "win") {
       save.money += trainer.reward ?? 0;
       save.flags.push(object.setsFlag ?? object.id);
@@ -326,7 +431,6 @@ function runCampaign(starter: number) {
     if (requireVictory) assert.equal(outcome, "win", `Lost a required battle against ${trainer.name}`);
     if (object.kind === "leader") {
       save.abilities.push(ABILITIES[save.badges++]);
-      if (save.badges === 1 && starter === 58) evolve(0, 59); // Dewdrop's Warm Hearth reward
     }
   }
 
@@ -341,28 +445,51 @@ function runCampaign(starter: number) {
   console.log(`\nStarter: ${engine.species(starter).name}`);
   for (let route = 1; route <= 20; route++) {
     const map = WORLD[`route${String(route).padStart(2, "0")}`];
-    for (const species of targetSpecies[route] ?? []) {
+    const additions = route === 2 && starter !== 69 ? [69] : route === 3 && starter !== 58 ? [37] : [];
+    for (const species of [...(targetSpecies[route] ?? []), ...additions]) {
+      if (save.party.some((mon) => mon.species === species)) continue;
+      if (species === 105 && save.party.some((mon) => mon.species === 51)) continue;
       const encounter = map.encounters.find((entry) => entry.species === species);
       if (!encounter) continue;
-      if (save.badges >= 5 && (save.items.ultra_ball ?? 0) < 5) buy("ultra_ball", 5, 1200);
-      if (save.items.poke_ball < 4) buy("poke_ball", 10, 200);
-      save.party = save.party.map((mon) => engine.healPokemon(mon));
-      const replace = [10, 15, 17].includes(route) ? 1 : save.party.length - 1;
-      const previous = save.party.length === 6 && save.party.splice(replace, 1)[0];
-      const outcome = fight({ species, level: encounter.maxLevel }, true);
-      if (previous) {
-        if (outcome === "caught") save.storage.push(previous);
-        else save.party.push(previous);
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const [ballId, key, price] = ballStock.filter(([, , , badges]) => save.badges >= badges).at(-1)!;
+        if ((save.items[key] ?? 0) < 4) buy(key, Math.min(5, Math.floor(save.money / price)), price);
+        bestBall = save.items[key] ? ballId : pokeballId;
+        save.party = save.party.map((mon) => engine.healPokemon(mon));
+        const replace = save.party
+          .map((mon, slot) => ({ mon, slot }))
+          .filter(({ mon }) => !partnerFamily.has(mon.species))
+          .filter(({ mon }) => ![51, 55, 105, 131, 149, 181, 229].includes(mon.species) || mon.species === species)
+          .sort((a, b) => a.mon.level - b.mon.level)[0]?.slot ?? save.party.length - 1;
+        const previous = save.party.length === 6 && save.party.splice(replace, 1)[0];
+        const outcome = fight({ species, level: encounter.maxLevel }, true);
+        if (previous) {
+          if (outcome === "caught") save.storage.push(previous);
+          else save.party.push(previous);
+        }
+        console.log(map.id, engine.species(species).name, outcome);
+        if (outcome === "caught") {
+          if (species === 37) evolve(save.party.length - 1, 38); // Route 02 Fire Stone
+          break;
+        }
       }
-      console.log(map.id, engine.species(species).name, outcome);
+    }
+    if (route === 2 && starter !== 58) {
+      const mareep = save.party.findIndex((mon) => mon.species === 179);
+      if (mareep > 0) [save.party[0], save.party[mareep]] = [save.party[mareep], save.party[0]];
     }
     for (const location of [map.id, ...(detours[route] ?? [])]) {
       for (const object of WORLD[location].objects) {
-        if (!object.trainer || object.kind === "legendary" || object.id.endsWith("_optional_1"))
+        if (!object.trainer || object.kind === "legendary")
           continue;
         // The road teams may backtrack to town between training fights.
         save.party = save.party.map((mon) => engine.healPokemon(mon));
         if (save.items.potion < 4) buy("potion", 4, MEDICINE.potion.price);
+        if (object.kind === "leader" || object.id === "meridian_objective") {
+          for (const key of ["super_potion", "hyper_potion", "revive"] as const)
+            if (save.badges >= MEDICINE[key].badges && (save.items[key] ?? 0) < 3)
+              buy(key, 3, MEDICINE[key].price);
+        }
         const lead = save.party[0];
         if (save.badges >= 2 && ((lead.species === 61 && lead.level >= 32)
             || (lead.species === 70 && lead.level >= 42)) && save.money >= 2100) {
@@ -370,14 +497,25 @@ function runCampaign(starter: number) {
           evolve(0, lead.species + 1);
         }
         challenge(object, object.kind === "leader" || object.id === "meridian_objective");
+        if (WORLD[location].kind === "route" && !/^rival_/.test(object.id)
+          && save.flags.includes(object.setsFlag ?? object.id))
+          routePractice.push(object);
       }
     }
   }
 
   assert.equal(save.badges, 8, "Eight badges are required before entering the League");
-  console.log(`League preparation: ${save.money} funds after ${trainerWins} trainer wins and ${captures} captures`);
+  // Use up to eight route rematches to build the endgame team, with each new
+  // recruit taking the lead on a route fight they can handle.
+  const trainees = [...save.party].sort((a, b) => b.level - a.level).slice(0, 5);
+  const lastTrainers = routePractice.slice(-4);
+  for (const [index, trainer] of [...lastTrainers, ...lastTrainers].entries()) {
+    const species = trainees[index % lastTrainers.length + 1]?.species;
+    practice(trainer, save.party.findIndex((mon) => mon.species === species));
+  }
+  console.log(`League preparation: ${save.money} funds after ${trainerWins} trainer wins, ${practiceWins} rematches and ${captures} captures`);
   for (const [key, quantity] of Object.entries(leagueSupplies) as [keyof typeof leagueSupplies, number][])
-    assert(buy(key, quantity, MEDICINE[key].price), `Cannot afford League supplies: ${key}`);
+    assert(buy(key, Math.max(0, quantity - (save.items[key] ?? 0)), MEDICINE[key].price), `Cannot afford League supplies: ${key}`);
 
   // One full heal before Rowan. Use only purchased supplies between chambers.
   save.party = save.party.map((mon) => engine.healPokemon(mon));
@@ -386,7 +524,9 @@ function runCampaign(starter: number) {
       save.party = save.party.map((mon) => {
         let ready = giveMedicine(mon, "revive");
         if (ready.status) ready = giveMedicine(ready, "full_restore");
-        if (ready.hp < ready.stats[0] * 0.75) ready = giveMedicine(ready, "hyper_potion");
+        const missing = ready.stats[0] - ready.hp;
+        if (missing >= 55) ready = giveMedicine(ready, "hyper_potion");
+        else if (missing >= 28) ready = giveMedicine(ready, "super_potion");
         if (ready.moves.some((id, slot) => id && move(id).power > 0 && (ready.pp[slot] & 63) <= 3))
           ready = giveMedicine(ready, "max_elixer");
         return ready;

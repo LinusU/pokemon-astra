@@ -34,8 +34,10 @@ interface BattleSide {
 }
 export interface BattleSnapshot {
   site: string | null;
+  bag: BattleBag;
   legal: unknown[];
   state: {
+    battle_mode?: number;
     player: BattleSide;
     enemy: BattleSide;
   };
@@ -44,12 +46,16 @@ export interface BattleSnapshot {
   outcome: string | null;
   result: BattleResult | null;
 }
+export interface BattleBag {
+  items: [number, number][];
+  balls: [number, number][];
+}
 export interface BattleResult {
   outcome: string;
   party: Pokemon[];
   caught: number | null;
   money: number;
-  bag: { items: [number, number][]; balls: [number, number][] };
+  bag: BattleBag;
   may_evolve: number[];
   world: { seen: number[]; caught: number[] };
 }
@@ -60,7 +66,6 @@ export interface BattleOptions {
   items?: [number, number][];
   money?: number;
   badges?: number;
-  training?: boolean;
   seed?: number;
   seen?: number[];
   caught?: number[];
@@ -85,7 +90,8 @@ type Exports = {
   cry(p: number, n: number, id: number): number;
   sound_effect(p: number, n: number, id: number): number;
 };
-const TRAINING_LEVELS = [11, 17, 23, 28, 34, 40, 45, 50, 58];
+
+const TRAINING_LEVELS = [12, 18, 24, 30, 37, 43, 48, 53, 60];
 
 export class Engine {
   constructor(
@@ -280,10 +286,7 @@ export class Engine {
         op: "start",
         setup,
         seed: options.seed ?? Math.floor(Math.random() * 0xffffffff),
-        training_level:
-          options.training && "Trainer" in opp
-            ? TRAINING_LEVELS[popcount(options.badges ?? 0)]
-            : 0,
+        training_level: "Trainer" in opp ? TRAINING_LEVELS[popcount(options.badges ?? 0)] : 0,
       }),
     );
   }

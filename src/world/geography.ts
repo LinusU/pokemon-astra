@@ -33,20 +33,37 @@ export const routeDirections: Partial<Record<string, Direction>> = {
   "25": "south",
 };
 
-const opening = new Set(["dewdrop", "mossford", "route01", "route02"]);
 export const dimensions = (id: string, kind: WorldMap["kind"]): Point => {
-  if (id === "route01") return [40, 24];
-  if (id === "route02") return [28, 28];
-  if (id === "dewdrop" || id === "mossford") return [32, 28];
-  if (kind === "town") return [26, 20];
-  if (kind === "route") return [26, 18];
+  if (id === "route01") return [28, 18];
+  if (id === "route02") return [24, 19];
+  if (id === "dewdrop" || id === "mossford") return [25, 20];
+  if (kind === "town") return [24, 18];
+  if (kind === "route") return [23, 16];
   if (kind === "dungeon") return [20, 16];
   if (kind === "gym") return [22, 18];
-  return [24, 16];
+  if (id.startsWith("league")) return [24, 16];
+  if (id === "lab") return [13, 10];
+  if (id.endsWith("_center")) return [12, 9];
+  return [11, 9];
 };
 
 const walkableWithoutSurf = (ch: string | undefined) =>
   ch !== undefined && !"#rw~BCPTS".includes(ch);
+
+function resizeLayout(map: WorldMap, width: number, height: number) {
+  const point = ([x, y]: Point): Point => [
+    Math.round((x * (map.width - 1)) / (width - 1)),
+    Math.round((y * (map.height - 1)) / (height - 1)),
+  ];
+  const patch = ([x, y, w, h, tile]: Patch): Patch => {
+    const [left, top] = point([x, y]);
+    const [right, bottom] = point([x + w - 1, y + h - 1]);
+    return [left, top, right - left + 1, bottom - top + 1, tile];
+  };
+  const anchors = (points: Record<string, Point>) =>
+    Object.fromEntries(Object.entries(points).map(([id, p]) => [id, point(p)]));
+  return { point, patch, anchors };
+}
 
 function floorPlan(map: WorldMap, ground: string) {
   const { width, height } = map;
@@ -178,10 +195,80 @@ interface TownPlan {
   anchors: Record<string, Point>;
   /** Secondary lane or promenade. */
   lane?: Point[];
+  house?: [x: number, y: number, width: number];
 }
 
 const towns: Record<string, TownPlan> = {
+  dewdrop: {
+    square: [12, 10],
+    sites: [
+      [2, 3, 5],
+      [17, 6, 5],
+      [9, 2, 7],
+      [2, 13, 5],
+    ],
+    ground: [
+      [1, 1, 6, 2, "#"],
+      [18, 1, 6, 3, "#"],
+      [20, 16, 4, 3, "#"],
+      [17, 13, 5, 3, "~"],
+      [18, 12, 4, 5, "~"],
+      [15, 12, 2, 4, "f"],
+      [2, 7, 5, 2, "f"],
+      [15, 2, 3, 3, "f"],
+      [8, 16, 2, 3, "#"],
+    ],
+    anchors: {
+      robin_start: [10, 8],
+      quest_hearth: [15, 13],
+      resident_dewdrop_0: [7, 6],
+      resident_dewdrop_1: [19, 10],
+    },
+    lane: [
+      [4, 16],
+      [7, 16],
+      [7, 10],
+      [12, 10],
+    ],
+  },
+  mossford: {
+    house: [3, 2, 5],
+    square: [12, 9],
+    sites: [
+      [17, 4, 6],
+      [3, 12, 6],
+    ],
+    ground: [
+      [1, 1, 3, 5, "#"],
+      [21, 1, 3, 2, "#"],
+      [2, 11, 8, 1, "~"],
+      [1, 15, 2, 4, "~"],
+      [1, 17, 10, 2, "~"],
+      [10, 16, 6, 3, "~"],
+      [15, 14, 9, 3, "~"],
+      [5, 2, 2, 2, "#"],
+      [8, 2, 2, 2, "#"],
+      [5, 5, 2, 2, "#"],
+      [8, 5, 2, 2, "#"],
+      [3, 7, 2, 2, "f"],
+      [20, 11, 4, 2, "f"],
+    ],
+    anchors: {
+      robin_mossford: [10, 9],
+      quest_parcel: [15, 9],
+      quest_pollinators: [7, 7],
+      quest_medicine: [17, 11],
+      resident_mossford_0: [8, 7],
+      resident_mossford_1: [8, 15],
+    },
+    lane: [
+      [12, 7],
+      [12, 15],
+      [6, 15],
+    ],
+  },
   bramble: {
+    house: [15, 12, 5],
     square: [13, 10],
     sites: [
       [4, 2, 7],
@@ -210,11 +297,12 @@ const towns: Record<string, TownPlan> = {
     ],
   },
   tideglass: {
+    house: [9, 2, 5],
     square: [13, 8],
     sites: [
       [17, 2, 7],
       [2, 3, 5],
-      [18, 6, 5],
+      [18, 7, 5],
     ],
     ground: [
       [1, 12, 24, 7, "~"],
@@ -268,6 +356,7 @@ const towns: Record<string, TownPlan> = {
     ],
   },
   sunspire: {
+    house: [3, 1, 5],
     square: [13, 12],
     sites: [
       [17, 1, 7],
@@ -296,6 +385,7 @@ const towns: Record<string, TownPlan> = {
     ],
   },
   reedhaven: {
+    house: [14, 13, 5],
     square: [14, 9],
     sites: [
       [16, 4, 7],
@@ -352,6 +442,7 @@ const towns: Record<string, TownPlan> = {
     ],
   },
   rimepeak: {
+    house: [8, 11, 5],
     square: [12, 12],
     sites: [
       [3, 3, 7],
@@ -405,6 +496,7 @@ const towns: Record<string, TownPlan> = {
     ],
   },
   aster: {
+    house: [2, 11, 4],
     square: [13, 9],
     sites: [
       [5, 13, 7],
@@ -460,6 +552,25 @@ const towns: Record<string, TownPlan> = {
 };
 
 function townLayout(world: Region, map: WorldMap, spec: TownPlan) {
+  if (map.id !== "dewdrop" && map.id !== "mossford") {
+    const { point, patch, anchors } = resizeLayout(map, 26, 20);
+    const site = ([x, y, w]: [number, number, number]): [
+      number,
+      number,
+      number,
+    ] => {
+      const [left, top, width] = patch([x, y, w, 3, "r"]);
+      return [left, top, width];
+    };
+    spec = {
+      square: point(spec.square),
+      ground: spec.ground.map(patch),
+      sites: spec.sites.map(site),
+      anchors: anchors(spec.anchors),
+      lane: spec.lane?.map(point),
+      house: spec.house && site(spec.house),
+    };
+  }
   const plan = floorPlan(map, ",");
   const [cx, cy] = spec.square;
   spec.ground.forEach(plan.patch);
@@ -471,23 +582,31 @@ function townLayout(world: Region, map: WorldMap, spec: TownPlan) {
   // Keep services together in the specification while allowing each town to
   // put the keeper on the far side of a canal, plaza, ridge or market.
   const priority = (e: Exit) =>
-    e.to.endsWith("_center") ? 0 : e.to.endsWith("_mart") ? 1 : 2;
+    e.to.endsWith("_center")
+      ? 0
+      : e.to.endsWith("_mart")
+        ? 1
+        : e.to === "home" || e.to.endsWith("_house")
+          ? 3
+          : 2;
+  const site = (exit: Exit, index: number) =>
+    exit.to.endsWith("_house") ? spec.house! : spec.sites[index];
   buildings.sort((a, b) => priority(a) - priority(b));
   for (const e of map.exits.filter((e) => e.direction))
     plan.trail([spec.square, roadApproach(map, e), [e.x, e.y]], 1);
   buildings.forEach((e, i) => {
-    const [x, y, width] = spec.sites[i];
+    const [x, y, width] = site(e, i);
     relocateExit(world, map, e, [x + Math.floor(width / 2), y + 2]);
     const door: Point = [e.x, e.y + 1];
     plan.trail([spec.square, [cx, door[1]], door], 1);
   });
   for (const e of portals.filter((exit) => world[exit.to].kind === "dungeon")) {
-    const point: Point = map.id === "bellweather" ? [20, 5] : [13, 1];
+    const point: Point = map.id === "bellweather" ? [19, 5] : [21, 5];
     relocateExit(world, map, e, point);
     plan.trail([spec.square, [point[0], cy], point], 1);
   }
   buildings.forEach((e, i) => {
-    const [x, y, width] = spec.sites[i];
+    const [x, y, width] = site(e, i);
     plan.patch([x, y, width, 2, "r"]);
     plan.patch([x, y + 2, width, 1, "w"]);
     plan.grid[e.y][e.x] = "d";
@@ -511,6 +630,64 @@ interface RoutePlan {
 }
 
 const routes: Record<string, RoutePlan> = {
+  "01": {
+    road: [
+      [4, 9],
+      [4, 11],
+      [13, 11],
+      [13, 8],
+      [23, 8],
+      [23, 9],
+    ],
+    ground: [
+      [1, 1, 7, 5, "#"],
+      [8, 3, 5, 2, "g"],
+      [14, 2, 7, 3, "f"],
+      [19, 4, 6, 2, "~"],
+      [20, 3, 3, 4, "~"],
+      [3, 13, 7, 3, "g"],
+      [16, 11, 6, 4, "g"],
+      [1, 15, 2, 2, "#"],
+      [24, 12, 3, 5, "#"],
+    ],
+    training: [8, 10],
+    cache: [19, 13],
+    anchors: { route01_optional_0: [16, 7], route01_optional_1: [8, 14] },
+    clue: "Dewdrop lies west and Mossford east. Wild Pokémon hide in the grass south of the pond.",
+  },
+  "02": {
+    road: [
+      [4, 9],
+      [4, 7],
+      [10, 7],
+      [10, 12],
+      [18, 12],
+      [18, 9],
+    ],
+    ground: [
+      [1, 1, 4, 5, "#"],
+      [6, 2, 2, 2, "#"],
+      [10, 2, 2, 2, "#"],
+      [14, 2, 2, 2, "#"],
+      [19, 2, 4, 4, "#"],
+      [11, 1, 2, 16, "~"],
+      [2, 12, 7, 3, "g"],
+      [13, 14, 5, 3, "g"],
+      [16, 5, 4, 3, "g"],
+      [2, 16, 6, 2, "#"],
+      [20, 14, 3, 4, "#"],
+      [5, 5, 4, 1, "f"],
+    ],
+    training: [6, 6],
+    cache: [17, 15],
+    anchors: {
+      rival_1: [14, 11],
+      evolution_supply_0: [7, 13],
+      route02_optional_0: [8, 11],
+      route02_optional_1: [18, 7],
+    },
+    clue: "The bridge over the orchard stream leads east to Bramble. Look south of the road for wild Pokémon.",
+  },
   "03": {
     road: [
       [15, 14],
@@ -933,7 +1110,7 @@ const routes: Record<string, RoutePlan> = {
     training: [13, 10],
     cache: [5, 5],
     anchors: { legendary_243: [22, 4] },
-    clue: "The planks cross to Reedhaven. Surf reaches the outlying islands and the restored beacon.",
+    clue: "The planks lead to the landing. Surf north across the channel to Reedhaven or explore the islands by the beacon.",
   },
   "23": {
     road: [
@@ -1006,6 +1183,17 @@ const routes: Record<string, RoutePlan> = {
 };
 
 function routeLayout(world: Region, map: WorldMap, spec: RoutePlan) {
+  if (map.id !== "route01" && map.id !== "route02") {
+    const { point, patch, anchors } = resizeLayout(map, 26, 18);
+    spec = {
+      ...spec,
+      road: spec.road.map(point),
+      training: point(spec.training),
+      cache: point(spec.cache),
+      ground: spec.ground.map(patch),
+      anchors: anchors(spec.anchors ?? {}),
+    };
+  }
   const plan = floorPlan(map, ",");
   spec.ground.forEach(plan.patch);
   const [arrival, onward] = map.exits;
@@ -1052,6 +1240,11 @@ function routeLayout(world: Region, map: WorldMap, spec: RoutePlan) {
       [18, 5],
     ]);
   }
+
+  // The crossing has a surveyed launch point at each end, with an open
+  // stretch of water between the two plank landings.
+  if (map.id === "route22")
+    plan.patch([1, Math.floor(map.height / 2), map.width - 2, 2, "~"]);
 
   const middle = spec.road[Math.floor(spec.road.length / 2)];
   map.objects.push({
@@ -1825,7 +2018,7 @@ function gymLayout(world: Region, map: WorldMap) {
   const plan = floorPlan(map, ".");
   gymTerrain[n - 1].forEach(plan.patch);
   const [door] = map.exits;
-  relocateExit(world, map, door, [11, 16]);
+  relocateExit(world, map, door, [11, map.height - 1]);
   placeObjects(
     map,
     plan,
@@ -1904,7 +2097,7 @@ function leagueLayout(world: Region, map: WorldMap) {
   const final = map.id === "league_mira";
   const opponent = map.objects.find((object) => object.trainer)!;
   leagueTerrain[map.id].forEach(plan.patch);
-  relocateExit(world, map, map.exits[0], [12, 14]);
+  relocateExit(world, map, map.exits[0], [12, first ? map.height - 1 : 14]);
   const onward = map.exits[1];
   if (onward) relocateExit(world, map, onward, [12, 2]);
   if (first) relocateExit(world, map, map.exits[2], [20, 12]);
@@ -1912,6 +2105,76 @@ function leagueLayout(world: Region, map: WorldMap) {
     onward.lockedDialogue =
       "The Hall of Fame opens after defeating Champion Mira.";
   placeObjects(map, plan, { [opponent.id]: [12, 6] }, [12, 10]);
+  finish(map, plan);
+}
+
+const servicePlans: Record<string, Patch[]> = {
+  center: [
+    [1, 1, 10, 1, "#"],
+    [4, 3, 4, 1, "C"],
+    [5, 1, 2, 1, "S"],
+    [1, 3, 1, 1, "P"],
+    [10, 3, 1, 1, "P"],
+    [2, 6, 2, 1, "T"],
+    [8, 6, 2, 1, "T"],
+    [4, 7, 4, 1, "a"],
+  ],
+  mart: [
+    [1, 1, 9, 1, "B"],
+    [2, 3, 3, 1, "C"],
+    [7, 3, 2, 1, "B"],
+    [7, 4, 2, 1, "B"],
+    [7, 6, 2, 1, "B"],
+    [1, 6, 1, 1, "P"],
+  ],
+  lab: [
+    [1, 1, 11, 1, "B"],
+    [2, 3, 3, 1, "T"],
+    [2, 4, 1, 1, "S"],
+    [8, 3, 3, 1, "C"],
+    [3, 7, 1, 1, "P"],
+    [9, 7, 1, 1, "P"],
+    [5, 6, 3, 3, "a"],
+  ],
+  home: [
+    [1, 1, 4, 1, "B"],
+    [1, 3, 1, 1, "C"],
+    [2, 4, 2, 1, "T"],
+    [7, 2, 2, 1, "T"],
+    [9, 1, 1, 1, "B"],
+    [9, 6, 1, 1, "P"],
+    [4, 3, 3, 4, "a"],
+  ],
+};
+
+function interiorLayout(world: Region, map: WorldMap) {
+  const type = map.id.endsWith("_center")
+    ? "center"
+    : map.id.endsWith("_mart")
+      ? "mart"
+      : map.id === "lab"
+        ? "lab"
+        : "home";
+  const plan = floorPlan(map, ".");
+  servicePlans[type].forEach(plan.patch);
+  const x = Math.floor(map.width / 2);
+  const [door] = map.exits;
+  relocateExit(world, map, door, [x, map.height - 1]);
+  // The entrance aisle leads to the service counter or the central room.
+  const clerk: Point =
+    type === "center"
+      ? [6, 2]
+      : type === "mart"
+        ? [3, 2]
+        : type === "lab"
+          ? [6, 4]
+          : [3, 3];
+  const [person, visitor] = map.objects;
+  const anchors = { [person.id]: clerk };
+  if (visitor) anchors[visitor.id] = type === "center" ? [2, 5] : [8, 5];
+  placeObjects(map, plan, anchors, [x, 5]);
+  person.facing = "down";
+  if (visitor) visitor.facing = "left";
   finish(map, plan);
 }
 
@@ -1933,12 +2196,13 @@ function townDirections(map: WorldMap) {
 export function composeGeography(world: Region) {
   for (const map of Object.values(world)) {
     if (map.kind === "town") townDirections(map);
-    if (opening.has(map.id)) continue;
     if (map.kind === "town") townLayout(world, map, towns[map.id]);
     if (map.kind === "route") routeLayout(world, map, routes[map.id.slice(5)]);
     if (map.kind === "gym") gymLayout(world, map);
-    if (map.id === "league" || map.id.startsWith("league_"))
-      leagueLayout(world, map);
+    if (map.kind === "interior") {
+      if (map.id.startsWith("league")) leagueLayout(world, map);
+      else interiorLayout(world, map);
+    }
   }
   for (const [id, spec] of Object.entries(dungeons))
     dungeonLayout(world, id, spec);

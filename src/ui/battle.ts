@@ -1,10 +1,12 @@
 import type { BattleMon, BattleSnapshot } from "../engine";
 import { escapeHtml } from "./shell";
+import { battleBagKey, itemInfo, mountBag, type BagItem, type BagState } from "./bag";
 import "./battle.css";
 
 type Side = "Player" | "Enemy";
 type Event = Record<string, any>;
-type Experience = { mon: string; exp: number };
+type Battler = "player" | "enemy";
+type ItemAction = { id: number; target: number | null; move_slot: number | null };
 type Options = {
   layer: HTMLElement;
   trainerName?: string;
@@ -467,35 +469,19 @@ export function battleMonAtSendOut(
   return mon;
 }
 
-function groupExperience(events: Event[]): Event[] {
-  const grouped: Event[] = [];
-  let gains: Experience[] | undefined;
-  for (const event of events) {
-    const gain = event.Message?.GainedExp;
-    if (gain) {
-      if (!gains) {
-        gains = [];
-        grouped.push({ Experience: gains });
-      }
-      gains.push(gain);
-      continue;
-    }
-    if (
-      !event.ExpBar && !event.StatsBox && event.Sound === undefined
-      && !event.Message?.GrewToLevel && !event.Message?.LearnedMove
-    ) gains = undefined;
-    grouped.push(event);
-  }
-  return grouped;
-}
-
 export class BattlePresenter {
   private root: HTMLElement;
   private snapshot: BattleSnapshot;
-  private shown: { player: BattleMon; enemy: BattleMon };
+  private shown: Record<Battler, BattleMon>;
+  private shownSlots: Record<Battler, number>;
+  private readonly trainerBattle: boolean;
   private queue: Event[] = [];
   private category = "";
   private bagItem: number | undefined;
+  private bagTarget: number | undefined;
+  private bagState: BagState = {};
+  private bagView?: ReturnType<typeof mountBag>;
+  private choosing = false;
   private waiting = false;
   private typing = false;
   private message = "";
@@ -503,6 +489,8 @@ export class BattlePresenter {
   private disposed = false;
   constructor(private o: Options) {
     this.snapshot = o.snapshot;
+    this.trainerBattle = Boolean(o.trainerName) || o.snapshot.state.battle_mode === 2;
+    this.shownSlots = { player: o.snapshot.state.player.active_slot, enemy: o.snapshot.state.enemy.active_slot };
     this.shown = {
       player: this.initialMon("player"),
       enemy: this.initialMon("enemy"),
@@ -523,6 +511,7 @@ export class BattlePresenter {
         <div class="battle-mon battle-enemy"><img alt=""></div>
         <div class="battle-mon battle-player"><img alt=""></div>
         <div class="battle-fx"></div>
+        <div class="battle-party-effect" hidden></div>
       </div>
       <div class="battle-box">
         <div class="battle-copy" aria-live="polite"></div><div class="battle-controls"></div>
@@ -536,7 +525,7 @@ export class BattlePresenter {
     this.paint();
     const opening = o.snapshot.events as Event[];
     if (
-      trainer || opening.some((e) => e.Frontpic !== undefined || e.Message?.EnemySentOut || (e.Animation?.anim === 257 && e.Animation.user === "Enemy"))
+      trainer || opening.some((e) => e.Frontpic !== undefined || e.Message?.EnemySentOut || (e.Animation?.anim === 257 && e.Animation.param === 0 && e.Animation.user === "Enemy"))
     )
       this.conceal("enemy");
     if (opening.some((e) => e.Message?.PlayerSentOut || (e.Animation?.anim === 257 && e.Animation.user === "Player")))
@@ -567,15 +556,18 @@ export class BattlePresenter {
         image.alt = this.o.species(mon.species).name;
       }
       const status = battleStatus(mon.status);
+      const name = side === "player" ? this.memberName(this.shownSlots.player) : image.alt;
       const badge = status
         ? `<span class="battle-status ${status[0].toLowerCase()}" aria-label="${status[1]}" title="${status[1]}">${status[0]}</span>`
         : "";
-      hud.innerHTML = `<div class="battle-hud-top"><strong>${escapeHtml(image.alt)}</strong><span>Lv${mon.level}</span></div><div class="battle-hp"><b>HP</b><div class="battle-hp-track"><i class="${ratio <= 0.2 ? "low" : ratio <= 0.5 ? "mid" : ""}" style="width:${ratio * 100}%"></i></div></div><div class="battle-hud-bottom">${badge}${side === "player" ? `<span class="battle-hp-value">${mon.hp} / ${mon.max_hp}</span>` : ""}</div>`;
+      hud.innerHTML = `<div class="battle-hud-top"><strong>${escapeHtml(name)}</strong><span>Lv${mon.level}</span></div><div class="battle-hp"><b>HP</b><div class="battle-hp-track"><i class="${ratio <= 0.2 ? "low" : ratio <= 0.5 ? "mid" : ""}" style="width:${ratio * 100}%"></i></div></div><div class="battle-hud-bottom">${badge}${side === "player" ? `<span class="battle-hp-value">${mon.hp} / ${mon.max_hp}</span>` : ""}</div>`;
     }
   }
   private enqueue(snapshot: BattleSnapshot) {
     this.snapshot = snapshot;
-    this.queue = groupExperience(snapshot.events as Event[]);
+    this.queue = [...snapshot.events] as Event[];
+    this.clearCapture();
+    this.choosing = false;
     this.root.classList.remove("battle-choosing");
     this.root.querySelector(".battle-controls")!.innerHTML = "";
     this.next();
@@ -597,6 +589,7 @@ export class BattlePresenter {
         this.o.finish(this.snapshot);
         return;
       }
+      this.shownSlots = { player: this.snapshot.state.player.active_slot, enemy: this.snapshot.state.enemy.active_slot };
       this.shown = {
         player: structuredClone(this.snapshot.state.player.active),
         enemy: structuredClone(this.snapshot.state.enemy.active),
@@ -611,31 +604,16 @@ export class BattlePresenter {
       this.menu();
       return;
     }
-    if (event.Experience) {
-      const [first, ...others] = event.Experience as Experience[];
-      const names = [first, ...others].map(({ mon, exp }) => `${mon} +${exp}`);
-      const text = others.length
-        ? `EXP · ${names.join(" · ")}`
-        : `${first.mon} gained ${first.exp} EXP!`;
-      this.say(text, true, true);
-      return;
-    }
     if (event.Message) {
       const message = event.Message;
-      for (const [kind, side] of [
-        ["PlayerSentOut", "player"],
-        ["EnemySentOut", "enemy"],
-      ] as const) {
-        if (message[kind]) {
-          this.shown[side] = this.initialMon(side, this.queue);
-          this.root
-            .querySelector(`.battle-${side}`)
-            ?.classList.remove("faint", "withdraw");
-          this.paint();
-        }
-      }
       const kind =
         typeof message === "string" ? message : Object.keys(message)[0];
+      const growth = message.GrewToLevel ?? message.PartyGrewToLevel;
+      if (growth?.slot === this.shownSlots.player) {
+        this.shown.player.level = growth.level;
+        this.paint();
+      }
+      if (kind === "BallBlocked" || kind === "BallDontBeAThief") this.clearCapture();
       if (/^(Downpour|RainContinues|SunGotBright|SunlightIsStrong|SandstormBrewed|SandstormRages)$/.test(kind)) {
         this.root.classList.add("weather-flash");
         this.root.querySelector(".battle-field")?.addEventListener(
@@ -652,8 +630,17 @@ export class BattlePresenter {
           this.o.trainerName,
           this.o.prizeMoney,
         ),
-        /^(UsedMove|StatRose|StatFell|GainedExp|GrewToLevel|LearnedMove|PartyGrewToLevel|CriticalHit|SuperEffective|NotVeryEffective)$/.test(kind),
+        !/^(WantsToBattle|WildAppeared|Caught|EnemyWasDefeated|GotMoney|GotMoneySentSomeToMom|LostAgainst|TiedAgainst|AskForgetMove)$/.test(kind),
       );
+      return;
+    }
+    if (event.SendOut) {
+      const { side, slot, mon } = event.SendOut;
+      const battler = side === "Player" ? "player" : "enemy";
+      this.shownSlots[battler] = slot;
+      this.shown[battler] = mon;
+      this.paint();
+      this.next();
       return;
     }
     if (event.Sound !== undefined) {
@@ -667,9 +654,13 @@ export class BattlePresenter {
       return;
     }
     if (event.Frontpic !== undefined) {
-      this.conceal("enemy", false);
       this.o.cry(event.Frontpic);
-      this.animate("enemy", "appear", 500);
+      if (this.root.classList.contains("conceal-enemy")) {
+        this.conceal("enemy", false);
+        this.animate("enemy", "appear", 500);
+      } else {
+        this.next();
+      }
       return;
     }
     if (event.Faint) {
@@ -688,10 +679,13 @@ export class BattlePresenter {
       this.hp(event.HpBar);
       return;
     }
-    if (event.ExpBar) {
+    if (event.ExpBar?.slot === this.shownSlots.player) {
+      const { from, to } = event.ExpBar;
       const hud = this.root.querySelector<HTMLElement>(".battle-player-hud")!;
       const bar = document.createElement("div");
       bar.className = "battle-exp";
+      bar.style.setProperty("--exp-from", `${from}%`);
+      bar.style.setProperty("--exp-to", `${to}%`);
       bar.innerHTML = "<i></i>";
       hud.append(bar);
       this.delay(550, () => {
@@ -701,19 +695,19 @@ export class BattlePresenter {
       return;
     }
     if (event.StatsBox) {
-      if (event.StatsBox.slot === this.snapshot.state.player.active_slot)
+      if (event.StatsBox.slot === this.shownSlots.player)
         this.animate("player", "effect-heal", 500);
       else this.next();
       return;
     }
-    if (event.BallWobbles !== undefined && event.BallWobbles !== null) {
+    if (!this.trainerBattle && event.BallWobbles != null) {
       const b = event.BallWobbles;
       this.root.classList.add("capture", b.caught ? "caught" : "escape");
       const ball = this.root.querySelector<HTMLElement>(".battle-enemy")!;
       ball.style.setProperty("--wobbles", String(b.wobbles));
       this.delay(500 + b.wobbles * 450, () => {
-        this.root.classList.remove("capture", "caught", "escape");
-        if (b.caught) ball.classList.add("concealed");
+        this.clearCapture();
+        if (b.caught) this.conceal("enemy");
         this.next();
       });
       return;
@@ -723,9 +717,7 @@ export class BattlePresenter {
       const user = a.user === "Player" ? "player" : "enemy";
       if (a.anim === 257) {
         this.conceal(user, false);
-        this.shown[user] = this.initialMon(user, this.queue);
-        this.paint();
-        this.animate(user, "appear", 500);
+        this.animate(user, a.param === 1 ? "effect-status" : "appear", 500);
         return;
       }
       if (a.anim === 258) {
@@ -733,6 +725,11 @@ export class BattlePresenter {
         return;
       }
       if (a.anim === 256) {
+        if (this.trainerBattle || this.queue[0]?.BallWobbles == null) {
+          this.clearCapture();
+          this.next();
+          return;
+        }
         this.root.classList.add("capture", "throwing");
         this.delay(450, () => {
           this.root.classList.remove("throwing");
@@ -808,7 +805,7 @@ export class BattlePresenter {
   }
   private animate(side: string, effect: string, duration: number) {
     const el = this.root.querySelector(`.battle-${side}`)!;
-    el.classList.remove("faint", "withdraw");
+    if (effect === "appear") el.classList.remove("faint", "withdraw");
     el.classList.add(effect);
     this.delay(duration, () => {
       if (effect !== "faint" && effect !== "withdraw")
@@ -816,35 +813,46 @@ export class BattlePresenter {
       this.next();
     });
   }
-  private hp(h: {
-    target: Side | { Party: number };
-    from: number;
-    to: number;
-    max: number;
-  }) {
-    const side =
-      h.target === "Player" ||
-      (typeof h.target === "object" && h.target.Party === this.snapshot.state.player.active_slot)
-        ? "player"
-        : h.target === "Enemy" ? "enemy" : null;
-    if (!side) {
-      this.next();
-      return;
+  private clearCapture() {
+    this.root.classList.remove("capture", "throwing", "caught", "escape");
+  }
+  private hp(h: { target: Side | { Party: number }; from: number; to: number; max: number }) {
+    const reserve = typeof h.target === "object" && h.target.Party !== this.shownSlots.player
+      ? h.target.Party
+      : undefined;
+    const overlay = this.root.querySelector<HTMLElement>(".battle-party-effect")!;
+    const side = h.target === "Enemy" ? "enemy" : "player";
+    if (reserve !== undefined) {
+      overlay.hidden = false;
+      overlay.innerHTML = `<div class="battle-hud-top"><strong>${escapeHtml(this.memberName(reserve))}</strong><span></span></div><div class="battle-hp"><b>HP</b><div class="battle-hp-track"><i></i></div></div>`;
     }
-    const start = performance.now(),
-      duration = 500 / Math.max(0.25, this.o.speed);
+    const setHp = (hp: number) => {
+      if (reserve === undefined) {
+        this.shown[side].hp = hp;
+        this.shown[side].max_hp = h.max;
+        this.paint();
+      } else {
+        overlay.querySelector("span")!.textContent = `${hp} / ${h.max}`;
+        overlay.querySelector("i")!.style.width = `${100 * hp / Math.max(1, h.max)}%`;
+      }
+    };
+    const start = performance.now();
+    const duration = 520 / Math.max(0.25, this.o.speed);
     const step = (now: number) => {
       if (this.disposed) return;
       const p = Math.min(1, (now - start) / duration);
-      this.shown[side].hp = Math.round(h.from + (h.to - h.from) * p);
-      this.shown[side].max_hp = h.max;
-      this.paint();
+      setHp(Math.round(h.from + (h.to - h.from) * p));
       if (p < 1) requestAnimationFrame(step);
-      else this.next();
+      else if (reserve === undefined) this.next();
+      else this.delay(450, () => {
+        overlay.hidden = true;
+        this.next();
+      });
     };
+    setHp(h.from);
     requestAnimationFrame(step);
   }
-  private say(text: string, routine = false, instant = false) {
+  private say(text: string, routine = false) {
     this.message = text;
     this.waiting = true;
     this.typing = true;
@@ -852,22 +860,19 @@ export class BattlePresenter {
     const controls = this.root.querySelector<HTMLElement>(".battle-controls")!;
     controls.innerHTML = `<button class="battle-continue" aria-label="Continue">▼</button>`;
     controls.querySelector("button")!.onclick = () => this.advance();
-    const quick = routine && this.o.speed > 1;
+    const hold = Math.max(560, Math.min(1500, text.length * 27));
     const settle = () => {
       this.typing = false;
-      if (quick) this.delay(Math.max(720, text.length * 35), () => this.advance());
+      if (routine) this.delay(hold, () => this.advance());
     };
     let i = 0;
     const type = () => {
       if (!this.typing) return;
-      copy.textContent = text.slice(0, ++i);
-      if (i < text.length) this.delay(24, type);
+      copy.textContent = text.slice(0, i += 2);
+      if (i < text.length) this.delay(18, type);
       else settle();
     };
-    if (instant) {
-      copy.textContent = text;
-      settle();
-    } else type();
+    type();
   }
   advance() {
     if (!this.waiting) return;
@@ -883,10 +888,19 @@ export class BattlePresenter {
     this.next();
   }
   back() {
-    if (this.waiting) return;
+    if (this.waiting || !this.choosing) return;
+    if (this.bagView) {
+      this.bagView.back();
+      return;
+    }
+    if (this.bagTarget !== undefined) {
+      this.bagTarget = undefined;
+      this.menu();
+      return;
+    }
     if (this.bagItem !== undefined) {
       this.bagItem = undefined;
-      this.menu();
+      this.openBag();
       return;
     }
     if (this.category) {
@@ -904,7 +918,68 @@ export class BattlePresenter {
     );
     if (cancel >= 0) this.act(cancel);
   }
+  private memberName(slot: number) {
+    const saved = this.o.party()[slot];
+    const species = this.snapshot.state.player.party?.[slot]?.species ?? saved?.species;
+    return saved?.nickname || (species ? this.o.species(species).name : "Pokémon");
+  }
+  private closeBag() {
+    this.bagView?.destroy();
+    this.bagView = undefined;
+    this.root.querySelector<HTMLElement>(".battle-box")!.inert = false;
+    this.root.querySelector(".battle-bag")?.remove();
+  }
+  private openBag() {
+    const actions = this.snapshot.legal as { Item?: ItemAction }[];
+    const items: BagItem[] = [];
+    const addPocket = (pocket: "items" | "balls", entries: [number, number][]) => {
+      for (const [id, count] of entries) {
+        if (count <= 0) continue;
+        const info = itemInfo(battleBagKey(id));
+        const allowed = actions.some((a) => a.Item?.id === id);
+        items.push({
+          key: String(id),
+          pocket,
+          name: info.name ?? this.o.itemName(id),
+          description: info.description,
+          action: info.action,
+          count,
+          unavailable: pocket === "balls" && this.trainerBattle
+            ? "Poké Balls are unavailable in trainer battles."
+            : allowed ? undefined : "This item has no effect right now.",
+        });
+      }
+    };
+    addPocket("items", this.snapshot.bag.items);
+    addPocket("balls", this.snapshot.bag.balls);
+    const host = document.createElement("div");
+    host.className = "battle-bag";
+    this.root.append(host);
+    this.root.querySelector<HTMLElement>(".battle-box")!.inert = true;
+    this.bagView = mountBag(host, {
+      items,
+      pockets: ["items", "balls"],
+      state: this.bagState,
+      onUse: (item) => {
+        const id = Number(item.key);
+        this.closeBag();
+        const noTarget = actions.findIndex((a) => a.Item?.id === id && a.Item.target == null);
+        if (noTarget >= 0) this.act(noTarget);
+        else {
+          this.bagItem = id;
+          this.menu();
+        }
+      },
+      onCancel: () => {
+        this.closeBag();
+        this.category = "";
+        this.menu();
+        this.root.querySelector<HTMLButtonElement>('[data-group="BAG"]')?.focus({ preventScroll: true });
+      },
+    });
+  }
   private menu() {
+    this.choosing = true;
     const s = this.snapshot,
       actions = s.legal as any[],
       active = s.state.player.active;
@@ -923,16 +998,11 @@ export class BattlePresenter {
       .map((x) => x.Message?.AskForgetMove)
       .find(Boolean);
     const learningMon = s.state.player.party?.[s.learning_slot ?? s.state.player.active_slot] ?? active;
-    const memberName = (slot: number) => {
-      const saved = this.o.party()[slot];
-      const species = s.state.player.party?.[slot]?.species ?? saved?.species;
-      return saved?.nickname || (species ? this.o.species(species).name : "Pokémon");
-    };
     const member = (slot: number) => {
       const mon = s.state.player.party?.[slot];
-      if (!mon) return memberName(slot);
+      if (!mon) return this.memberName(slot);
       const status = battleStatus(mon.status);
-      return `${memberName(slot)} · Lv${mon.level} · ${mon.hp}/${mon.max_hp} HP${status ? ` · ${status[0]}` : ""}`;
+      return `${this.memberName(slot)} · Lv${mon.level} · ${mon.hp}/${mon.max_hp} HP${status ? ` · ${status[0]}` : ""}`;
     };
     const describeMove = (id: number, currentPp?: number) => {
       const move = this.o.move(id);
@@ -956,7 +1026,7 @@ export class BattlePresenter {
         const targetMove = x.move_slot == null || x.target == null
           ? undefined
           : s.state.player.party?.[x.target]?.moves[x.move_slot];
-        return targetMove ? `${target} · ${this.o.move(targetMove).name}` : target;
+        return targetMove ? this.o.move(targetMove).name : target;
       }
       if (k === "LearnMove")
         return x.slot === null
@@ -984,44 +1054,52 @@ export class BattlePresenter {
       const enemy = this.o.species(s.state.enemy.active.species);
       const types = [...new Set(enemy.types)].map((type) => typeNames[type]).filter(Boolean);
       copy.textContent = `${this.o.trainerName || "The opposing trainer"} is sending out ${enemy.name}.${types.length ? `\n${types.join(" / ")}` : ""}`;
+    } else if (this.bagTarget !== undefined) {
+      copy.textContent = `Restore PP for which move on ${this.memberName(this.bagTarget)}?`;
     } else if (this.bagItem !== undefined) {
       copy.textContent = `Use ${this.o.itemName(this.bagItem)} on which Pokémon?`;
     } else {
       copy.textContent = standard
-        ? `What will ${memberName(s.state.player.active_slot)} do?`
+        ? `What will ${this.memberName(s.state.player.active_slot)} do?`
         : "Choose a move.";
     }
     const controls = this.root.querySelector<HTMLElement>(".battle-controls")!;
-    const entries =
-      standard && !this.category
-        ? ["FIGHT", "BAG", "PARTY", "RUN"].map(
-            (g) =>
-              `<button data-group="${g}" aria-label="${g === "PARTY" ? "Pokémon" : g}"${actions.some((a) => group(a) === g) ? "" : " disabled"}>${g === "PARTY" ? "POKÉMON" : g}</button>`,
-          )
-        : standard && this.category === "BAG" && this.bagItem === undefined
-          ? Array.from(new Set<number>(actions.flatMap((a) => a.Item ? [a.Item.id] : [])))
-              .map((id) => `<button data-item="${id}">${escapeHtml(this.o.itemName(id))}</button>`)
-          : actions
-            .map((a, i) => ({ a, i }))
-            .filter(({ a }) => !standard || (this.bagItem !== undefined ? a.Item?.id === this.bagItem : group(a) === this.category))
-            .map(({ a, i }) => {
-              const detail = a.Move
-                ? describeMove(active.moves[a.Move.slot], active.pp[a.Move.slot])
-                : a.LearnMove?.slot != null
-                  ? describeMove(learningMon.moves[a.LearnMove.slot], learningMon.pp[a.LearnMove.slot])
-                  : "";
-              return `<button data-index="${i}">${escapeHtml(label(a))}${detail ? `<small>${escapeHtml(detail)}</small>` : ""}</button>`;
-            });
+    let entries: string[];
+    if (standard && !this.category) {
+      entries = ["FIGHT", "BAG", "PARTY", "RUN"].map((g) =>
+        `<button data-group="${g}" aria-label="${g === "PARTY" ? "Pokémon" : g}"${g === "BAG" || actions.some((a) => group(a) === g) ? "" : " disabled"}>${g === "PARTY" ? "POKÉMON" : g}</button>`,
+      );
+    } else if (standard && this.bagItem !== undefined && this.bagTarget === undefined) {
+      const targets = new Set<number>(actions.flatMap((a) => a.Item?.id === this.bagItem && a.Item.target != null ? [a.Item.target] : []));
+      entries = Array.from(targets, (slot) => `<button data-target="${slot}">${escapeHtml(member(slot))}</button>`);
+    } else {
+      entries = actions
+        .map((a, i) => ({ a, i }))
+        .filter(({ a }) => !standard || (this.bagItem !== undefined ? a.Item?.id === this.bagItem && a.Item.target === this.bagTarget : group(a) === this.category))
+        .map(({ a, i }) => {
+          const detail = a.Move ? describeMove(active.moves[a.Move.slot], active.pp[a.Move.slot]) : "";
+          return `<button data-index="${i}"${detail ? ` data-move-detail="${escapeHtml(detail)}"` : ""}>${escapeHtml(label(a))}</button>`;
+        });
+    }
     if (standard && this.category)
       entries.push('<button data-back aria-label="Back">Back</button>');
     controls.innerHTML = entries.join("");
-    controls.querySelectorAll<HTMLButtonElement>("[data-item]").forEach((b) => {
-      b.onclick = () => {
-        const id = Number(b.dataset.item);
-        const noTarget = actions.findIndex((a) => a.Item?.id === id && a.Item.target == null);
-        if (noTarget >= 0) this.act(noTarget);
+    if (controls.querySelector("[data-move-detail]")) {
+      controls.querySelectorAll<HTMLButtonElement>("button").forEach((button) => {
+        button.onfocus = () => {
+          copy.textContent = button.dataset.moveDetail?.split(" · ").join("\n") || "Choose a move.";
+        };
+      });
+    }
+    controls.scrollTop = 0;
+    controls.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus({ preventScroll: true });
+    controls.querySelectorAll<HTMLButtonElement>("[data-target]").forEach((button) => {
+      button.onclick = () => {
+        const target = Number(button.dataset.target);
+        const action = actions.findIndex((a) => a.Item?.id === this.bagItem && a.Item.target === target && a.Item.move_slot == null);
+        if (action >= 0) this.act(action);
         else {
-          this.bagItem = id;
+          this.bagTarget = target;
           this.menu();
         }
       };
@@ -1035,7 +1113,9 @@ export class BattlePresenter {
             this.act(i);
           } else {
             this.category = g;
-            this.menu();
+            if (g === "BAG") this.openBag();
+            else if (g === "FIGHT" && actions.includes("Fight")) this.act(actions.indexOf("Fight"));
+            else this.menu();
           }
         }),
     );
@@ -1047,12 +1127,12 @@ export class BattlePresenter {
       ?.addEventListener("click", () => this.back());
   }
   private act(index: number) {
-    if (this.waiting || !this.root.querySelector(".battle-controls button"))
-      return;
+    if (this.waiting || !this.choosing || index < 0) return;
     this.root.querySelector(".battle-controls")!.innerHTML = "";
     try {
       this.category = "";
       this.bagItem = undefined;
+      this.bagTarget = undefined;
       this.enqueue(this.o.act(index));
     } catch (e) {
       this.destroy();
@@ -1062,6 +1142,7 @@ export class BattlePresenter {
   destroy() {
     this.disposed = true;
     clearTimeout(this.timer);
+    this.closeBag();
     this.root.remove();
   }
 }

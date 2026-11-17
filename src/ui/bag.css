@@ -1,0 +1,236 @@
+.astra-bag {
+  --bag-ink: #233e34;
+  --bag-paper: #f8f1d9;
+  --bag-pocket: #4b7957;
+  --bag-tint: #dbe6c5;
+  position: absolute;
+  z-index: 12;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: clamp(4px, 1.3%, 10px);
+  padding: 3%;
+  color: var(--bag-ink);
+  background: repeating-linear-gradient(0deg, #e9e9ce 0 2px, #eff0d9 2px 6px);
+  font-family: "VT323", monospace;
+  font-size: clamp(18px, 4vw, 28px);
+  line-height: 1;
+}
+
+.astra-bag[data-pocket="balls"] {
+  --bag-pocket: #a95741;
+  --bag-tint: #eed1ae;
+}
+.astra-bag[data-pocket="key"] {
+  --bag-pocket: #515b8f;
+  --bag-tint: #dbdded;
+}
+
+.astra-bag header,
+.astra-bag nav {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.astra-bag header {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.astra-bag h2 {
+  margin: 0;
+  font: inherit;
+  font-size: 1.32em;
+}
+
+.astra-bag button {
+  border: 2px solid transparent;
+  border-radius: 0;
+  padding: 0.14em 0.38em;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  line-height: 1;
+}
+
+.astra-bag header button {
+  border-color: currentColor;
+  background: var(--bag-paper);
+}
+
+.astra-bag nav button {
+  flex: 1;
+  border-color: var(--bag-ink);
+  background: var(--bag-tint);
+  white-space: nowrap;
+}
+
+.astra-bag nav button[aria-pressed="true"] {
+  background: var(--bag-pocket);
+  color: #fff8e3;
+  box-shadow: inset 0 -3px #1b312751;
+}
+
+.astra-bag-inventory {
+  position: relative;
+  display: grid;
+  grid-template-columns: 26% minmax(0, 1fr);
+  gap: 3%;
+  min-height: 0;
+}
+
+.astra-bag-rows,
+.astra-bag-details,
+.astra-bag-actions {
+  border: 4px double var(--bag-ink);
+  background: var(--bag-paper);
+}
+
+.astra-bag-rows {
+  min-height: 0;
+  padding: 2px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.astra-bag-rows button {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.2em;
+  width: 100%;
+  padding-left: 1.05em;
+  text-align: left;
+}
+
+.astra-bag-count {
+  color: #4b5e53;
+  white-space: nowrap;
+}
+
+.astra-bag-details {
+  min-height: calc(2em + 12px);
+  padding: 4px 6px;
+}
+
+.astra-bag-details p {
+  margin: 0;
+}
+.astra-bag-unavailable {
+  color: #743b31;
+  font-size: 0.88em;
+}
+
+.astra-bag-actions {
+  position: absolute;
+  z-index: 1;
+  right: 3%;
+  bottom: 3%;
+  display: grid;
+  min-width: 5em;
+  box-shadow: 3px 3px #203f3866;
+}
+
+.astra-bag-actions button {
+  position: relative;
+  padding-left: 1.05em;
+  text-align: left;
+}
+.astra-bag-actions button:disabled {
+  color: #6d756b;
+  cursor: default;
+}
+.astra-bag-rows button[data-selected],
+.astra-bag-actions button:focus {
+  background: var(--bag-tint);
+}
+
+.astra-bag-rows button[data-selected]::before,
+.astra-bag-actions button:focus::before {
+  position: absolute;
+  inset-inline-start: 0.3em;
+  top: 50%;
+  width: 0.48em;
+  height: 0.52em;
+  transform: translateY(-50%);
+  clip-path: polygon(
+    0 0,
+    40% 0,
+    40% 20%,
+    60% 20%,
+    60% 40%,
+    100% 40%,
+    100% 60%,
+    60% 60%,
+    60% 80%,
+    40% 80%,
+    40% 100%,
+    0 100%
+  );
+  background: currentColor;
+  content: "";
+}
+
+.astra-bag button:focus {
+  outline: 2px solid var(--bag-pocket);
+  outline-offset: -2px;
+}
+
+.astra-bag-icon {
+  position: relative;
+  align-self: center;
+  justify-self: center;
+  width: min(76%, 110px);
+  aspect-ratio: 1;
+  color: var(--bag-ink);
+  isolation: isolate;
+}
+
+.astra-bag-icon::before,
+.astra-bag-icon::after,
+.astra-bag-icon i {
+  position: absolute;
+  display: block;
+  border: clamp(2px, 0.5vw, 4px) solid currentColor;
+  content: "";
+}
+
+.astra-bag-icon::before {
+  inset: 0 34% 67%;
+  border-radius: 36% 36% 0 0;
+}
+
+.astra-bag-icon::after {
+  inset: 15% 8% 2%;
+  border-radius: 20% 20% 13% 13%;
+  background: var(--bag-pocket);
+  box-shadow:
+    inset 0 -0.27em #283c3851,
+    0 0.21em #273b3840;
+}
+
+.astra-bag-icon i {
+  inset: 46% 19% 15%;
+  z-index: 1;
+  border-radius: 13% 13% 17% 17%;
+  background: var(--bag-tint);
+  box-shadow: inset 0 0.16em #fff5;
+}
+
+.astra-bag-icon i::after {
+  position: absolute;
+  inset: 30% 23% auto;
+  border-top: 2px solid var(--bag-ink);
+  content: "";
+}
+
+@media (max-width: 440px), (max-height: 550px) {
+  .astra-bag {
+    font-size: 19px;
+  }
+  .astra-bag-inventory {
+    grid-template-columns: 22% minmax(0, 1fr);
+  }
+}

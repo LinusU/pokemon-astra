@@ -2,12 +2,15 @@ import { Input } from "./game/input";
 import { Renderer } from "./game/render";
 import { WorldActors, interactionTarget } from "./game/actors";
 import {
+  barrierTarget,
+  exitOpen,
   connectionAt,
   connectedBlocked,
   crossConnection,
 } from "./game/navigation";
 import { directions, bearings } from "./game/journal";
 import { drawFieldMap } from "./ui/field-map";
+import { mountBag, itemInfo, type BagState } from "./ui/bag";
 import { MenuInput } from "./ui/menu-input";
 import { MEDICINE, isMedicine, useMedicine } from "./game/medicine";
 import { GameAudio } from "./game/audio";
@@ -17,6 +20,7 @@ import {
   freshSave,
   isValidSave,
   normalizeSavePosition,
+  meetsRequirement,
   type Save,
 } from "./game/save";
 import { createShell, panel, escapeHtml } from "./ui/shell";
@@ -24,7 +28,7 @@ import {
   WORLD,
   QUESTS,
   BADGES,
-  type Ability,
+  type Exit,
   type Requirement,
   type Reward,
   type WorldObject,
@@ -57,30 +61,7 @@ const ballIds: Record<string, number> = {
   poke_ball: 5,
 };
 const has = (r?: Requirement) =>
-  !r ||
-  ((!r.flags || r.flags.every((f) => save.flags.includes(f))) &&
-    (!r.badges || save.badges >= r.badges) &&
-    (!r.ability || save.abilities.includes(r.ability)) &&
-    (!r.caught || save.caught.length >= r.caught) &&
-    (!r.items || r.items.every((item) => (save.items[item] || 0) > 0)) &&
-    (!r.species ||
-      r.species.some((id) => save.party.some((m) => m.species === id))) &&
-    (!r.types ||
-      r.types.every(
-        (t) =>
-          save.caught.filter((id) =>
-            engine
-              .species(id)
-              .types.includes(
-                (
-                  { bug: 7, water: 21, grass: 22, fire: 20 } as Record<
-                    string,
-                    number
-                  >
-                )[t.type] ?? -1,
-              ),
-          ).length >= t.count,
-      )));
+  meetsRequirement(save, r, (id) => engine.species(id).types);
 const spriteCache = new Map<string, string>();
 function sprite(id: number, back = false) {
   const key = `${id}:${back}`;
@@ -185,14 +166,22 @@ function restoreSession(data: Save) {
   sound.attach(engine, save.settings.music !== false);
 }
 function message(text: string, callback?: () => void, speaker?: string) {
-  const words = text.trim().split(/\s+/),
-    pages: string[] = [];
+  // Keep short thoughts together and prefer a sentence break between pages.
+  const pages: string[] = [];
   let page = "";
-  for (const word of words) {
-    if (page && `${page} ${word}`.length > 180) {
+  const sentences = text.trim().split(/(?<=[.!?])\s+(?=[A-Z“])/);
+  for (const sentence of sentences) {
+    if (page && page.length + sentence.length > 105) {
       pages.push(page);
-      page = word;
-    } else page = page ? `${page} ${word}` : word;
+      page = "";
+    }
+    for (const word of sentence.split(/\s+/)) {
+      if (page.length + word.length + 1 > 110 && page) {
+        pages.push(page);
+        page = "";
+      }
+      page += (page ? " " : "") + word;
+    }
   }
   if (page) pages.push(page);
   function show() {
@@ -216,8 +205,9 @@ function welcome(error = "") {
   mode = "welcome";
   const p = panel(
     layer,
-    "A new adventure awaits",
-    `<p>The beacons of Astra are fading. Choose a partner, explore a new region, and follow the light of the Aurora Current.</p><div class="drop" id="drop"><p><strong>Bring your own Pokémon Crystal ROM</strong><br><span class="small muted">Your ROM stays in this browser, stored locally. It is never uploaded.</span></p><button id="choose-rom">Choose ROM</button><input hidden id="rom" type="file" accept=".gbc,application/octet-stream"><p class="small muted">or drop your file here</p></div>${error ? `<p class="error">${escapeHtml(error)}</p>` : ""}<p class="small muted">Use the English release, revision 1.1 (.gbc).</p>`,
+    "Pokémon Astra",
+    `<p>Choose your English Pokémon Crystal 1.1 cartridge file (.gbc) to begin.</p><div class="drop" id="drop"><button id="choose-rom">Choose ROM</button><input hidden id="rom" type="file" accept=".gbc,application/octet-stream"><span class="drop-hint small"> or drop your file here</span></div><p class="small muted">Your cartridge and save stay in this browser.</p>${error ? `<p class="error">${escapeHtml(error)}</p>` : ""}`,
+    "rom-import",
   );
   const file = p.querySelector<HTMLInputElement>("#rom")!;
   p.querySelector("#choose-rom")!.addEventListener("click", () => file.click());
@@ -319,8 +309,8 @@ function intro() {
   mode = "intro";
   const p = panel(
     layer,
-    "The Astra region",
-    `<p>Eight ancient beacons guide Pokémon along the Aurora Current. Lately, their lights have begun to fail.</p><p>Leave home and follow the village path to Alder’s lab. Open the menu for a field map, and face people to speak with them.</p><div class="buttons"><button id="begin">Begin adventure</button><button id="how" class="secondary">How to play</button></div>`,
+    "Dewdrop Village",
+    `<p>Professor Alder has a Pokémon for you. Meet him at the lab in the north garden.</p><p class="small">Walk with the D-pad. Face Alder and press A to talk.</p><div class="buttons"><button id="begin">Begin adventure</button><button id="how" class="secondary">How to play</button></div>`,
   );
   p.querySelector("#how")!.addEventListener("click", () => fieldBasics(intro));
   p.querySelector("#begin")!.addEventListener("click", () => {
@@ -335,7 +325,7 @@ function fieldBasics(back: () => void) {
   const p = panel(
     layer,
     "Field basics",
-    `<div class="journal-entries"><article><strong>Find your way</strong><p>Walk with the D-pad, arrows or WASD. Face a person or object and press A or Z. Open Menu with Start or M to see your next stop on the map.</p></article><article><strong>Build your team</strong><p>Walk through tall grass to find Pokémon. Weaken a wild Pokémon, then choose Bag and throw a Poké Ball. Extra catches go to Storage.</p></article><article><strong>Train and recover</strong><p>Trainer battles help healthy teammates catch up. The Party screen shows moves and evolution hints. A red-roofed Center restores HP, status and all move uses.</p></article><article><strong>Follow the beacons</strong><p>Your journal follows the survey and records blocked paths. Each badge unlocks a field ability you can use without teaching a move.</p></article></div><button class="secondary" id="back">Back</button>`,
+    `<div class="journal-entries"><article><strong>Find your way</strong><p>Walk with the D-pad, arrows or WASD. Face a person or object and press A or Z. Open Menu with Start or M to see your next stop on the map.</p></article><article><strong>Build your team</strong><p>Walk through tall grass to find Pokémon. Weaken a wild Pokémon, then choose Bag and throw a Poké Ball. Extra catches go to Storage.</p></article><article><strong>Train and recover</strong><p>Pokémon that fight earn experience. A teammate holding Exp. Share can earn some too. Talk to a road trainer again for a practice battle. A Center heals your whole party.</p></article><article><strong>Follow the beacons</strong><p>Your journal follows the survey and records blocked paths. Each badge unlocks a field ability you can use without teaching a move.</p></article></div><button class="secondary" id="back">Back</button>`,
   );
   p.querySelector("#back")!.addEventListener("click", back);
 }
@@ -344,7 +334,7 @@ function starter() {
   const p = panel(
     layer,
     "Choose your partner",
-    `<p>Professor Alder offers three companions. Your adventure begins together at level 6.</p><div class="list"><button data-id="58"><img class="mini-sprite" src="${sprite(58)}" alt=""> Growlithe <span class="muted">· Fire</span></button><button data-id="60"><img class="mini-sprite" src="${sprite(60)}" alt=""> Poliwag <span class="muted">· Water</span></button><button data-id="69"><img class="mini-sprite" src="${sprite(69)}" alt=""> Bellsprout <span class="muted">· Grass</span></button></div>`,
+    `<p>Which Pokémon will you take with you?</p><div class="list"><button data-id="58"><img class="mini-sprite" src="${sprite(58)}" alt=""> Growlithe <span class="muted">· Fire</span></button><button data-id="60"><img class="mini-sprite" src="${sprite(60)}" alt=""> Poliwag <span class="muted">· Water</span></button><button data-id="69"><img class="mini-sprite" src="${sprite(69)}" alt=""> Bellsprout <span class="muted">· Grass</span></button></div>`,
   );
   p.querySelectorAll<HTMLButtonElement>("[data-id]").forEach(
     (b) =>
@@ -355,10 +345,22 @@ function starter() {
         cry(id);
         save.seen.push(id);
         save.caught.push(id);
+        // Earlier saves already included these supplies before meeting Alder.
+        if (save.flags.includes("starter_supplies_pending")) {
+          applyReward({
+            items: [
+              { item: "poke_ball", amount: 10 },
+              { item: "potion", amount: 5 },
+            ],
+          });
+          save.flags = save.flags.filter(
+            (f) => f !== "starter_supplies_pending",
+          );
+        }
         flag("partner");
         persist();
         message(
-          `${engine.species(id).name} joined your party! You received 10 Poké Balls and 5 Potions. Follow Dewpath east to Mossford. Look in the tall grass for wild Pokémon.`,
+          `${engine.species(id).name} joined your party! Alder packed 10 Poké Balls and 5 Potions in your Bag. Take the east road to Mossford.`,
         );
       }),
   );
@@ -424,11 +426,74 @@ function applyReward(r?: Reward) {
     if (!save.seen.includes(r.species)) save.seen.push(r.species);
   }
 }
+const isExitOpen = (exit: Exit) => exitOpen(exit, has, save.flags);
+
+const fieldActions: Record<string, [string, string, string]> = {
+  cut: [
+    "Overgrown tree",
+    "Use Cut",
+    "The branches fell away. The path is clear.",
+  ],
+  strength: [
+    "Heavy boulder",
+    "Use Strength",
+    "You pushed the boulder off the trail.",
+  ],
+  whirlpool: [
+    "Whirlpool",
+    "Use Whirlpool",
+    "The spinning water settled. You can cross.",
+  ],
+  surf: [
+    "Water crossing",
+    "Use Surf",
+    "Your Pokémon carried you onto the water.",
+  ],
+  rockSmash: ["Cracked rock", "Use Rock Smash", "The cracked rock crumbled."],
+  flash: ["Dark passage", "Use Flash", "The passage lit up."],
+  waterfall: [
+    "Waterfall",
+    "Use Waterfall",
+    "Your Pokémon found a way up the falls.",
+  ],
+};
+function inspectBarrier(exit: Exit) {
+  const obstacle = exit.barrier!;
+  const action = fieldActions[obstacle.kind];
+  if (!has(exit.requires) || !obstacle.flag || !action) {
+    flag(`gate_${save.map}_${exit.to}`);
+    persist();
+    message(
+      exit.lockedDialogue || "The passage is closed.",
+      undefined,
+      action?.[0] ||
+        (obstacle.kind === "warden" ? "Trail warden" : "Closed gate"),
+    );
+    return;
+  }
+  mode = "menu";
+  const p = panel(
+    layer,
+    action[0],
+    `<div class="buttons"><button id="use-field">${action[1]}</button><button class="secondary" id="back">Leave it</button></div>`,
+  );
+  p.querySelector("#back")!.addEventListener("click", close);
+  p.querySelector("#use-field")!.addEventListener("click", () => {
+    flag(obstacle.flag);
+    persist();
+    message(action[2]);
+  });
+}
 function interact() {
   const map = WORLD[save.map],
     dx = save.facing === "left" ? -1 : save.facing === "right" ? 1 : 0,
     dy = save.facing === "up" ? -1 : save.facing === "down" ? 1 : 0;
   actors.enter(map);
+  const barrier = barrierTarget(map, save, isExitOpen);
+  if (barrier) {
+    inspectBarrier(barrier);
+    return;
+  }
   const tx = save.x + dx * 0.75,
     ty = save.y + dy * 0.75;
   const o = interactionTarget(map, save, new Set(save.flags), (o) =>
@@ -453,13 +518,22 @@ function interact() {
     return;
   }
   actors.face(o, save.x, save.y);
+  if (o.quest) {
+    flag("met_" + o.id);
+    persist();
+  }
   // Finished errands remain finished even after a party or held item changes.
   if (o.setsFlag && save.flags.includes(o.setsFlag) && !o.repeatable) {
+    const practice =
+      map.kind === "route" &&
+      o.kind === "trainer" &&
+      !o.id.startsWith("rival_");
     if (
-      save.flags.includes("champion") &&
-      (o.kind === "leader" || o.id.startsWith("league_"))
+      practice ||
+      (save.flags.includes("champion") &&
+        (o.kind === "leader" || o.id.startsWith("league_")))
     ) {
-      offerRematch(o);
+      offerRematch(o, practice);
       return;
     }
     const finished = o.quest ? QUESTS.find((q) => q.id === o.quest) : undefined;
@@ -467,7 +541,7 @@ function interact() {
       finished
         ? `${finished.name} complete. Thank you for your help!`
         : o.kind === "starter"
-          ? "Your partner looks happy. Check the beacon journal whenever you need a lead."
+          ? "Your partner looks happy! Take Dewpath east to Mossford."
           : o.victoryDialogue ||
             (o.kind === "switch"
               ? "It’s already in place."
@@ -492,15 +566,19 @@ function interact() {
     return;
   }
   if (o.kind === "healer") {
+    if (!save.party.length) {
+      message(
+        "Alder has a Pokémon for you at the lab. Bring your partner here whenever it needs a rest.",
+        undefined,
+        o.name,
+      );
+      return;
+    }
     sound.cue("heal");
     save.center = save.map;
     save.party = save.party.map((m) => engine.healPokemon(m));
     persist();
-    message(
-      "Your team’s HP, moves and status are fully restored. If your team faints, we’ll bring you back here.",
-      undefined,
-      o.name,
-    );
+    message("Your Pokémon are all healed up!", undefined, o.name);
     return;
   }
   if (o.kind === "shop") {
@@ -528,7 +606,7 @@ function interact() {
       const p = panel(
         layer,
         "Enter the Astral League?",
-        `<p>Your team will be fully healed for Rowan. Bring enough medicine for four specialists and Mira. Leaving the League restarts the challenge.</p><div class="buttons"><button id="enter">Face Rowan</button><button class="secondary" id="back">Prepare first</button></div>`,
+        `<p>We’ll heal your team before Rowan. The League’s Pokémon range from Lv 55 to 62. Bring medicine for all five battles. Leaving starts the challenge over.</p><div class="buttons"><button id="enter">Face Rowan</button><button class="secondary" id="back">Prepare first</button></div>`,
       );
       p.querySelector("#back")!.addEventListener("click", close);
       p.querySelector("#enter")!.addEventListener("click", () => {
@@ -573,39 +651,47 @@ function finishErrand(o: WorldObject, reward?: Reward) {
     o.name,
   );
 }
-function offerRematch(o: WorldObject) {
-  const team = o.trainer!.team.map((m) => ({
-    ...m,
-    level: Math.min(
-      80,
-      Math.max(
-        60,
-        o.trainer!.team.at(-1)!.level + 5,
-        ...save.party.map((p) => p.level),
-      ) +
-        m.level -
-        o.trainer!.team.at(-1)!.level,
-    ),
-  }));
+function offerRematch(o: WorldObject, practice: boolean) {
+  const trainer = o.trainer!;
+  const prize = practice
+    ? Math.floor((trainer.reward || 0) / 2)
+    : trainer.reward || 0;
+  const team = practice
+    ? trainer.team
+    : trainer.team.map((m) => ({
+        ...m,
+        level: Math.min(
+          80,
+          Math.max(
+            60,
+            o.trainer!.team.at(-1)!.level + 5,
+            ...save.party.map((p) => p.level),
+          ) +
+            m.level -
+            o.trainer!.team.at(-1)!.level,
+        ),
+      }));
   mode = "menu";
   const p = panel(
     layer,
-    `${o.name}’s rematch`,
-    `<p>Face ${escapeHtml(o.name)} again at Lv ${team[0].level}–${team.at(-1)!.level}. Prize money is ₽${o.trainer!.reward}.</p><div class="buttons"><button id="fight">Battle</button><button class="secondary" id="back">Later</button></div>`,
+    practice ? o.name : `${o.name}’s rematch`,
+    `<p>${practice ? "Want another practice battle?" : "Ready for another match, Champion?"} My team is Lv ${team[0].level}${team[0].level === team.at(-1)!.level ? "" : "–" + team.at(-1)!.level}. The prize is ₽${prize}.</p><div class="buttons"><button id="fight">Battle</button><button class="secondary" id="back">Later</button></div>`,
   );
   p.querySelector("#fight")!.addEventListener("click", () =>
     startBattle(team[0].species, team[0].level, {
       ...o,
       id: "rematch_" + o.id,
-      setsFlag: "rematch_" + o.id,
+      setsFlag: practice ? o.setsFlag : "rematch_" + o.id,
       reward: undefined,
-      victoryDialogue: "You keep finding new ways to surprise me, Champion.",
-      trainer: { ...o.trainer!, team },
+      victoryDialogue: practice
+        ? "Good match! Come back any time."
+        : "You keep finding new ways to surprise me, Champion.",
+      trainer: { ...trainer, team, reward: prize },
     }),
   );
   p.querySelector("#back")!.addEventListener("click", close);
 }
-function shop() {
+function shop(selected?: string) {
   mode = "menu";
   const stock: [string, string, number, number][] = [
     ["poke_ball", "Poké Ball", 200, 0],
@@ -646,20 +732,60 @@ function shop() {
   p.querySelectorAll<HTMLButtonElement>("[data-item]").forEach(
     (b) =>
       (b.onclick = () => {
-        const cost = Number(b.dataset.cost);
-        if ((save.items[b.dataset.item!] || 0) >= 99) {
-          message("Your bag already holds 99 of that item.", shop);
+        const key = b.dataset.item!,
+          cost = Number(b.dataset.cost);
+        const back = () => shop(key);
+        const max = Math.min(
+          99 - (save.items[key] || 0),
+          Math.floor(save.money / cost),
+        );
+        if (max < 1) {
+          message(
+            (save.items[key] || 0) >= 99
+              ? "Your Bag already holds 99 of those."
+              : "You don’t have enough money.",
+            back,
+          );
           return;
         }
-        if (save.money >= cost) {
-          save.money -= cost;
-          save.items[b.dataset.item!] = (save.items[b.dataset.item!] || 0) + 1;
+        const buy = (quantity: number) => {
+          save.money -= cost * quantity;
+          save.items[key] = (save.items[key] || 0) + quantity;
           persist();
-          shop();
-        } else message("You do not have enough money.", shop);
+          message(
+            `You put ${itemName(key)} × ${quantity} in your Bag.`,
+            back,
+            "Shopkeeper",
+          );
+        };
+        const quantities = [1, 5, 10].filter((q) => q <= max);
+        const sale = panel(
+          layer,
+          itemName(key),
+          `<p>${escapeHtml(itemInfo(key).description || "")}</p><p class="small">Money ₽${save.money} · In Bag ${save.items[key] || 0}</p><div class="list">${quantities
+            .map(
+              (q) =>
+                `<button data-quantity="${q}">Buy ${q}<span class="stock-count">₽${q * cost}</span></button>`,
+            )
+            .join(
+              "",
+            )}</div><button class="secondary" id="back">Cancel</button>`,
+        );
+        sale.querySelector("#back")!.addEventListener("click", back);
+        sale
+          .querySelectorAll<HTMLButtonElement>("[data-quantity]")
+          .forEach(
+            (button) =>
+              (button.onclick = () => buy(Number(button.dataset.quantity))),
+          );
       }),
   );
   p.querySelector("#back")!.addEventListener("click", close);
+  if (selected) {
+    const row = p.querySelector<HTMLButtonElement>(`[data-item="${selected}"]`);
+    row?.focus({ preventScroll: true });
+    if (row) p.scrollTop = Math.max(0, row.offsetTop - p.clientHeight / 2);
+  }
 }
 function close() {
   mode = "world";
@@ -692,18 +818,44 @@ function depart(destination: string, move: () => void) {
     move();
   });
 }
+let journeySelection = "party";
+let fieldBagState: BagState = {};
 function menu() {
   mode = "menu";
-  const goal = directions(save, has);
+  const options = [
+    ["party", "Pokémon"],
+    ["bag", "Bag"],
+    ["dex", "Pokédex"],
+    ["map", "Map"],
+    ["journal", "Journal"],
+    ["storage", "Storage"],
+    ["settings", "Options"],
+    ["close", "Exit"],
+  ].filter(
+    ([key]) =>
+      save.flags.includes("partner") ||
+      ["map", "settings", "close"].includes(key) ||
+      (key === "bag" && Object.values(save.items).some((n) => n > 0)),
+  );
+  if (!options.some(([key]) => key === journeySelection))
+    journeySelection = options[0][0];
   const p = panel(
     layer,
-    "Your journey",
-    `<p>${escapeHtml(WORLD[save.map].name)} · ${save.badges} / 8 badges · ₽${save.money}</p><div class="objective"><strong>${escapeHtml(goal.title)}</strong><br>${escapeHtml(goal.hint)}</div><div class="menu-grid"><button data-view="party">Party</button><button data-view="bag">Bag</button><button data-view="dex">Pokédex</button><button data-view="journal">Journal</button><button data-view="map">Map &amp; travel</button><button data-view="storage">Storage</button><button data-view="settings">Settings &amp; save</button><button data-view="close">Resume</button></div>`,
+    "Menu",
+    `<nav class="journey-list" aria-label="Journey menu">${options
+      .map(([key, label]) => `<button data-view="${key}">${label}</button>`)
+      .join("")}</nav>`,
+    "journey-menu",
   );
+  p
+    .querySelector<HTMLButtonElement>(`[data-view="${journeySelection}"]`)
+    ?.focus({ preventScroll: true });
   p.querySelectorAll<HTMLButtonElement>("[data-view]").forEach(
     (b) =>
       (b.onclick = () => {
-        const v = b.dataset.view;
+        const v = b.dataset.view!;
+        journeySelection = v;
+        if (v === "bag") fieldBagState = {};
         if (v === "close") close();
         else view(v!);
       }),
@@ -732,16 +884,23 @@ function view(v: string, pageIndex = 0, missingOnly = false) {
       : "<p>Your party is empty. Visit Alder in the lab.</p>";
     body = `<p class="small">Select a Pokémon to inspect its moves or change your lead.</p><div class="list">${body}</div>`;
   } else if (v === "bag") {
-    title = "Your bag";
-    body = `<p class="small">Select an item to use it or read what it does.</p><div class="list">${Object.entries(
-      save.items,
-    )
-      .filter(([, n]) => n > 0)
-      .map(
-        ([k, n]) =>
-          `<button data-use="${escapeHtml(k)}">${escapeHtml(itemName(k))} × ${n}</button>`,
-      )
-      .join("")}</div>`;
+    layer.replaceChildren();
+    mountBag(layer, {
+      items: Object.entries(save.items)
+        .filter(([, count]) => count > 0)
+        .map(([key, count]) => ({
+          key,
+          count,
+          name: itemName(key),
+          ...(ballIds[key]
+            ? { unavailable: "Can only be thrown in a wild battle." }
+            : {}),
+        })),
+      state: fieldBagState,
+      onUse: (item) => useItem(item.key),
+      onCancel: menu,
+    });
+    return;
   } else if (v === "dex") {
     title = `Pokédex · ${save.caught.length} / 251`;
     const ids = Array.from({ length: 251 }, (_, i) => i + 1).filter(
@@ -784,16 +943,22 @@ function view(v: string, pageIndex = 0, missingOnly = false) {
           .filter((e) => save.flags.includes(`gate_${m.id}_${e.to}`))
           .map(
             (e) =>
-              `<article><strong>${escapeHtml(WORLD[e.to].name)}</strong> · ${escapeHtml(m.name)}<p class="small">${has(e.requires) ? "The way is open." : escapeHtml(e.lockedDialogue || "Check the next beacon objective.")}</p></article>`,
+              `<article><strong>${escapeHtml(WORLD[e.to].name)}</strong> · ${escapeHtml(m.name)}<p class="small">${isExitOpen(e) ? "The way is open." : has(e.requires) && e.barrier ? (fieldActions[e.barrier.kind]?.[1] || "Inspect the path") + " here." : escapeHtml(e.lockedDialogue || "Check the next beacon objective.")}</p></article>`,
           ),
       )
       .join("");
-    const entries = QUESTS.map((q) => {
+    const entries = QUESTS.flatMap((q) => {
       const who = Object.values(WORLD).find((m) =>
         m.objects.some((o) => o.quest === q.id),
       )!;
       const npc = who.objects.find((o) => o.quest === q.id)!;
       const done = save.flags.includes(q.completedFlag);
+      if (
+        !done &&
+        !save.flags.includes("met_" + npc.id) &&
+        !(q.id === "parcel" && save.flags.includes("found_parcel"))
+      )
+        return [];
       let clue = npc.lockedDialogue || q.description;
       if (q.id === "parcel")
         clue = save.flags.includes("found_parcel")
@@ -816,7 +981,7 @@ function view(v: string, pageIndex = 0, missingOnly = false) {
         Number(b.ready) - Number(a.ready) ||
         Number(b.local) - Number(a.local),
     );
-    body = `<div class="objective"><strong>${escapeHtml(goal.title)}</strong><br>${escapeHtml(goal.hint)}</div><h3>Beacon badges</h3><p>${save.badges ? BADGES.slice(0, save.badges).join(" · ") : "Your first keeper is Fern in Bramble."}</p>${save.hallOfFame ? '<button id="hall">Hall of Fame</button>' : ""}${gates ? `<h3>Paths to revisit</h3><div class="journal-entries">${gates}</div>` : ""}<h3>Field requests</h3><div class="journal-entries">${entries.map((e) => e.html).join("")}</div>`;
+    body = `<div class="objective"><strong>${escapeHtml(goal.title)}</strong><br>${escapeHtml(goal.hint)}</div><h3>Beacon badges</h3><p>${save.badges ? BADGES.slice(0, save.badges).join(" · ") : "Your first keeper is Fern in Bramble."}</p>${save.hallOfFame ? '<button id="hall">Hall of Fame</button>' : ""}${gates ? `<h3>Paths to revisit</h3><div class="journal-entries">${gates}</div>` : ""}<h3>Field requests</h3><div class="journal-entries">${entries.map((e) => e.html).join("") || "<p>No requests yet. Talk to people along the way.</p>"}</div>`;
   } else if (v === "map") {
     const map = WORLD[save.map],
       goal = directions(save, has);
@@ -874,9 +1039,6 @@ function view(v: string, pageIndex = 0, missingOnly = false) {
       directions(save, has).marker,
     );
   p.querySelector("#back")!.addEventListener("click", menu);
-  p.querySelectorAll<HTMLButtonElement>("[data-use]").forEach(
-    (b) => (b.onclick = () => useItem(b.dataset.use!)),
-  );
   p.querySelectorAll<HTMLButtonElement>("[data-switch]").forEach(
     (b) =>
       (b.onclick = () => {
@@ -1126,11 +1288,43 @@ function useItem(item: string) {
     moon_stone: 8,
     sun_stone: 169,
   };
+  const targets = save.party.map((mon) => {
+    const healed = isMedicine(item)
+      ? useMedicine(item, mon, engine)
+      : undefined;
+    const evo =
+      !heldItems[item] && !isMedicine(item) && item !== "friendship_charm"
+        ? engine
+            .evolutionData(mon.species)
+            .evolutions.find(
+              (e) =>
+                (e.method === 2 && e.parameter === stones[item]) ||
+                (e.method === 3 &&
+                  item === "link_cable" &&
+                  (e.parameter === 255 || e.parameter === mon.item)),
+            )
+        : undefined;
+    const eligible = isMedicine(item)
+      ? !!healed
+      : heldItems[item]
+        ? !mon.item
+        : item === "friendship_charm"
+          ? mon.happiness < 255
+          : !!evo;
+    return { healed, evo, eligible };
+  });
   mode = "menu";
   const p = panel(
     layer,
-    "Choose a Pokémon",
-    `<p>Use ${escapeHtml(item.replaceAll("_", " "))} on whom?</p><div class="list">${save.party.map((m, i) => `<button data-target="${i}">${escapeHtml(engine.species(m.species).name)} · Lv ${m.level} · HP ${m.hp}/${m.stats[0]}</button>`).join("")}</div><button class="secondary" id="back">Back</button>`,
+    itemName(item),
+    `<p>${heldItems[item] ? "Give to" : "Use on"} which Pokémon?</p><div class="list target-list">${
+      save.party
+        .map(
+          (mon, i) =>
+            `<button data-target="${i}" ${targets[i].eligible ? "" : "disabled"}><img class="mini-sprite" alt="" src="${sprite(mon.species)}"><span>${escapeHtml(engine.species(mon.species).name)}<br><small>Lv ${mon.level} · HP ${mon.hp}/${mon.stats[0]}</small></span><small>${targets[i].eligible ? "" : heldItems[item] ? "Holding item" : "No effect"}</small></button>`,
+        )
+        .join("") || "<p>You haven’t chosen a partner yet.</p>"
+    }</div><button class="secondary" id="back">Back to Bag</button>`,
   );
   p.querySelector("#back")!.addEventListener("click", () => view("bag"));
   p.querySelectorAll<HTMLButtonElement>("[data-target]").forEach(
@@ -1138,6 +1332,8 @@ function useItem(item: string) {
       (b.onclick = () => {
         const index = Number(b.dataset.target),
           mon = save.party[index];
+        const { healed, evo, eligible } = targets[index];
+        if (!eligible) return;
         if (item === "friendship_charm") {
           mon.happiness = Math.min(255, mon.happiness + 80);
           save.items[item]--;
@@ -1149,51 +1345,28 @@ function useItem(item: string) {
           return;
         }
         if (heldItems[item]) {
-          if (mon.item) {
-            message("This Pokémon is already holding an item.", () =>
-              view("bag"),
-            );
-            return;
-          }
           mon.item = heldItems[item];
           save.items[item]--;
           persist();
           message(
-            `${engine.species(mon.species).name} is holding ${item.replaceAll("_", " ")}.`,
+            `${engine.species(mon.species).name} is holding ${itemName(item)}.`,
             () => view("bag"),
           );
           return;
         }
-        if (isMedicine(item)) {
-          const healed = useMedicine(item, mon, engine);
-          if (!healed) {
-            message("That Pokémon does not need this medicine.", () =>
-              view("bag"),
-            );
-            return;
-          }
+        if (healed) {
           save.party[index] = healed;
           save.items[item]--;
           persist();
           message(
-            `${engine.species(mon.species).name} used the ${itemName(item)}. HP ${healed.hp}/${healed.stats[0]}.`,
+            item === "max_elixer"
+              ? `${engine.species(mon.species).name}’s move PP was restored.`
+              : `${engine.species(mon.species).name} recovered with the ${itemName(item)}. HP ${healed.hp}/${healed.stats[0]}.`,
             () => view("bag"),
           );
           return;
         }
-        const evo = engine
-          .evolutionData(mon.species)
-          .evolutions.find(
-            (e) =>
-              (e.method === 2 && e.parameter === stones[item]) ||
-              (e.method === 3 &&
-                item === "link_cable" &&
-                (e.parameter === 255 || e.parameter === mon.item)),
-          );
-        if (!evo) {
-          message("It will not have an effect.", () => view("bag"));
-          return;
-        }
+        if (!evo) return;
         save.party[index] = engine.evolvePokemon(mon, evo.species);
         if (evo.method === 3 && evo.parameter !== 255)
           save.party[index].item = 0;
@@ -1231,7 +1404,6 @@ function startBattle(species: number, level: number, o?: WorldObject) {
         m.id,
         save.items[key] || 0,
       ]),
-      training: !!o?.trainer && o.kind !== "legendary",
       money: save.money,
       badges: (1 << save.badges) - 1,
       seen: save.seen,
@@ -1296,8 +1468,10 @@ function showBattle() {
         save.flags = save.flags.filter((f) => !/^league_[0-3]_won$/.test(f));
       save.map =
         save.center && WORLD[save.center] ? save.center : "dewdrop_center";
-      save.x = 12.5;
-      save.y = 8.5;
+      const door = WORLD[save.map].exits[0];
+      save.x = door.x + 0.5;
+      save.y = door.y - 0.5;
+      save.facing = "up";
       save = normalizeSavePosition(save);
       exitLock = true;
     }
@@ -1438,9 +1612,8 @@ function postBattle(evolvable: number[]) {
 function blocked(x: number, y: number) {
   const map = WORLD[save.map];
   return (
-    connectedBlocked(map, x, y, save.abilities.includes("surf"), (e) =>
-      has(e.requires),
-    ) || actors.solid(map, x, y)
+    connectedBlocked(map, x, y, save.abilities.includes("surf"), isExitOpen) ||
+    actors.solid(map, x, y)
   );
 }
 function challengeTrainer(o: WorldObject) {
@@ -1485,7 +1658,7 @@ function update(dt: number) {
     interact();
     return;
   }
-  if (input.hit("menu") || input.hit("b")) {
+  if (input.hit("menu")) {
     menu();
     return;
   }
@@ -1521,46 +1694,27 @@ function update(dt: number) {
   const map = WORLD[save.map];
   const exit =
     connectionAt(map, save.x, save.y) ||
-    map.exits.find((e) => {
-      if (!e.direction)
-        return Math.floor(save.x) === e.x && Math.floor(save.y) === e.y;
-      if (has(e.requires)) return false;
-      const width = (e.span ?? 1) + 0.3;
-      if (e.direction === "west")
-        return dx < 0 && save.x < 0.6 && Math.abs(save.y - e.y - 0.5) < width;
-      if (e.direction === "east")
-        return (
-          dx > 0 &&
-          save.x > map.width - 0.6 &&
-          Math.abs(save.y - e.y - 0.5) < width
-        );
-      if (e.direction === "north")
-        return dy < 0 && save.y < 0.6 && Math.abs(save.x - e.x - 0.5) < width;
-      return (
-        dy > 0 &&
-        save.y > map.height - 0.6 &&
-        Math.abs(save.x - e.x - 0.5) < width
-      );
-    });
+    map.exits.find(
+      (e) =>
+        !e.direction &&
+        Math.floor(save.x) === e.x &&
+        Math.floor(save.y) === e.y,
+    );
   if (!exit) exitLock = false;
-  else if (!exitLock || (exit.direction && has(exit.requires))) {
+  else if (isExitOpen(exit) && (!exitLock || exit.direction)) {
     exitLock = true;
-    if (!has(exit.requires)) {
-      const key = `gate_${map.id}_${exit.to}`,
-        newlyFound = !save.flags.includes(key);
-      flag(key);
-      persist();
-      message(
-        (exit.lockedDialogue || "The way is closed.") +
-          (newlyFound ? " Marked in your journal." : ""),
-      );
-      return;
-    }
     depart(exit.to, () => {
-      const arrival = crossConnection(map, exit, save.x, save.y);
+      const arrival = crossConnection(map, exit, save.x, save.y, isExitOpen);
       save.map = exit.to;
       save.x = arrival.x;
       save.y = arrival.y;
+      if (exit.entrance === "mat") save.facing = "down";
+      else if (
+        WORLD[save.map].exits.some(
+          (e) => e.to === map.id && e.entrance === "mat",
+        )
+      )
+        save.facing = "up";
       actors.enter(WORLD[save.map]);
       if (!exit.direction) save = normalizeSavePosition(save);
       if (!save.visited.includes(save.map) && WORLD[save.map].kind === "town")
@@ -1615,9 +1769,13 @@ function frame(now: number) {
   const wasWorld = mode === "world";
   if (mode === "dialogue" && (input.hit("a") || input.hit("b"))) advance();
   else if ((mode === "menu" || mode === "guide") && input.hit("b")) {
-    const back = layer.querySelector<HTMLButtonElement>("#back, #later");
+    const back = layer.querySelector<HTMLButtonElement>(
+      "[data-bag-cancel], #back, #later",
+    );
     if (back) back.click();
     else close();
+  } else if (mode === "title" && input.hit("b")) {
+    layer.querySelector<HTMLButtonElement>("#cancel")?.click();
   } else if (mode === "menu" && input.hit("menu")) close();
   else if (mode === "battle" && input.hit("b")) battlePresenter?.back();
   else if (!["world", "loading", "dialogue"].includes(mode)) {
@@ -1637,7 +1795,7 @@ function frame(now: number) {
       save.facing,
       now,
       save.flags,
-      { npcs: actors.states, hideHud: mode !== "world" },
+      { npcs: actors.states, hideHud: mode !== "world", exitOpen: isExitOpen },
     );
   requestAnimationFrame(frame);
 }

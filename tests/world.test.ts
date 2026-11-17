@@ -1,7 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { WORLD, QUESTS, ABILITIES, type Requirement } from "../src/world";
+import {
+  WORLD,
+  QUESTS,
+  ABILITIES,
+  type Requirement,
+  type WorldMap,
+} from "../src/world";
+import { interactionTarget } from "../src/game/actors";
+import { barrierAt, exitOpen } from "../src/game/navigation";
 
 const maps = Object.values(WORLD);
+const needsSurf = (map: WorldMap) =>
+  map.id === "route22" ||
+  map.exits.some((exit) => map.tiles[exit.y][exit.x] === "~");
+const solidTerrain = (map: WorldMap, tile: string) =>
+  "#rwBCPTS".includes(tile) || (!needsSurf(map) && tile === "~");
 function can(
   req: Requirement | undefined,
   flags: Set<string>,
@@ -61,7 +74,7 @@ describe("authored region", () => {
           y < 0 ||
           x >= m.width ||
           y >= m.height ||
-          "#rw~BCPTS".includes(m.tiles[y][x])
+          solidTerrain(m, m.tiles[y][x])
         )
           continue;
         visited.add(key);
@@ -143,11 +156,6 @@ describe("authored region", () => {
       "link_cable",
     ])
       expect(items.has(item), item).toBe(true);
-    expect(WORLD.lab.exits[0]).toMatchObject({ x: 12, y: 14 });
-    expect(WORLD.lab.objects.find((o) => o.id === "alder")).toMatchObject({
-      x: 12,
-      y: 4,
-    });
   });
   it("keeps named quest objectives and ordered mechanisms persistent", () => {
     const objects = maps.flatMap((m) => m.objects);
@@ -265,11 +273,20 @@ describe("authored region", () => {
               changed = true;
             }
           }
-        for (const e of m.exits)
-          if (can(e.requires, flags, badges, 0) && !reachable.has(e.to)) {
+        for (const e of m.exits) {
+          const field = e.barrier?.flag;
+          if (field && !flags.has(field) && can(e.requires, flags, badges, 0)) {
+            flags.add(field);
+            changed = true;
+          }
+          if (
+            exitOpen(e, (req) => can(req, flags, badges, 0), [...flags]) &&
+            !reachable.has(e.to)
+          ) {
             reachable.add(e.to);
             changed = true;
           }
+        }
       }
       if (!changed) break;
     }
@@ -424,11 +441,7 @@ function connectedFloor(
 it("keeps doors and conversations reachable around solid people", () => {
   for (const m of maps) {
     const start = m.exits.find((e) => e.direction) ?? m.exits[0];
-    const seen = connectedFloor(
-      m,
-      start,
-      (tile) => !"#rw~BCPTS".includes(tile),
-    );
+    const seen = connectedFloor(m, start, (tile) => !solidTerrain(m, tile));
     for (const e of m.exits)
       expect(seen.has(`${e.x},${e.y}`), `${m.id} exit ${e.to}`).toBe(true);
     for (const o of m.objects) {
@@ -449,7 +462,7 @@ it("keeps encounters off mandatory roads and grass accessible in every habitat",
     const dry = connectedFloor(
       m,
       entry,
-      (tile) => !"#rw~BCPTSg".includes(tile),
+      (tile) => !solidTerrain(m, tile) && tile !== "g",
     );
     expect(
       m.exits.every((exit) => dry.has(`${exit.x},${exit.y}`)),
@@ -458,7 +471,7 @@ it("keeps encounters off mandatory roads and grass accessible in every habitat",
     const withGrass = connectedFloor(
       m,
       entry,
-      (tile) => !"#rw~BCPTS".includes(tile),
+      (tile) => !solidTerrain(m, tile),
     );
     const accessibleGrass = [...withGrass].filter((key) => {
       const [x, y] = key.split(",").map(Number);
@@ -540,9 +553,59 @@ it("keeps the full three-cell width of every road mouth open", () => {
             e.y +
             (vertical ? (e.direction === "north" ? inset : -inset) : side);
           expect(
-            "#rw~BCPTS".includes(m.tiles[y][x]),
+            solidTerrain(m, m.tiles[y][x]),
             `${m.id} ${e.label} ${side},${inset}`,
           ).toBe(false);
         }
     }
+});
+
+it("places both dry and Surf access around flooded route landings", () => {
+  const crossing = WORLD.route22;
+  const [south, north] = crossing.exits;
+  const walkable = (tile: string) => !"#rw~BCPTS".includes(tile);
+  expect(
+    connectedFloor(crossing, { x: south.x, y: south.y - 1 }, walkable),
+  ).not.toContain(`${north.x},${north.y + 1}`);
+  expect(
+    connectedFloor(crossing, south, (tile) => !solidTerrain(crossing, tile)),
+  ).toContain(`${north.x},${north.y}`);
+  expect(
+    maps.flatMap((map) =>
+      map.exits
+        .filter((exit) => exit.barrier?.kind === "surf")
+        .map((exit) => map.tiles[exit.y][exit.x]),
+    ),
+  ).toEqual(["~", "~", "~"]);
+});
+
+it("makes every field service accessible over its own counter", () => {
+  for (const map of maps) {
+    const clerk = map.objects.find(
+      (o) => o.kind === "healer" || o.kind === "shop",
+    );
+    if (!clerk) continue;
+    const player = { x: clerk.x + 0.5, y: clerk.y + 2.5, facing: "up" };
+    expect(map.tiles[clerk.y + 1][clerk.x], map.id).toBe("C");
+    expect(
+      interactionTarget(map, player, new Set(), (o) => ({
+        x: o.x + 0.5,
+        y: o.y + 0.5,
+      })),
+      map.id,
+    ).toBe(clerk);
+    expect(map.width).toBeLessThanOrEqual(13);
+    expect(map.exits[0].entrance, map.id).toBe("mat");
+  }
+});
+
+it("authors a physical barrier for every gated campaign junction", () => {
+  for (const map of maps) {
+    for (const exit of map.exits.filter((e) => e.requires)) {
+      expect(
+        barrierAt(map, exit.x + 0.5, exit.y + 0.5),
+        `${map.id} → ${exit.to}`,
+      ).toBe(exit);
+    }
+  }
 });

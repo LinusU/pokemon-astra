@@ -117,7 +117,7 @@ pub enum Message {
     /// "… gained … EXP. Points!" (`boosted`: "a boosted …")
     GainedExp { mon: String, exp: u16, boosted: bool },
     /// "… grew to level …!"
-    GrewToLevel { mon: String, level: u8 },
+    GrewToLevel { mon: String, level: u8, slot: u8 },
     /// "… learned …!"
     LearnedMove { mon: String, mv: u8 },
     /// "… is trying to learn …. But … can't learn more than four moves. …"

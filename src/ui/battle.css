@@ -8,6 +8,7 @@
   font-family: VT323, monospace;
   overflow: hidden;
   image-rendering: pixelated;
+  container-type: inline-size;
 }
 .battle-field {
   position: relative;
@@ -92,52 +93,65 @@
 .battle-status.par { background: #775a0b; }
 .battle-mon {
   position: absolute;
-  width: 33%;
-  height: 48%;
-  display: grid;
-  place-items: center;
+  width: 36%;
+  height: 45%;
 }
 .battle-mon img {
+  position: absolute;
+  inset: 0;
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: contain;
+  object-position: center bottom;
   image-rendering: pixelated;
 }
 .battle-enemy {
-  right: 6%;
-  top: 9%;
+  right: 4%;
+  bottom: 45%;
 }
 .battle-player {
   left: 4%;
-  bottom: 0;
+  bottom: 8%;
   width: 40%;
-  height: 52%;
+  height: 60%;
 }
 .battle-box {
   position: relative;
   box-sizing: border-box;
-  min-height: 31%;
+  flex: 0 0 36%;
+  min-height: 0;
   display: flex;
   gap: 6px;
   background: #f6f5df;
   border: 5px double #33463b;
   border-radius: 8px;
   padding: 6px 8px;
-  font-size: clamp(16px, 4.8vw, 25px);
+  font-size: clamp(15px, 5.65cqw, 24px);
   line-height: 1;
 }
 .battle-copy {
   flex: 1;
   min-width: 0;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
 }
 .battle-controls {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-content: safe center;
   gap: 2px;
-  min-width: 40%;
-  max-width: 57%;
+  flex: 0 0 56%;
+  min-height: 0;
   overflow: auto;
+}
+.battle-choosing .battle-controls {
+  flex-basis: 62%;
+}
+.battle-controls:has([data-target]),
+.battle-choosing .battle-controls:has([data-index]:nth-child(5)) {
+  grid-template-columns: 1fr;
 }
 .battle-controls:empty {
   display: none;
@@ -145,14 +159,15 @@
 .battle-controls:has(.battle-continue) {
   grid-template-columns: auto;
   align-content: end;
-  min-width: 0;
+  flex: none;
 }
 .battle-controls button {
   font: inherit;
   line-height: 0.9;
   text-align: left;
   min-height: 24px;
-  padding: 3px 4px 3px 15px;
+  padding: 3px 2px 3px 14px;
+  overflow-wrap: anywhere;
   position: relative;
   border: 0;
   background: transparent;
@@ -170,16 +185,19 @@
   opacity: 0.65;
   cursor: default;
 }
-.battle-controls button:focus-visible,
-.battle-controls button:hover {
-  outline: 1px solid #668c6d;
-  background: #d5e5c6;
+.battle-controls button:hover:not(:disabled) {
+  background: #dfebcf;
 }
-.battle-controls button:focus-visible:before,
-.battle-controls button:hover:before {
+.battle-controls button:focus {
+  outline: 2px solid #345e48;
+  outline-offset: -2px;
+  color: #193d2d;
+  background: #cadfba;
+}
+.battle-controls button:focus:before {
   content: "";
   position: absolute;
-  left: 4px;
+  left: 3px;
   top: 50%;
   transform: translateY(-50%);
   border-top: 4px solid transparent;
@@ -187,6 +205,7 @@
   border-left: 6px solid currentColor;
 }
 .battle-controls .battle-continue {
+  padding: 3px 6px;
   justify-self: end;
   align-self: end;
   color: #668b69;
@@ -224,11 +243,8 @@
 .battle-scene.capture .battle-enemy img {
   opacity: 0;
 }
-.battle-scene.capture .battle-enemy:after {
-  animation: ball-shake 0.45s infinite alternate;
-}
-.battle-scene.capture.escape .battle-enemy:after {
-  animation: ball-shake 0.45s infinite alternate;
+.battle-scene.capture:is(.caught, .escape) .battle-enemy:after {
+  animation: ball-shake calc(450ms * var(--battle-speed, 1)) var(--wobbles, 0) ease-in-out;
 }
 .battle-scene.capture.caught .battle-enemy:after {
   filter: brightness(1.15);
@@ -284,12 +300,9 @@
   }
 }
 @keyframes ball-shake {
-  from {
-    transform: rotate(-20deg);
-  }
-  to {
-    transform: rotate(20deg);
-  }
+  0%, 100% { transform: translateX(0) rotate(0); }
+  25% { transform: translateX(-12%) rotate(-20deg); }
+  75% { transform: translateX(12%) rotate(20deg); }
 }
 .battle-mon.attack-windup {
   animation: battle-windup 0.18s ease-in;
@@ -311,9 +324,6 @@
 }
 .battle-fx.projectile.misses {
   opacity: 0.65;
-}
-.battle-scene.capture .battle-enemy:after {
-  animation-iteration-count: var(--wobbles, 1);
 }
 @keyframes battle-windup {
   50% {
@@ -359,10 +369,10 @@
 }
 @keyframes exp-fill {
   from {
-    width: 0;
+    width: var(--exp-from, 0%);
   }
   to {
-    width: 100%;
+    width: var(--exp-to, 100%);
   }
 }
 @keyframes weather-flash {
@@ -389,30 +399,23 @@
   border-radius: 50%;
   box-shadow: 180px -94px 0 -8px #b3d493;
 }
-.battle-box {
-  flex: 0 0 31%;
-  min-height: 0;
-  max-height: 31%;
+.battle-party-effect {
+  position: absolute;
+  z-index: 3;
+  left: 5%;
+  bottom: 8%;
+  width: 43%;
+  padding: 4px 7px;
+  color: #25372d;
+  background: #f3f4d7;
+  border: 2px solid #263c35;
+  box-shadow: 2px 2px #73957c;
+  font-size: clamp(14px, 4.4cqw, 22px);
 }
-.battle-copy {
-  overflow: auto;
-}
-.battle-controls {
-  min-height: 0;
-}
-.battle-choosing .battle-box {
-  flex-basis: 38%;
-  max-height: 38%;
-}
-.battle-choosing .battle-controls {
-  width: 64%;
-  max-width: 64%;
-}
-.battle-choosing .battle-copy {
-  white-space: pre-line;
-}
-.battle-mon.concealed {
-  visibility: hidden;
+.battle-bag {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
 }
 .conceal-enemy .battle-enemy,
 .conceal-enemy .battle-enemy-hud,
@@ -757,3 +760,18 @@
 .battle-exp i { animation-duration: calc(550ms * var(--battle-speed, 1)); }
 .battle-scene.capture.throwing .battle-enemy:after,
 .battle-scene.capture.throwing .battle-enemy img { animation-duration: calc(450ms * var(--battle-speed, 1)); }
+
+.battle-mon.attack-windup { animation-duration: calc(180ms * var(--battle-speed, 1)); }
+.battle-fx.projectile { animation-duration: calc(360ms * var(--battle-speed, 1)); }
+
+.battle-controls {
+  grid-auto-rows: max-content;
+}
+.battle-controls:has([data-move-detail]) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.battle-controls button {
+  min-height: max(23px, 1.2em);
+  height: auto;
+  line-height: 1;
+}

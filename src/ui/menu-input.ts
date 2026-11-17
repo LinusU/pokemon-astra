@@ -1,4 +1,5 @@
 import type { Input } from "../game/input";
+import { bagController } from "./bag";
 
 const directions = ["up", "down", "left", "right"] as const;
 type Direction = (typeof directions)[number];
@@ -43,7 +44,7 @@ function destination(
 }
 
 export class MenuInput {
-  private root?: Element | null;
+  private start?: Element | ReturnType<typeof bagController> | null;
   private repeating?: Direction;
   private repeatAt = 0;
 
@@ -53,27 +54,40 @@ export class MenuInput {
     now: number,
     battle: boolean,
   ) {
-    const root = layer.firstElementChild;
-    const opened = root !== this.root;
+    const bag = bagController(layer);
+    const scroller =
+      layer.querySelector<HTMLElement>(
+        battle ? ".battle-controls" : ".panel",
+      ) ?? layer;
+    // Battle submenus replace their buttons without replacing the scene.
+    const start =
+      bag ??
+      (battle
+        ? scroller.querySelector("button:not(:disabled)")
+        : layer.firstElementChild);
+    const opened = start !== this.start;
     if (opened) this.repeating = undefined;
-    this.root = root;
+    this.start = start;
     const pressed = directions.find((direction) => input.hit(direction));
     const held = this.repeating && input.held(this.repeating);
     if (!pressed && !held) this.repeating = undefined;
     const direction =
       pressed ??
-      (!battle && held && now >= this.repeatAt ? this.repeating : undefined);
+      ((!battle || bag) && held && now >= this.repeatAt
+        ? this.repeating
+        : undefined);
     if (pressed) {
       this.repeating = pressed;
       this.repeatAt = now + 300;
     } else if (direction) this.repeatAt = now + 95;
     const confirm = input.hit("a");
     if (!opened && !direction && !confirm) return;
+    if (bag) {
+      if (confirm) bag.input("a");
+      else if (direction) bag.input(direction);
+      return;
+    }
 
-    const scroller =
-      layer.querySelector<HTMLElement>(
-        battle ? ".battle-controls" : ".panel",
-      ) ?? layer;
     const viewport = scroller.getBoundingClientRect();
     const buttons = Array.from(
       scroller.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"),
@@ -92,12 +106,12 @@ export class MenuInput {
       ({ button }) => button === layer.ownerDocument.activeElement,
     );
     const firstVisible = buttons.find(visible);
-    const journeyStart =
-      opened && !battle && scroller.querySelector(".menu-grid")
+    const menuStart =
+      opened && scroller.querySelector(".menu-grid, [data-menu-start]")
         ? buttons[0]
         : undefined;
     const current =
-      focused && visible(focused) ? focused : (firstVisible ?? journeyStart);
+      focused && visible(focused) ? focused : (firstVisible ?? menuStart);
     const focus = ({ button, bounds }: ButtonPosition) => {
       button.focus({ preventScroll: true });
       if (bounds.top < viewport.top)
@@ -110,7 +124,7 @@ export class MenuInput {
       return;
     }
     if (battle && buttons.length <= 1) return;
-    if (opened && current && !focused && !battle) {
+    if (opened && current && !focused) {
       focus(current);
       if (!visible(current)) return;
     }

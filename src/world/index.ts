@@ -72,10 +72,18 @@ export interface WorldObject {
   roam?: number;
   sightRange?: number;
 }
+export type BarrierKind = Exclude<Ability, "fly"> | "warden" | "shutter";
+export interface ExitBarrier {
+  kind: BarrierKind;
+  /** A field action clears both ends of a shortcut permanently. */
+  flag?: string;
+}
+
 export interface Exit {
   direction?: Direction;
   span?: number;
-  entrance?: "door" | "cave" | "stairs";
+  entrance?: "door" | "cave" | "stairs" | "mat";
+  barrier?: ExitBarrier;
   x: number;
   y: number;
   to: string;
@@ -486,6 +494,128 @@ leaders.forEach(([name, type, town], i) => {
   map(`gym${i + 1}`, `${name}'s ${type} Gym`, "gym", WORLD[town].palette);
   connect(town, `gym${i + 1}`, `${name}'s Gym`, town);
 });
+const serviceVisitors: Record<string, [[string, string], [string, string]]> = {
+  dewdrop: [
+    [
+      "Bug catcher",
+      "I practice with Scout Ari on Dewpath. If you’ve already beaten him, talk to him for another battle.",
+    ],
+    [
+      "Supply runner",
+      "Alder hands new trainers a few Poké Balls and Potions. I buy more when I’ve found a place worth exploring.",
+    ],
+  ],
+  mossford: [
+    [
+      "Orchard picker",
+      "Poison can cut a trip short. Heal here before taking Orchard Lane east.",
+    ],
+    [
+      "Orchard shopper",
+      "Look in the grass beside the bridge on Orchard Lane. Someone dropped a Fire Stone there.",
+    ],
+  ],
+  bramble: [
+    [
+      "Survey volunteer",
+      "The surveyor is somewhere past the north trail. The floor switches in Lantern Wood light the way.",
+    ],
+    [
+      "Woodland guide",
+      "Keep a few Poké Balls ready for the Lantern Approach. The locals’ Pokémon are good at wearing down a new team.",
+    ],
+  ],
+  tideglass: [
+    [
+      "Harbor fisher",
+      "Once you learn Surf, you can set off from the buoys on the east quay. That takes you toward Copperwick.",
+    ],
+    [
+      "Sailor",
+      "I keep a stronger ball for Pokémon that get away from the first one. The harbor has a fine fishing spot.",
+    ],
+  ],
+  copperwick: [
+    [
+      "Line worker",
+      "The lights flicker even here. The old power station is up Switchyard Road.",
+    ],
+    [
+      "Scrap picker",
+      "Three parts went missing from the workshop. The collector in town is still looking for them.",
+    ],
+  ],
+  sunspire: [
+    [
+      "Desert traveler",
+      "The trails around Glassway curve between old walls. A break here saves a longer trip back through the dunes.",
+    ],
+    [
+      "Glassworks hand",
+      "Evolution stones work on particular species. Check the Party screen before using one.",
+    ],
+  ],
+  reedhaven: [
+    [
+      "Field ranger",
+      "You can carry six partners. Look under Storage in the menu if you want to rotate in a new catch.",
+    ],
+    [
+      "Bird watcher",
+      "Repel buys you time to look around in tall grass when you’re already going somewhere.",
+    ],
+  ],
+  cinderfall: [
+    [
+      "Mine hand",
+      "Our crews carry extras of anything that heals a burn. The steam vents don’t always give much notice.",
+    ],
+    [
+      "Furnace apprentice",
+      "The artisan in town is collecting a special ore. If you’re visiting the mine, keep an eye out for it.",
+    ],
+  ],
+  rimepeak: [
+    [
+      "Pass hiker",
+      "Use a Center before you head into Frostvault. Trainers and wild Pokémon share the lower passages.",
+    ],
+    [
+      "Mountain guide",
+      "I stock up before going north. If you run low on move PP halfway through a route, an Ether helps.",
+    ],
+  ],
+  bellweather: [
+    [
+      "Tower pilgrim",
+      "When you climb Echo Bell Tower, listen for the order in which the bells sound.",
+    ],
+    [
+      "Archivist",
+      "The old tower has a side chamber. You’ll find the route clearer once you have Flash.",
+    ],
+  ],
+  aster: [
+    [
+      "Sky watcher",
+      "The final beacon is in the observatory west of town. Astra’s sky should start moving again once it’s back.",
+    ],
+    [
+      "Observatory aide",
+      "Follow Crown Road north to Victory Ascent. Take restoration supplies before you head up, especially if you plan to challenge the League.",
+    ],
+  ],
+  crown: [
+    [
+      "League challenger",
+      "Rowan starts with Grass types around Lv 55. I brought a Fire type and saved my Ice moves for Mira.",
+    ],
+    [
+      "Returning challenger",
+      "I forgot to check my move PP last time. Look at your whole party before you go in.",
+    ],
+  ],
+};
 // Homes, services and facilities are real maps, not decorative buildings.
 for (const [town, name] of townData) {
   for (const [suffix, title] of [
@@ -504,6 +634,9 @@ for (const [town, name] of townData) {
           ? "Welcome! Your Pokémon can rest here."
           : "Welcome! Stock up for the road.",
     });
+    const [visitor, dialogue] =
+      serviceVisitors[town][suffix === "center" ? 0 : 1];
+    obj(id, { id: `${id}_visitor`, kind: "person", name: visitor, dialogue });
   }
 }
 for (const [id, name, town] of [
@@ -513,6 +646,55 @@ for (const [id, name, town] of [
 ] as const) {
   map(id, name, "interior", WORLD[town].palette);
   connect(town, id, name, town);
+}
+for (const [town, title, host, dialogue] of [
+  [
+    "mossford",
+    "Windmill Cottage",
+    "Millwright",
+    "My father measured the wind by the bell above Bramble. Fern will lend you Cut after you earn the Canopy Badge. With it you can walk straight back to Dewdrop through the old grove.",
+  ],
+  [
+    "bramble",
+    "Lantern Lodge",
+    "Trail warden",
+    "If you’re looking for the surveyor, take the Lantern Approach north. People who get turned around in the woods leave a trail of lamps.",
+  ],
+  [
+    "tideglass",
+    "Harbor Office",
+    "Pilot",
+    "The western road is safe on foot. To go east, follow the buoys off the end of the quay and use Surf once Marina has given you the Tidal Badge.",
+  ],
+  [
+    "sunspire",
+    "Glassworks",
+    "Lens maker",
+    "Keep a Sun Stone or Moon Stone for a Pokémon that responds to it. You can find more among the offerings beside the Hourglass Ruins.",
+  ],
+  [
+    "reedhaven",
+    "Ranger Cabin",
+    "Field researcher",
+    "An extra catch goes to Storage when you already travel with six. It still counts in our habitat census.",
+  ],
+  [
+    "rimepeak",
+    "Pass Shelter",
+    "Shelter keeper",
+    "The snow herb from Frostvault travels well. The healer who uses it lives by the bridge in Mossford.",
+  ],
+  [
+    "aster",
+    "Chart Room",
+    "Cartographer",
+    "Write down the names of every beacon you visit. The astronomer in the plaza gives an award when your chart is complete.",
+  ],
+] as const) {
+  const id = `${town}_house`;
+  map(id, title, "interior", WORLD[town].palette);
+  connect(town, id, title, WORLD[town].name);
+  obj(id, { id: `${id}_host`, kind: "person", name: host, dialogue });
 }
 obj("home", {
   id: "mother",
@@ -543,14 +725,14 @@ obj("dewdrop", {
 // Main road gates ensure each community's story is completed before leaving.
 const gates: Record<string, Requirement> = {
   "01": { flags: ["partner"] },
-  "04": { badges: 1 },
-  "06": { badges: 2 },
-  "08": { badges: 3 },
-  "10": { badges: 4 },
+  "04": { badges: 1, ability: "cut" },
+  "06": { badges: 2, ability: "surf" },
+  "08": { badges: 3, ability: "flash" },
+  "10": { badges: 4, ability: "strength" },
   "12": { flags: ["ranger_report"] },
-  "14": { badges: 5 },
-  "16": { badges: 6 },
-  "18": { badges: 7 },
+  "14": { badges: 5, ability: "rockSmash" },
+  "16": { badges: 6, ability: "whirlpool" },
+  "18": { badges: 7, ability: "waterfall" },
   "20": { badges: 8, flags: ["engine_stopped"] },
   "21": { ability: "cut" },
   "22": { ability: "surf", badges: 4 },
@@ -560,14 +742,14 @@ const gates: Record<string, Requirement> = {
 };
 const roadAdvice: Record<string, string> = {
   "01": "Visit Professor Alder at the north end of Dewdrop and choose your partner first.",
-  "04": "Rescue the surveyor in Lantern Wood, then earn Fern’s Canopy Badge.",
-  "06": "Restore the lighthouse signal in Undertow Cave and earn Marina’s Tidal Badge.",
-  "08": "Restore power in Copperworks and earn Volt’s Dynamo Badge.",
-  "10": "Recover the Hourglass lens and earn Sable’s Mirage Badge.",
-  "12": "Meet the ranger across the bridge in Bamboo Sanctuary to get the report.",
-  "14": "Free the captive Pokémon in Ember Mine and earn Flint’s Ember Badge.",
-  "16": "Open the pass through Frostvault and earn Neve’s Rime Badge.",
-  "18": "Follow the bells in Echo Bell Tower and earn Lyra’s Chime Badge.",
+  "04": "A young tree blocks the trail. Rescue the surveyor in Lantern Wood, then earn Cut from Fern.",
+  "06": "The quay ends here. Restore the signal in Undertow Cave, then earn Surf from Marina.",
+  "08": "The passage is too dark to follow. Restore power at Copperworks, then earn Flash from Volt.",
+  "10": "A boulder has rolled into the trail. Recover the Hourglass lens, then earn Strength from Sable.",
+  "12": "The ranger crew has closed the trail. Find their report across the bridge in Bamboo Sanctuary.",
+  "14": "A cracked pile of stone blocks the pass. Free the captive Pokémon in Ember Mine, then earn Rock Smash from Flint.",
+  "16": "Meltwater pours through the pass. Reopen the route in Frostvault, then earn Whirlpool from Neve.",
+  "18": "The trail climbs past a waterfall. Follow the bells in Echo Bell Tower, then earn Waterfall from Lyra.",
   "20": "Earn the Astral Badge and shut down the Celestial Engine before climbing to Crown Summit.",
   "21": "Fern’s Canopy Badge teaches Cut, which opens the overgrown trail.",
   "22": "This crossing needs Surf. Sable’s Mirage Badge opens the far landing.",
@@ -1631,78 +1813,6 @@ dungeonData.forEach(([id, name], i) => {
   });
 });
 
-// Interiors use actual furnishings: B bookcase, C counter, P plant, T table.
-// Entrances face the room from the south; every important counter has a clear
-// approach from that door. The symbols are impassable but never hide an object.
-for (const m of Object.values(WORLD).filter((m) => m.kind === "interior")) {
-  if (m.id === "league" || m.id.startsWith("league_")) continue;
-  const grid = m.tiles.map((row, y) =>
-    row
-      .split("")
-      .map((tile, x) =>
-        x === 0 || x === m.width - 1 || y === 0 || y === m.height - 1
-          ? "#"
-          : tile,
-      ),
-  );
-  const entrance = m.exits[0];
-  if (entrance) {
-    const back = WORLD[entrance.to].exits.find(
-      (e) => e.to === m.id && e.toX === entrance.x && e.toY === entrance.y,
-    );
-    entrance.x = 12;
-    entrance.y = 14;
-    if (back) {
-      back.toX = 12;
-      back.toY = 14;
-    }
-  }
-  const put = (x: number, y: number, ch: string) => {
-    if (
-      !m.objects.some((o) => o.x === x && o.y === y) &&
-      !m.exits.some((e) => e.x === x && e.y === y)
-    )
-      grid[y][x] = ch;
-  };
-  if (m.id === "lab") {
-    for (let x = 3; x <= 8; x++) put(x, 2, "B");
-    for (let x = 15; x <= 20; x++) put(x, 2, "B");
-    for (let x = 4; x <= 7; x++) put(x, 5, "T");
-    for (let x = 16; x <= 19; x++) put(x, 5, "T");
-    put(3, 11, "P");
-    put(20, 11, "P");
-    put(7, 11, "T");
-    put(17, 11, "T");
-  } else if (m.id.endsWith("_center")) {
-    for (let x = 5; x <= 9; x++) put(x, 5, "C");
-    for (let x = 13; x <= 18; x++) put(x, 5, "C");
-    put(3, 3, "P");
-    put(20, 3, "P");
-    put(5, 10, "T");
-    put(18, 10, "T");
-    put(3, 12, "P");
-  } else if (m.id.endsWith("_mart")) {
-    for (let x = 5; x <= 9; x++) put(x, 5, "C");
-    for (let x = 13; x <= 18; x++) put(x, 5, "C");
-    for (const y of [9, 11]) for (const x of [4, 5, 18, 19]) put(x, y, "B");
-    put(3, 3, "P");
-    put(20, 3, "P");
-  } else if (m.id === "home") {
-    for (let x = 3; x <= 7; x++) put(x, 2, "B");
-    for (let x = 16; x <= 20; x++) put(x, 2, "C");
-    for (const [x, y] of [
-      [5, 8],
-      [6, 8],
-      [17, 9],
-      [18, 9],
-    ] as const)
-      put(x, y, "T");
-    put(3, 12, "P");
-    put(20, 12, "P");
-  }
-  m.tiles = grid.map((r) => r.join(""));
-}
-
 // Evolution supplies can be found in the world as well as bought at later marts.
 const evolutionSupplies: [string, string, string, Requirement?][] = [
   ["route02", "fire_stone", "Fire Stone"],
@@ -1960,7 +2070,7 @@ const townVoices: Record<string, [string, string][]> = {
     ],
     [
       "League attendant",
-      "Take time to prepare. Mira welcomes trainers who have crossed Astra with their Pokémon.",
+      "Mira has six Pokémon, up to Lv 62. The trainers on Crown Road will practice with you before you register.",
     ],
   ],
 };
@@ -2079,335 +2189,6 @@ for (const [n, , a, b] of routeData) {
   }
 }
 
-// The opening is hand-composed as a village, riverside orchard town and two
-// different stretches of countryside. Coordinates below are part of the map
-// design: roads meet doors and junctions rather than being inferred from exits.
-function openingMap(id: string, base: string) {
-  const m = WORLD[id];
-  const g = Array.from(
-    { length: m.height },
-    () => Array(m.width).fill(base) as string[],
-  );
-  const rect = (x1: number, y1: number, x2: number, y2: number, c: string) => {
-    for (let y = Math.max(0, y1); y <= Math.min(m.height - 1, y2); y++)
-      for (let x = Math.max(0, x1); x <= Math.min(m.width - 1, x2); x++)
-        g[y][x] = c;
-  };
-  const road = (points: [number, number][], width = 1) => {
-    for (let i = 1; i < points.length; i++) {
-      let [x, y] = points[i - 1];
-      const [tx, ty] = points[i];
-      const paint = () => {
-        for (let dy = -width; dy <= width; dy++)
-          for (let dx = -width; dx <= width; dx++) {
-            const xx = x + dx,
-              yy = y + dy;
-            if (xx >= 0 && yy >= 0 && xx < m.width && yy < m.height)
-              g[yy][xx] = "~=".includes(g[yy][xx]) ? "=" : ".";
-          }
-      };
-      paint();
-      while (x !== tx) {
-        x += Math.sign(tx - x);
-        paint();
-      }
-      while (y !== ty) {
-        y += Math.sign(ty - y);
-        paint();
-      }
-    }
-  };
-  const building = (to: string, x: number, y: number) => {
-    rect(x, y, x + 6, y + 1, "r");
-    rect(x, y + 2, x + 6, y + 2, "w");
-    const e = m.exits.find((e) => e.to === to)!;
-    e.x = x + 3;
-    e.y = y + 2;
-    e.entrance = "door";
-    g[e.y][e.x] = "d";
-    const back = WORLD[to].exits.find((exit) => exit.to === id)!;
-    back.toX = e.x;
-    back.toY = e.y;
-    back.entrance = "door";
-  };
-  const place = (positions: Record<string, [number, number]>) => {
-    for (const [objectId, [x, y]] of Object.entries(positions)) {
-      const o = m.objects.find((object) => object.id === objectId);
-      if (o) {
-        o.x = x;
-        o.y = y;
-        if ("#~rw".includes(g[y][x])) g[y][x] = ",";
-      }
-    }
-  };
-  // An uneven tree line suggests the landscape continues beyond the map.
-  for (let x = 0; x < m.width; x++) {
-    g[0][x] = "#";
-    g[m.height - 1][x] = "#";
-  }
-  for (let y = 0; y < m.height; y++) {
-    g[y][0] = "#";
-    g[y][m.width - 1] = "#";
-  }
-  if (id === "dewdrop") {
-    rect(1, 1, 4, 7, "#");
-    rect(1, 2, 2, 11, "#");
-    rect(27, 1, 30, 7, "#");
-    rect(1, 18, 2, 26, "#");
-    rect(27, 20, 30, 26, "#");
-    rect(21, 24, 29, 26, "#");
-    // Pond on the southeast green, with an irregular shore and flower garden.
-    rect(22, 17, 27, 20, "~");
-    rect(23, 16, 26, 21, "~");
-    rect(3, 9, 8, 11, "f");
-    rect(19, 5, 25, 7, "f");
-    // The village green opens onto a square; lanes link homes and the lab.
-    rect(12, 11, 19, 17, ".");
-    road(
-      [
-        [0, 14],
-        [31, 14],
-      ],
-      1,
-    );
-    road(
-      [
-        [16, 0],
-        [16, 27],
-      ],
-      1,
-    );
-    road(
-      [
-        [5, 24],
-        [5, 20],
-        [16, 20],
-      ],
-      1,
-    );
-    road(
-      [
-        [6, 6],
-        [6, 14],
-      ],
-      1,
-    );
-    road(
-      [
-        [14, 6],
-        [14, 12],
-      ],
-      1,
-    );
-    road(
-      [
-        [24, 8],
-        [24, 14],
-      ],
-      1,
-    );
-    building("home", 3, 21);
-    building("lab", 11, 3);
-    building("dewdrop_center", 3, 3);
-    building("dewdrop_mart", 21, 5);
-    place({
-      robin_start: [14, 13],
-      quest_hearth: [18, 16],
-      sign_dewdrop: [12, 15],
-      resident_dewdrop_0: [8, 10],
-      resident_dewdrop_1: [21, 13],
-    });
-  } else if (id === "mossford") {
-    // The river bends along the south side, crossed by a market bridge.
-    rect(1, 21, 30, 23, "~");
-    rect(1, 19, 7, 22, "~");
-    rect(23, 23, 30, 25, "~");
-    rect(1, 1, 4, 8, "#");
-    rect(27, 1, 30, 6, "#");
-    rect(1, 25, 4, 26, "#");
-    // An orchard occupies the northwest terraces and eastern river bank.
-    for (const [x, y] of [
-      [6, 3],
-      [9, 3],
-      [6, 6],
-      [9, 6],
-      [5, 9],
-      [9, 9],
-      [24, 10],
-      [27, 10],
-      [24, 13],
-      [27, 13],
-      [23, 17],
-      [27, 17],
-    ] as const)
-      rect(x, y, x + 1, y + 1, "#");
-    rect(11, 11, 19, 17, ".");
-    road(
-      [
-        [0, 14],
-        [31, 14],
-      ],
-      1,
-    );
-    road(
-      [
-        [16, 0],
-        [16, 26],
-        [16, 27],
-      ],
-      1,
-    );
-    road(
-      [
-        [16, 8],
-        [22, 8],
-        [22, 6],
-      ],
-      1,
-    );
-    road(
-      [
-        [16, 19],
-        [8, 19],
-        [8, 25],
-      ],
-      1,
-    );
-    building("mossford_center", 19, 3);
-    building("mossford_mart", 5, 16);
-    place({
-      robin_mossford: [13, 12],
-      quest_parcel: [18, 13],
-      quest_pollinators: [11, 10],
-      quest_medicine: [19, 16],
-      sign_mossford: [13, 17],
-      resident_mossford_0: [21, 10],
-      resident_mossford_1: [11, 19],
-    });
-  } else if (id === "route01") {
-    // Meadow folds around a northern pond and a southern stand of old trees.
-    rect(2, 2, 10, 4, "#");
-    rect(1, 2, 3, 8, "#");
-    rect(30, 1, 38, 4, "#");
-    rect(2, 19, 12, 22, "#");
-    rect(27, 19, 38, 22, "#");
-    rect(25, 5, 33, 8, "~");
-    rect(26, 4, 31, 9, "~");
-    rect(8, 6, 17, 9, "f");
-    rect(7, 16, 16, 18, "g");
-    rect(23, 15, 33, 18, "g");
-    rect(9, 4, 16, 5, "g");
-    road(
-      [
-        [0, 12],
-        [8, 12],
-        [8, 14],
-        [20, 14],
-        [20, 11],
-        [32, 11],
-        [32, 12],
-        [39, 12],
-      ],
-      1,
-    );
-    road(
-      [
-        [20, 11],
-        [20, 8],
-      ],
-      0,
-    );
-    road(
-      [
-        [26, 14],
-        [26, 17],
-      ],
-      0,
-    );
-    place({
-      trainer_route01: [13, 11],
-      item_route01: [26, 17],
-      route01_optional_0: [22, 10],
-      route01_optional_1: [18, 17],
-    });
-  } else {
-    // Two orchard terraces surround a short detour to the stream and bridge.
-    rect(1, 1, 5, 7, "#");
-    rect(20, 1, 26, 4, "#");
-    rect(1, 24, 6, 26, "#");
-    rect(21, 24, 26, 26, "#");
-    rect(24, 22, 26, 23, "#");
-    for (const y of [3, 8, 18, 22, 25])
-      for (const x of [7, 11, 18, 22]) rect(x, y, x + 1, y + 1, "#");
-    rect(1, 19, 26, 21, "~");
-    rect(1, 18, 8, 20, "~");
-    rect(3, 5, 5, 9, "f");
-    rect(5, 7, 11, 10, "g");
-    rect(22, 6, 25, 11, "g");
-    rect(22, 17, 25, 18, "g");
-    rect(4, 23, 12, 25, "g");
-    road(
-      [
-        [0, 14],
-        [7, 14],
-        [7, 11],
-        [14, 11],
-        [14, 17],
-        [20, 17],
-        [20, 14],
-        [27, 14],
-      ],
-      1,
-    );
-    road(
-      [
-        [14, 17],
-        [14, 23],
-        [20, 23],
-      ],
-      1,
-    );
-    place({
-      trainer_route02: [10, 9],
-      item_route02: [20, 23],
-      rival_1: [17, 14],
-      route02_optional_0: [12, 16],
-      route02_optional_1: [22, 12],
-      evolution_supply_0: [8, 17],
-    });
-  }
-  // Map-edge road mouths use the full width of their connected lanes.
-  for (const e of m.exits)
-    if (e.direction) {
-      g[e.y][e.x] = ".";
-      const dx = e.direction === "west" ? 1 : e.direction === "east" ? -1 : 0;
-      const dy = e.direction === "north" ? 1 : e.direction === "south" ? -1 : 0;
-      g[e.y + dy][e.x + dx] = ".";
-    }
-  m.tiles = g.map((row) => row.join(""));
-}
-openingMap("dewdrop", ",");
-openingMap("mossford", ",");
-openingMap("route01", ",");
-openingMap("route02", ",");
-obj("route01", {
-  id: "sign_route01",
-  name: "Dewpath marker",
-  kind: "sign",
-  x: 6,
-  y: 10,
-  dialogue:
-    "Dewdrop lies west and Mossford east. Follow the dry road, or explore the grass south of the pond.",
-});
-obj("route02", {
-  id: "sign_route02",
-  name: "Orchard marker",
-  kind: "sign",
-  x: 5,
-  y: 12,
-  dialogue:
-    "Follow Orchard Lane east to Bramble. The market footbridge crosses the stream to the south.",
-});
 composeGeography(WORLD);
 
 const facings = ["down", "left", "up", "right"] as const;
@@ -2435,10 +2216,30 @@ for (const m of Object.values(WORLD))
       (m.id.startsWith("league") && dest.id.startsWith("league")) ||
       (m.kind === "dungeon" && dest.kind === "dungeon")
         ? "stairs"
-        : m.kind === "dungeon" || dest.kind === "dungeon"
-          ? "cave"
-          : "door";
+        : (m.kind === "interior" || m.kind === "gym") && dest.kind === "town"
+          ? "mat"
+          : m.kind === "dungeon" || dest.kind === "dungeon"
+            ? "cave"
+            : "door";
   }
+for (const m of Object.values(WORLD)) {
+  for (const e of m.exits) {
+    if (!e.requires) continue;
+    const ability = e.requires.ability;
+    const kind = !e.direction
+      ? "shutter"
+      : ability && ability !== "fly"
+        ? ability
+        : "warden";
+    e.barrier = {
+      kind,
+      flag:
+        kind !== "warden" && kind !== "surf" && kind !== "shutter"
+          ? `field_${e.to.startsWith("route") ? e.to : m.id}`
+          : undefined,
+    };
+  }
+}
 // Directions describe a person's pose or a trainer's actual line of sight.
 for (const [mapId, id, facing] of [
   ["route01", "trainer_route01", "down"],
@@ -2478,5 +2279,25 @@ for (const m of Object.values(WORLD)) {
         )
           grid[y][x] = "~=".includes(grid[y][x]) ? "=" : ".";
       }
+  m.tiles = grid.map((row) => row.join(""));
+}
+
+// Surf is a physical crossing. Once the buoys on the arc are open, the same
+// water at both shores keeps movement and the rider sprite continuous.
+for (const m of Object.values(WORLD)) {
+  const grid = m.tiles.map((row) => row.split(""));
+  for (const e of m.exits) {
+    if (!e.direction) continue;
+    const peer = WORLD[e.to].exits.find(
+      (other) => other.to === m.id && other.x === e.toX && other.y === e.toY,
+    );
+    if (e.barrier?.kind !== "surf" && peer?.barrier?.kind !== "surf") continue;
+    const vertical = e.direction === "north" || e.direction === "south";
+    for (let lateral = -1; lateral <= 1; lateral++) {
+      const x = e.x + (vertical ? lateral : 0);
+      const y = e.y + (vertical ? 0 : lateral);
+      grid[y][x] = "~";
+    }
+  }
   m.tiles = grid.map((row) => row.join(""));
 }

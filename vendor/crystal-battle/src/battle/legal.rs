@@ -76,7 +76,7 @@ const POKE_DOLL_ID: u8 = 0x25;
 
 // `wBattleMode` — 0 = not in battle, 1 = wild, 2 = trainer (`WILD_BATTLE` /
 // `TRAINER_BATTLE` in `scratch/pokecrystal/constants/battle_constants.asm`).
-// We only offer Poké Balls in a wild battle (`offers_balls`); a thrown ball in
+// We only offer Poké Balls in a wild battle. A thrown ball in
 // a trainer battle is refused by the real game ("The trainer blocked the BALL!").
 // `00:d22d wBattleMode` in `pokecrystal.sym`.
 const W_BATTLE_MODE: u16 = 0xd22d;
@@ -699,12 +699,9 @@ pub fn legal_battle_menu_steps(cpu: &impl ReadMem) -> Vec<Step> {
             }
         }
     }
-    // Balls work in every battle: in a trainer battle `UseBallInTrainerBattle`
-    // still tosses the ball and uses the turn ("The trainer blocked the BALL!").
-    // (A full party AND a full box would refuse it; a harness battle starts
-    // with an empty box and can catch at most one mon.)
-    if items_allowed {
-        for (id, _qty) in read_pocket(cpu, W_NUM_BALLS) {
+    // A harness battle starts with an empty box and can catch at most one mon.
+    if items_allowed && cpu.read_byte(W_BATTLE_MODE) == defs::WILD_BATTLE {
+        for (id, _qty) in read_pocket(cpu, W_NUM_BALLS).into_iter().filter(|(id, _)| is_ball_id(*id)) {
             out.push(Step::Item { id, target: None, move_slot: None });
         }
     }

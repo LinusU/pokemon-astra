@@ -20,27 +20,30 @@ function panel(
     clientHeight: height,
     getBoundingClientRect: () => rect(0, 0, 200, height),
     querySelectorAll: () => buttons,
-    querySelector: () => (journey ? {} : null),
+    querySelector: (selector: string) =>
+      selector === "button:not(:disabled)" ? buttons[0] : journey ? {} : null,
   };
-  const buttons = layout.map(([left, top, width, buttonHeight]) => ({
-    getBoundingClientRect: () =>
-      rect(
-        left,
-        top - scroller.scrollTop,
-        left + width,
-        top + buttonHeight - scroller.scrollTop,
-      ),
-    focus: vi.fn((_: FocusOptions) => {
-      ownerDocument.activeElement = buttonAt(left, top);
-    }),
-    click: vi.fn(),
-  }));
-  const buttonAt = (left: number, top: number) =>
-    buttons[layout.findIndex(([x, y]) => left === x && top === y)];
+  const buttons = layout.map(([left, top, width, buttonHeight]) => {
+    const button = {
+      getBoundingClientRect: () =>
+        rect(
+          left,
+          top - scroller.scrollTop,
+          left + width,
+          top + buttonHeight - scroller.scrollTop,
+        ),
+      focus: vi.fn((_: FocusOptions) => {
+        ownerDocument.activeElement = button;
+      }),
+      click: vi.fn(),
+    };
+    return button;
+  });
   const layer = {
     firstElementChild: {},
     ownerDocument,
-    querySelector: () => scroller,
+    querySelector: (selector: string) =>
+      selector === "[data-bag]" ? null : scroller,
   } as unknown as HTMLElement;
   const menu = new MenuInput();
   const update = (now: number, pressed?: Action, held = pressed) =>
@@ -73,6 +76,25 @@ describe("menu input", () => {
     expect(ownerDocument.activeElement).toBe(buttons[1]);
     update(70, "a");
     expect(buttons[1].click).toHaveBeenCalledOnce();
+  });
+
+  it("focuses the first battle option on a submenu redraw", () => {
+    const { update, buttons, ownerDocument } = panel(
+      [
+        [0, 6, 88, 26],
+        [0, 38, 88, 26],
+        [0, 70, 88, 26],
+      ],
+      120,
+      true,
+    );
+    update(0);
+    expect(ownerDocument.activeElement).toBe(buttons[0]);
+    buttons.shift();
+    update(20);
+    expect(ownerDocument.activeElement).toBe(buttons[0]);
+    update(30, "a");
+    expect(buttons[0].click).toHaveBeenCalledOnce();
   });
 
   it("scrolls text before reaching Back and repeats only while a direction is held", () => {

@@ -1,4 +1,4 @@
-# Verification record — November 17, 2026
+# Verification record
 
 ## Earlier build checks
 
@@ -29,7 +29,7 @@ Using the actual production JavaScript/WASM and the user's local English Crystal
 
 Polish QA additionally caught incorrect overworld tree cells, opaque white sprite regions being removed, oversized small Pokémon, stale replacement HP, missing capture-ball positioning, raw native trainer names/prize text, parcel feedback, landscape controls, and offline startup. These were fixed before this publication.
 
-## Current release verification
+## November 17 release
 
 - The production build compiled the Rust engine and TypeScript, emitted 13 offline assets, and passed the cartridge-exclusion check.
 - All 61 Vitest checks passed across 11 test files, alongside three Rust tests and the native WASM smoke check using the local English Crystal 1.1 ROM.
@@ -40,8 +40,20 @@ Polish QA additionally caught incorrect overworld tree cells, opaque white sprit
 - A save from the campaign simulation was imported in Mira’s chamber. The entire six-opponent Champion battle was played through the production UI. It awarded victory, showed the six winning partners in the Hall of Fame, and advanced the journal to the Aurora Sanctuary. Reloading retained Champion progress. A later browser check confirmed the updated ceremonial arena, a scaled rematch, staged trainer introduction, Pokémon reveals and twilight battle scene.
 - Tideglass was visited using Fly. Its pier, lighthouse, Surf skiff, and route map were inspected. With the local server stopped, a reload continued the saved Tideglass adventure and the postgame map still offered Fly to Dewdrop. The worker’s update flow was also exercised against successive production builds.
 
+## November 18 playability checks
+
+- The region contains 119 maps and 34,758 tiles, including seven additional local buildings. The previous version contained 112 maps and 46,092 tiles. All 12 Centers and 12 Marts have a service counter and a second character.
+- The world tests exercise the eight-badge route, recover older saves from new solid tiles, and verify dry approaches, water crossings, and field obstacles. In the production browser, walking into the Bramble tree kept the game in the overworld. Inspecting it explained Cut. Using Cut after earning the badge opened Route 04 and persisted the cleared tree. The village camera framed the nearby streets at the starting doorstep and scrolled continuously across the opened road.
+- A new journey walked from the doorstep in Dewdrop to Alder’s lab using directional input, chose Growlithe, and received ten Poké Balls and five Potions. A separate check walked out of the home using its south-wall doormat.
+- In an isolated save, an injured Growlithe healed across the nurse’s counter. Buying five Poké Balls at once cost ₽1,000 and added five to the Bag. D-pad, A, B and touch were exercised through pockets, the item action menu, Pokémon selection, cancellation and returning to the selected item.
+- A battle against Scout Ari opened with FIGHT selected. Moving the cursor between attacks changed the move details. The dialogue box retained its measured bounds from the command grid through move selection. Both sprites stayed within the arena. Choosing a trainer battle’s ball pocket displayed the restriction and disabled Throw.
+- Growlithe defeated Ari’s Pokémon and gained 79 EXP. The reserve Caterpie’s EXP stayed at 64 and the Bag retained every ball. A separate wild Pikachu capture showed the throw animation, consumed the ball and added Pikachu to the party. An explicit practice rematch with Ari paid ₽140, retained the story flags and left Caterpie’s EXP alone. The production app resumed the saved journey with the browser offline.
+
+- On an iPhone Air simulator running iOS 26.2, Safari installed the production build using Add to Home Screen. Launching its icon opened the standalone app. The local cartridge imported through Files and the adventure began in Dewdrop. Portrait and landscape screenshots were inspected. The canvas and controls were inside the system safe areas.
+- All 71 Vitest checks, three Rust tests, and the native WASM/ROM smoke check passed. The production build generated 13 offline assets. Three seeded native campaign runs cleared all eight gyms and the five League fights. Each run won 84 pre-League trainer battles and eight practice rematches across two rounds with four route trainers and caught 17–19 Pokémon. The simulator used the player’s earned money for supplies and tested the participant-only experience rules.
+
 ## Limits
 
-The scripted campaign measures playability with informed team choices. Uninterrupted first-time human playthroughs, time to complete the 251-species Pokédex, physical FlipPad input, and native phone installation remain unverified. Puzzles use themed mechanisms and persistent conditions. Move effects use custom animation families; upstream battle paths such as PP Up and contest-only mechanics remain unported.
+The scripted campaign measures playability with informed team choices. Uninterrupted first-time human playthroughs, time to complete the 251-species Pokédex, physical FlipPad input, and installation on a physical iPhone remain unverified. Puzzles use themed mechanisms and persistent conditions. Move effects use custom animation families; upstream battle paths such as PP Up and contest-only mechanics remain unported.
 
 The synthesizer’s Gen 2 music wave channel is implemented in the vendored 0.2.3 code. The upstream README checkbox is stale.

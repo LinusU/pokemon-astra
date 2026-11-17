@@ -24,13 +24,13 @@ Production builds generate a versioned offline service worker covering the appli
 ## The adventure
 
 - Growlithe, Poliwag, or Bellsprout as your partner. Alder tutors Growlithe in Ember, Poliwag in Water Gun, or Bellsprout in Tackle. Robin raises the partner with a type advantage.
-- 12 settlements, 25 routes, 12 dungeons with three rooms each, eight gyms, and 112 connected maps in total, including five League chambers.
+- 12 settlements, 25 routes, 12 dungeons with three rooms each, eight gyms, and 119 connected maps in total, including five League chambers.
 - Professor Alder's beacon survey, Robin's changing relationship with Meridian, Director Vale's Celestial Engine, eight beacon keepers, the Elite Four, and Champion Mira.
 - 16 journal quests, optional trainers, evolution-item rewards, a postgame reserve, and retryable legendary encounters. All 251 species have an obtainable habitat, gift, or static encounter; no trade or event service is necessary.
 - Badge field abilities open return paths and hidden areas. Surf enables water traversal; Fly travels between visited settlements. Field abilities do not occupy Pokémon move slots.
 - Six-member party, storage, Pokédex habitat hints, native battles/catching/experience/move decisions, evolution stones and Link Cables, friendship/time/stat evolutions, shops, fishing, repels, healing, and autosave.
-- Smooth, animated movement with diagonal normalization, solid roaming NPCs, trainer sightlines and approaches, grass rustles, and continuous outdoor map boundaries. Outside the opening area, towns are 26×20 tiles, routes are 26×18, and dungeon rooms are 20×16. Regional palettes and landmarks distinguish each leg of the trip.
-- Trainer catch-up experience for healthy reserves, tiered medicine, scaled postgame rematches, and a Hall of Fame record. Staged battle introductions, A-acknowledged text, animated HP/experience, move effects, send-outs, fainting, and Poké Ball throws. Encounter transitions and battle exits preserve the overworld.
+- Smooth, animated movement with diagonal normalization, solid roaming NPCs, trainer sightlines and approaches, grass rustles, and continuous outdoor map boundaries. Dewdrop and Mossford are 25×20 tiles, later towns are 24×18 and later routes are 23×16. Centers and Marts fit in 12×9 and 11×9 rooms. Regional palettes and landmarks distinguish each leg of the trip.
+- Experience goes to conscious participants and eligible Exp. Share holders. Beaten road trainers offer optional practice rematches. The Bag sorts medicine, Poké Balls and key items into pockets. Field and battle menus support the D-pad, A and B. Staged battle introductions, A-acknowledged text, animated HP/experience, move effects, send-outs, fainting, and Poké Ball throws. Encounter transitions and battle exits preserve the overworld.
 - Self-hosted VT323 game text, ROM music/cries/sound effects, saved sound controls, and an explicit day/night camp option.
 
 The region plan is in [docs/DESIGN.md](docs/DESIGN.md); implemented content and contracts are in [docs/WORLD.md](docs/WORLD.md).
@@ -45,9 +45,9 @@ The region plan is in [docs/DESIGN.md](docs/DESIGN.md); implemented content and 
 
 Shift runs faster. Connect the FlipPad in a browser-supported Gamepad API mode, then press a button. The last actively used controller is selected so an idle receiver does not steal input. Standard mappings are implemented and tested with simulated pad events; physical FlipPad/iOS hardware has not been tested here.
 
-The field map marks your location and your next exit or objective. The journal records blocked routes, keeper challenges, and side quest rewards. Party details show current moves, PP and evolution methods.
+The field map marks your location and your next exit or objective. Inspect obstacles with A to record blocked routes in the journal. It also records requests you have discovered and your next survey stop. Party details show current moves, PP and evolution methods.
 
-Saves and cartridge bytes stay in this browser's IndexedDB. **Settings & save → Export save** creates a portable JSON backup; importing validates native Pokémon data and repairs positions obstructed by map revisions. Clearing browser storage removes the cached cartridge and save. Export a backup before changing devices or clearing storage. A new adventure asks for confirmation.
+Saves and cartridge bytes stay in this browser's IndexedDB. **Options → Export save** creates a portable JSON backup; importing validates native Pokémon data and repairs positions obstructed by map revisions. Clearing browser storage removes the cached cartridge and save. Export a backup before changing devices or clearing storage. A new adventure asks for confirmation.
 
 ## The three requested libraries
 

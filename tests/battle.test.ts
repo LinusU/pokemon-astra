@@ -62,6 +62,7 @@ describe.skipIf(!romAvailable)("real native battle events", () => {
     const used = events.findIndex((e) => e.Message?.UsedMove);
     const anim = events.findIndex((e) => e.Animation?.anim < 256);
     const hp = events.findIndex((e) => e.HpBar);
+    expect(battle.snapshot().state.enemy.active.hp).toBeGreaterThan(0);
     expect(used).toBeGreaterThanOrEqual(0);
     expect(anim).toBeGreaterThan(used);
     expect(hp).toBeGreaterThan(anim);
@@ -71,6 +72,7 @@ describe.skipIf(!romAvailable)("real native battle events", () => {
       (a) => a.Item?.id === 1,
     );
     const caught = capture.act(ball).events as any[];
+    expect(capture.snapshot().bag.balls).toEqual([]);
     expect(caught.find((e) => e.BallWobbles)?.BallWobbles).toEqual({
       caught: true,
       wobbles: 3,
@@ -83,6 +85,26 @@ describe.skipIf(!romAvailable)("real native battle events", () => {
 });
 
 describe.skipIf(!romAvailable)("complete native battle decisions", () => {
+  it("emits a reserve item HP animation with the native party slot and spends one Potion", async () => {
+    const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});
+    const engine = new Engine(instance.exports as never, readFileSync("pokecrystal11.gbc"));
+    const patient = { ...engine.makePokemon(19, 8), nickname: "Scout", hp: 1 };
+    const battle = engine.startBattle({
+      party: [engine.makePokemon(58, 10), patient],
+      opponent: { species: 19, level: 3 },
+      items: [[18, 2]],
+      seed: 5,
+    });
+    const action = (battle.snapshot().legal as any[]).findIndex((a) => a.Item?.id === 18 && a.Item.target === 1);
+    expect(action).toBeGreaterThanOrEqual(0);
+    const snapshot = battle.act(action);
+    expect(snapshot.bag.items).toEqual([[18, 1]]);
+    expect(snapshot.events).toContainEqual({
+      HpBar: { target: { Party: 1 }, from: 1, to: 21, max: patient.stats[0] },
+    });
+    expect(snapshot.events).toContainEqual({ Message: { PartyRecoveredHp: { mon: "Scout", hp: 20 } } });
+  });
+
   it("renders events through forced switch, trainer victory, level-up and move learning", async () => {
     const { instance } = await WebAssembly.instantiate(
       readFileSync("public/astra_native.wasm"),
@@ -128,7 +150,15 @@ describe.skipIf(!romAvailable)("complete native battle decisions", () => {
       if (index < 0) index = legal.findIndex((a) => a.Move?.slot === 3);
       if (index < 0) index = legal.findIndex((a) => a.Move);
       if (index < 0) index = 0;
-      battle.act(index);
+      const sentOut = battle.act(index);
+      if (legal[index]?.ForcedSwitch?.slot === 1)
+        expect(sentOut.events).toContainEqual({
+          SendOut: {
+            side: "Player",
+            slot: 1,
+            mon: expect.objectContaining({ species: lead.species, hp: lead.hp }),
+          },
+        });
     }
     expect(battle.snapshot().outcome).toBeTruthy();
     expect(seen.has("MonFainted")).toBe(true);
@@ -137,7 +167,7 @@ describe.skipIf(!romAvailable)("complete native battle decisions", () => {
     expect(seen.has("AskForgetMove")).toBe(true);
   });
 
-  it("trains a reserve through the native learn prompt without awarding reserve stat EXP", async () => {
+  it("awards reserve EXP only to an actual Exp. Share holder", async () => {
     const { instance } = await WebAssembly.instantiate(
       readFileSync("public/astra_native.wasm"),
       {},
@@ -152,17 +182,31 @@ describe.skipIf(!romAvailable)("complete native battle decisions", () => {
     reserve.pp = reserve.moves.map((id) => engine.move(id).pp);
     const lead = engine.makeStarter(58);
     const enemy = engine.makePokemon(10, 5);
-    for (const training of [false, true]) {
+    for (const expShare of [false, true]) {
       const battle = engine.startBattle({
-        party: [lead, reserve],
+        party: [lead, { ...reserve, item: expShare ? 57 : 0 }],
         opponent: { party: [enemy] },
-        training,
+        balls: [[5, 2]],
         seed: 123,
       });
       let learned = false;
-      for (let i = 0; i < 20 && !battle.snapshot().outcome; i++) {
+      let sawActiveExpBar = false;
+      const recipients = new Set<string>();
+      for (let i = 0; i < 20; i++) {
         const snapshot = battle.snapshot();
-        const actions = snapshot.legal as { Move?: { slot: number }; LearnMove?: { slot: number } }[];
+        for (const event of snapshot.events as any[]) {
+          if (event.Message?.GainedExp) recipients.add(event.Message.GainedExp.mon);
+          if (event.ExpBar) {
+            sawActiveExpBar = true;
+            expect(event.ExpBar.slot).toBe(0);
+            expect(event.ExpBar.from).toBeLessThan(event.ExpBar.to);
+            expect(event.ExpBar.to).toBeLessThanOrEqual(100);
+          }
+        }
+        if (snapshot.outcome) break;
+        const actions = snapshot.legal as { Move?: { slot: number }; LearnMove?: { slot: number }; Item?: { id: number } }[];
+        expect(snapshot.bag.balls).toEqual([[5, 2]]);
+        expect(actions.some((a) => a.Item?.id === 5)).toBe(false);
         const learning = snapshot.site === "LearnMove";
         if (learning) {
           learned = true;
@@ -177,10 +221,15 @@ describe.skipIf(!romAvailable)("complete native battle decisions", () => {
       }
       const result = battle.snapshot().result;
       expect(result?.outcome).toBe("win");
-      expect(learned).toBe(training);
-      expect(result?.party[1].level).toBe(training ? 7 : 6);
-      expect(result?.party[1].moves[2]).toBe(training ? 73 : 39);
-      expect(result?.party[1].stat_exp).toEqual(reserve.stat_exp);
+      expect(learned).toBe(expShare);
+      expect(sawActiveExpBar).toBe(true);
+      expect(recipients.has(reserve.nickname)).toBe(expShare);
+      expect(result?.party[1].level).toBe(expShare ? 7 : 6);
+      expect(result?.party[1].moves[2]).toBe(expShare ? 73 : 39);
+      if (!expShare) {
+        expect(result?.party[1].exp).toBe(reserve.exp);
+        expect(result?.party[1].stat_exp).toEqual(reserve.stat_exp);
+      }
     }
   });
 });
@@ -212,7 +261,7 @@ describe("authored trainer names", () => {
 
 it("uses only subsequent HP events for a replacement Pokémon", () => {
   const mon = { species: 25, moves: [], pp: [], level: 5, status: 0, hp: 15, max_hp: 15 };
-  const snapshot = { state: { player: { active: mon, active_slot: 0 }, enemy: { active: mon, active_slot: 1 } }, events: [], site: null, legal: [], outcome: null, result: null };
+  const snapshot = { state: { player: { active: mon, active_slot: 0 }, enemy: { active: mon, active_slot: 1 } }, events: [], site: null, legal: [], outcome: null, result: null, bag: { items: [], balls: [] } };
   expect(battleMonAtSendOut(snapshot, "enemy", [])).toMatchObject({ hp: 15, max_hp: 15 });
   expect(battleMonAtSendOut(snapshot, "enemy", [{ HpBar: { target: "Enemy", from: 15, to: 8, max: 15 } }])).toMatchObject({ hp: 15, max_hp: 15 });
   expect(battleMonAtSendOut(snapshot, "enemy", [{ Message: { EnemySentOut: {} } }, { HpBar: { target: "Enemy", from: 3, to: 0, max: 3 } }])).toMatchObject({ hp: 15, max_hp: 15 });

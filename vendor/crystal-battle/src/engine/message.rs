@@ -151,7 +151,7 @@ impl Engine {
                 boosted: self.mem.rb(W_STRING_BUFFER2 + 2) != 0,
             },
             r::BATTLE_TEXT_STRING_BUFFER1_GREW_TO_LEVEL => {
-                M::GrewToLevel { mon: self.mon_name(sb1()), level: self.mem.rb(W_CUR_PARTY_LEVEL) }
+                M::GrewToLevel { mon: self.mon_name(sb1()), level: self.mem.rb(W_CUR_PARTY_LEVEL), slot: self.mem.rb(W_CUR_PARTY_MON) }
             }
             r::LEARNED_MOVE_TEXT => M::LearnedMove { mon: self.mon_name(&n.mon_or_item), mv: self.move_in(sb2()) },
             r::ASK_FORGET_MOVE_TEXT => M::AskForgetMove { mon: self.mon_name(&n.mon_or_item), mv: self.move_in(sb2()) },

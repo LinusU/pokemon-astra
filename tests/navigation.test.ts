@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  barrierTarget,
   connectedBlocked,
   connectionAt,
   crossConnection,
+  exitOpen,
 } from "../src/game/navigation";
 import { WORLD } from "../src/world";
 
@@ -49,5 +51,92 @@ describe("continuous outdoor connections", () => {
           exit.direction === "north" ? WORLD[exit.to].height - 0.04 : 0.04,
         );
       }
+  });
+});
+
+describe("field barriers", () => {
+  it("blocks all lanes of a locked road and supports deliberate field actions", () => {
+    const map = WORLD.bramble;
+    const exit = map.exits.find((e) => e.to === "route04")!;
+    const open =
+      (requirementsMet: boolean, flags: string[] = []) =>
+      (e: typeof exit) =>
+        exitOpen(e, (req) => !req || requirementsMet, flags);
+    for (const yy of [-1, 0, 1].map((d) => exit.y + 0.5 + d)) {
+      expect(connectedBlocked(map, exit.x + 0.5, yy, false, open(false))).toBe(
+        true,
+      );
+      expect(connectedBlocked(map, exit.x + 0.5, yy, false, open(true))).toBe(
+        true,
+      );
+      expect(
+        connectedBlocked(
+          map,
+          exit.x + 0.5,
+          yy,
+          false,
+          open(true, [exit.barrier!.flag!]),
+        ),
+      ).toBe(false);
+    }
+    const approach = { x: exit.x - 0.5, y: exit.y + 0.5, facing: "right" };
+    expect(
+      connectedBlocked(map, approach.x, approach.y, false, open(false)),
+    ).toBe(false);
+    expect(barrierTarget(map, approach, open(false))).toBe(exit);
+    expect(
+      barrierTarget(map, { ...approach, facing: "left" }, open(false)),
+    ).toBeUndefined();
+    expect(
+      barrierTarget(map, approach, open(true, [exit.barrier!.flag!])),
+    ).toBeUndefined();
+  });
+
+  it("swims through open water crossings and stops at closed buoys", () => {
+    const map = WORLD.tideglass;
+    const exit = map.exits.find((e) => e.to === "route06")!;
+    const open = (e: typeof exit) => exitOpen(e, () => true, []);
+    const player = { x: exit.x - 0.5, y: exit.y + 0.5, facing: "right" };
+    expect(barrierTarget(map, player, () => false)).toBe(exit);
+    expect(connectedBlocked(map, exit.x + 0.5, exit.y + 0.5, false, open)).toBe(
+      true,
+    );
+    expect(connectedBlocked(map, exit.x + 0.5, exit.y + 0.5, true, open)).toBe(
+      false,
+    );
+    expect(
+      connectedBlocked(map, exit.x + 0.5, exit.y + 0.5, true, () => false),
+    ).toBe(true);
+  });
+
+  it("lands inside a closed reciprocal road after backtracking from an old save", () => {
+    const map = WORLD.route04;
+    const exit = map.exits.find((e) => e.to === "bramble")!;
+    const isOpen = (e: typeof exit) => !e.barrier;
+    const arrival = crossConnection(map, exit, -0.03, exit.y + 0.5, isOpen);
+    expect(
+      connectedBlocked(WORLD.bramble, arrival.x, arrival.y, false, isOpen),
+    ).toBe(false);
+  });
+
+  it("lands on the approach beside each building door or mat", () => {
+    for (const map of Object.values(WORLD)) {
+      for (const exit of map.exits.filter((e) => e.entrance === "mat")) {
+        const town = WORLD[exit.to];
+        const door = town.exits.find((e) => e.to === map.id)!;
+        const exterior = crossConnection(map, exit, 0, 0);
+        const interior = crossConnection(town, door, 0, 0);
+        expect(exterior.y).toBe(door.y + 1.5);
+        expect(interior.y).toBe(exit.y - 0.5);
+        expect(
+          connectedBlocked(town, exterior.x, exterior.y, false, () => true),
+          town.id,
+        ).toBe(false);
+        expect(
+          connectedBlocked(map, interior.x, interior.y, false, () => true),
+          map.id,
+        ).toBe(false);
+      }
+    }
   });
 });
