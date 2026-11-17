@@ -1,0 +1,7 @@
+# Vendored libraries
+
+- `crystal-battle`: <https://github.com/LinusU/pokemon-crystal-battle-engine>, commit `3255c575bd8a7b013aef9e9a7e06e4d54503dffc`, the `crates/crystal-battle` library. Local changes add serde serialization derives, add an interactive move-learning decision, and retain a full-party capture in the result (as a seventh result entry for the caller to send to storage). The upstream checkout did not include a license file; its licensing should be confirmed before redistribution.
+- `pokemon-synthesizer` 0.2.3: <https://github.com/LinusU/pokemon-synthesizer>, commit `66a0e01aa7d0554552a82f486b135af97f6c69ba`; upstream manifest declares MIT OR Apache-2.0. The upstream checkout did not include license text.
+- `pokemon-sprite-compression` 0.1.2: <https://crates.io/crates/pokemon-sprite-compression/0.1.2>; upstream manifest declares MIT OR Apache-2.0. No ROMs or test fixtures are included.
+
+The battle upstream still contains explicitly unported paths, including PP Up and contest-only mechanics. These are not covered by the smoke checks.

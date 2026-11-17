@@ -1,0 +1,26 @@
+{
+  "id": "./",
+  "name": "Pokémon Astra",
+  "short_name": "Astra",
+  "description": "A Pokémon adventure beneath the Aurora Current.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#122623",
+  "theme_color": "#182e2c",
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

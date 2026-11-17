@@ -1,0 +1,521 @@
+/** Browser bridge to the actual Crystal battle engine and ROM decoders. */
+export interface Pokemon {
+  species: number;
+  item: number;
+  moves: number[];
+  ot_id: number;
+  exp: number;
+  stat_exp: number[];
+  dvs: number[];
+  pp: number[];
+  happiness: number;
+  pokerus: number;
+  caught: number[];
+  level: number;
+  status: number;
+  hp: number;
+  stats: number[];
+  nickname: string;
+  ot_name: string;
+}
+export interface BattleMon {
+  species: number;
+  moves: number[];
+  pp: number[];
+  level: number;
+  status: number;
+  hp: number;
+  max_hp: number;
+}
+export interface BattleSnapshot {
+  site: string | null;
+  legal: unknown[];
+  state: {
+    player: { active: BattleMon; active_slot: number };
+    enemy: { active: BattleMon; active_slot: number };
+  };
+  events: unknown[];
+  outcome: string | null;
+  result: BattleResult | null;
+}
+export interface BattleResult {
+  outcome: string;
+  party: Pokemon[];
+  caught: number | null;
+  money: number;
+  bag: { items: [number, number][]; balls: [number, number][] };
+  may_evolve: number[];
+  world: { seen: number[]; caught: number[] };
+}
+export interface BattleOptions {
+  party: Pokemon[];
+  opponent: { species: number; level: number } | { party: Pokemon[] };
+  balls?: [number, number][];
+  items?: [number, number][];
+  money?: number;
+  badges?: number;
+  seed?: number;
+  seen?: number[];
+  caught?: number[];
+}
+type Exports = {
+  memory: WebAssembly.Memory;
+  alloc(n: number): number;
+  dealloc(p: number, n: number): void;
+  request(p: number, n: number): number;
+  output_len(): number;
+  decompress(p: number, n: number): number;
+  music(
+    p: number,
+    n: number,
+    bank: number,
+    addr: number,
+    start: number,
+    count: number,
+  ): number;
+  music_start(p: number, n: number, bank: number, addr: number): number;
+  music_next(count: number): number;
+  cry(p: number, n: number, id: number): number;
+};
+export class Engine {
+  constructor(
+    private wasm: Exports,
+    private rom: Uint8Array,
+  ) {}
+  private bytes(
+    data: Uint8Array,
+    fn: (p: number, n: number) => number,
+  ): Uint8Array {
+    const p = this.wasm.alloc(data.length);
+    new Uint8Array(this.wasm.memory.buffer, p, data.length).set(data);
+    try {
+      const out = fn(p, data.length);
+      return new Uint8Array(
+        this.wasm.memory.buffer,
+        out,
+        this.wasm.output_len(),
+      ).slice();
+    } finally {
+      this.wasm.dealloc(p, data.length);
+    }
+  }
+  private call<T>(value: unknown): T {
+    const bytes = this.bytes(
+      new TextEncoder().encode(JSON.stringify(value)),
+      (p, n) => this.wasm.request(p, n),
+    );
+    const result = JSON.parse(new TextDecoder().decode(bytes));
+    if (result.error) throw Error(result.error);
+    return result as T;
+  }
+  species(id: number): { id: number; name: string; types: number[] } {
+    const v = this.call<{ id: number; name: string }>({ op: "species", id });
+    const p = 0x51424 + (id - 1) * 32;
+    return { ...v, types: [this.rom[p + 7], this.rom[p + 8]] };
+  }
+  move(id: number): { id: number; name: string; pp: number } {
+    return this.call({ op: "move", id });
+  }
+  /** Original Crystal evolution records and level-up moves, read from the imported ROM. */
+  evolutionData(id: number): {
+    evolutions: {
+      method: number;
+      parameter: number;
+      condition?: number;
+      species: number;
+    }[];
+    learnset: { level: number; move: number }[];
+  } {
+    if (id < 1 || id > 251) throw Error("Invalid species");
+    const p = 0x425b1 + (id - 1) * 2;
+    let i = 0x40000 + ((this.rom[p] | (this.rom[p + 1] << 8)) & 0x3fff);
+    const evolutions: {
+      method: number;
+      parameter: number;
+      condition?: number;
+      species: number;
+    }[] = [];
+    while (this.rom[i]) {
+      const method = this.rom[i++],
+        parameter = this.rom[i++];
+      let condition: number | undefined;
+      if (method === 5) condition = this.rom[i++];
+      const species = this.rom[i++];
+      evolutions.push({ method, parameter, condition, species });
+    }
+    i++;
+    const learnset: { level: number; move: number }[] = [];
+    while (this.rom[i]) {
+      learnset.push({ level: this.rom[i], move: this.rom[i + 1] });
+      i += 2;
+    }
+    return { evolutions, learnset };
+  }
+  /** Apply a selected evolution while preserving individual values and damage. */
+  evolvePokemon(mon: Pokemon, target: number): Pokemon {
+    if (
+      !this.evolutionData(mon.species).evolutions.some(
+        (e) => e.species === target,
+      )
+    )
+      throw Error("Invalid evolution");
+    const base = 0x51424 + (target - 1) * 32;
+    const atk = mon.dvs[0] >> 4,
+      def = mon.dvs[0] & 15,
+      spd = mon.dvs[1] >> 4,
+      special = mon.dvs[1] & 15;
+    const hp = (atk & 1) * 8 + (def & 1) * 4 + (spd & 1) * 2 + (special & 1);
+    const dvs = [hp, atk, def, spd, special, special];
+    const exp = [
+      mon.stat_exp[0],
+      mon.stat_exp[1],
+      mon.stat_exp[2],
+      mon.stat_exp[3],
+      mon.stat_exp[4],
+      mon.stat_exp[4],
+    ];
+    const stats = dvs.map((dv, i) => {
+      const contribution = Math.floor(
+        Math.min(255, Math.ceil(Math.sqrt(exp[i]))) / 4,
+      );
+      const scaled = Math.floor(
+        (((this.rom[base + 1 + i] + dv) * 2 + contribution) * mon.level) / 100,
+      );
+      return scaled + (i === 0 ? mon.level + 10 : 5);
+    });
+    const oldName = this.species(mon.species).name;
+    return {
+      ...mon,
+      species: target,
+      stats,
+      hp:
+        mon.hp === 0 ? 0 : Math.min(stats[0], mon.hp + stats[0] - mon.stats[0]),
+      nickname:
+        mon.nickname === oldName ? this.species(target).name : mon.nickname,
+    };
+  }
+  teachMove(mon: Pokemon, move: number, slot: number): Pokemon {
+    if (slot < 0 || slot > 3 || move < 1 || move > 251)
+      throw Error("Invalid move or slot");
+    const moves = [...mon.moves],
+      pp = [...mon.pp];
+    moves[slot] = move;
+    pp[slot] = this.move(move).pp;
+    return { ...mon, moves, pp };
+  }
+  makePokemon(id: number, level: number): Pokemon {
+    return this.call({ op: "make", id, level });
+  }
+  healPokemon(mon: Pokemon): Pokemon {
+    return this.call({ op: "heal", mon });
+  }
+  startBattle(options: BattleOptions): Battle {
+    const opp =
+      "species" in options.opponent
+        ? { Wild: options.opponent }
+        : {
+            Trainer: {
+              class: 1,
+              id: 1,
+              party: options.opponent.party,
+              items: null,
+              ai_flags: null,
+              control: "original",
+            },
+          };
+    const setup = {
+      player: {
+        name: "ASTRA",
+        id: 0x1234,
+        gender: 0,
+        money: options.money ?? 3000,
+        johto_badges: options.badges ?? 0,
+        kanto_badges: 0,
+        mom_saving: 0,
+        mom_money: 0,
+      },
+      party: options.party,
+      bag: {
+        items: (options.items ?? [[18, 5]]).filter(([, count]) => count > 0),
+        balls: (options.balls ?? [[5, 10]]).filter(([, count]) => count > 0),
+      },
+      opponent: opp,
+      options: { battle_scene: true },
+      world: {
+        time_of_day: 2,
+        unlocked_unowns: 0,
+        rival_name: "ROBIN",
+        seen: options.seen ?? [],
+        caught: options.caught ?? [],
+        unown_dex: [],
+        location: 0,
+      },
+    };
+    return new Battle(
+      this,
+      this.call({
+        op: "start",
+        setup,
+        seed: options.seed ?? Math.floor(Math.random() * 0xffffffff),
+      }),
+    );
+  }
+  act(index: number): BattleSnapshot {
+    return this.call({ op: "act", index });
+  }
+  private color(p: number): number[] {
+    const c = this.rom[p] | (this.rom[p + 1] << 8);
+    return [
+      ((c & 31) * 255) / 31,
+      (((c >> 5) & 31) * 255) / 31,
+      (((c >> 10) & 31) * 255) / 31,
+      255,
+    ];
+  }
+  private paint(
+    out: Uint8ClampedArray,
+    width: number,
+    source: Uint8Array,
+    ox: number,
+    oy: number,
+    colors: number[][],
+    transparent: boolean,
+    flip = false,
+  ): void {
+    for (let y = 0; y < 8; y++)
+      for (let x = 0; x < 8; x++) {
+        const bit = 7 - x;
+        const c =
+          ((source[y * 2] >> bit) & 1) |
+          (((source[y * 2 + 1] >> bit) & 1) << 1);
+        if (!transparent || c)
+          out.set(colors[c], ((oy + y) * width + ox + (flip ? 7 - x : x)) * 4);
+      }
+  }
+  npc(kind: string, night = false, facing = "down", frame = 0): ImageData {
+    const table: Record<string, [number, number]> = {
+      player: [0xc0000, 0],
+      fisher: [0xc51c0, 2],
+      lass: [0xc3840, 1],
+      elder: [0xc4300, 3],
+      item: [0xc7380, 0],
+      nurse: [0xc4e00, 0],
+      clerk: [0xc5040, 1],
+      professor: [0xc15c0, 3],
+      sage: [0xc57c0, 3],
+    };
+    const [base, pal] = table[kind] ?? [0xc36c0, 0];
+    const colors = Array.from({ length: 4 }, (_, i) =>
+      this.color(0xb469 + (night ? 128 : 64) + pal * 8 + i * 2),
+    );
+    const off =
+      base +
+      (facing === "up"
+        ? 64
+        : facing === "left" || facing === "right"
+          ? 128
+          : 0) +
+      (frame ? 192 : 0);
+    const pixels = new Uint8ClampedArray(16 * 16 * 4);
+    for (let i = 0; i < 4; i++)
+      this.paint(
+        pixels,
+        16,
+        this.rom.subarray(off + i * 16, off + i * 16 + 16),
+        (facing === "right" ? 1 - (i % 2) : i % 2) * 8,
+        Math.floor(i / 2) * 8,
+        colors,
+        true,
+        facing === "right",
+      );
+    return new ImageData(pixels, 16, 16);
+  }
+  private tilesets = new Map<
+    string,
+    { graphics: Uint8Array; meta: number; pal: number }
+  >();
+  cell(set: string, cell: number, roof = 0, night = false): ImageData {
+    const ids: Record<string, number> = {
+      johto: 1,
+      modern: 2,
+      house: 5,
+      center: 7,
+      mart: 12,
+      lab: 10,
+      cave: 24,
+      ice: 29,
+      forest: 31,
+      ruins: 26,
+      park: 25,
+      gate: 8,
+      league: 15,
+      tower: 23,
+    };
+    const index = ids[set];
+    if (index === undefined) throw Error("Unknown tileset");
+    let ts = this.tilesets.get(set);
+    if (!ts) {
+      const h = 0x4d596 + index * 15;
+      const ptr = (p: number) =>
+        this.rom[p] * 0x4000 +
+        ((this.rom[p + 1] | (this.rom[p + 2] << 8)) & 0x3fff);
+      const g = ptr(h);
+      const graphics = this.bytes(this.rom.subarray(g, g + 0x4000), (p, n) =>
+        this.wasm.decompress(p, n),
+      );
+      ts = {
+        graphics,
+        meta: ptr(h + 3),
+        pal: 0x4c000 + ((this.rom[h + 13] | (this.rom[h + 14] << 8)) & 0x3fff),
+      };
+      this.tilesets.set(set, ts);
+    }
+    const pixels = new Uint8ClampedArray(16 * 16 * 4);
+    const block = Math.floor(cell / 4),
+      q = cell % 4,
+      indoor = !["johto", "modern", "park", "forest"].includes(set);
+    for (let ty = 0; ty < 2; ty++)
+      for (let tx = 0; tx < 2; tx++) {
+        const id =
+          this.rom[
+            ts.meta +
+              block * 16 +
+              (Math.floor(q / 2) * 2 + ty) * 4 +
+              (q % 2) * 2 +
+              tx
+          ];
+        const attr =
+          (this.rom[ts.pal + Math.floor(id / 2)] >> ((id % 2) * 4)) & 15;
+        const ix = attr & 8 ? Math.max(0, id - 128) + 96 : id;
+        let source = ts.graphics.subarray(ix * 16, ix * 16 + 16);
+        if (["johto", "modern"].includes(set) && ix >= 10 && ix < 19) {
+          const r = [0x190a8, 0x1c0cc, 0x1c15c, 0x1c1ec, 0x1c27c][roof % 5];
+          source = this.rom.subarray(r + (ix - 10) * 16, r + (ix - 9) * 16);
+        }
+        const p = attr & 7,
+          time = indoor ? 4 : night ? 2 : 1;
+        let colors = Array.from({ length: 4 }, (_, i) =>
+          this.color(0xb319 + time * 64 + p * 8 + i * 2),
+        );
+        if (p === 6 && !indoor) {
+          const groups = [24, 10, 8, 1, 11],
+            a = 0xb569 + groups[roof % 5] * 8 + (night ? 4 : 0);
+          colors[1] = this.color(a);
+          colors[2] = this.color(a + 2);
+        }
+        if (p === 3 && !indoor)
+          colors = Array.from({ length: 4 }, (_, i) =>
+            this.color(0xb319 + 320 + (night ? 8 : 0) + i * 2),
+          );
+        this.paint(pixels, 16, source, tx * 8, ty * 8, colors, false);
+      }
+    return new ImageData(pixels, 16, 16);
+  }
+  sprite(id: number, back = false): ImageData {
+    if (id < 1 || id > 251) throw Error("Invalid species");
+    const ptr =
+      (id === 201 ? 0x124000 : 0x120000 + (id - 1) * 6) + (back ? 3 : 0);
+    const bank = this.rom[ptr] + 0x36;
+    const address = this.rom[ptr + 1] | (this.rom[ptr + 2] << 8);
+    const offset = bank * 0x4000 + (address & 0x3fff);
+    const bytes = this.bytes(
+      this.rom.subarray(offset, Math.min(offset + 0x4000, this.rom.length)),
+      (p, n) => this.wasm.decompress(p, n),
+    );
+    const side = back ? 6 : this.rom[0x51424 + (id - 1) * 32 + 17] >> 4;
+    const size = side * 8;
+    const pixels = new Uint8ClampedArray(size * size * 4);
+    const pal = 0xa8ce + id * 8;
+    const colors = [
+      [255, 255, 255],
+      ...[0, 1].map((i) => {
+        const c = this.rom[pal + i * 2] | (this.rom[pal + i * 2 + 1] << 8);
+        return [
+          ((c & 31) * 255) / 31,
+          (((c >> 5) & 31) * 255) / 31,
+          (((c >> 10) & 31) * 255) / 31,
+        ];
+      }),
+      [0, 0, 0],
+    ];
+    for (let x = 0; x < size; x++)
+      for (let y = 0; y < size; y++) {
+        const t =
+          (Math.floor(x / 8) * side + Math.floor(y / 8)) * 16 + (y % 8) * 2;
+        const bit = 7 - (x % 8);
+        const c = ((bytes[t] >> bit) & 1) | (((bytes[t + 1] >> bit) & 1) << 1);
+        const dst = (y * size + x) * 4;
+        pixels.set([...colors[c], c === 0 ? 0 : 255], dst);
+      }
+    return new ImageData(pixels, size, size);
+  }
+  cry(id: number): Float32Array {
+    if (id < 1 || id > 251) throw Error("Invalid species");
+    const bytes = this.bytes(this.rom, (p, n) => this.wasm.cry(p, n, id));
+    return new Float32Array(bytes.buffer, bytes.byteOffset, bytes.length / 4);
+  }
+  startMusic(bank: number, addr: number): void {
+    const p = this.wasm.alloc(this.rom.length);
+    new Uint8Array(this.wasm.memory.buffer, p, this.rom.length).set(this.rom);
+    try {
+      if (!this.wasm.music_start(p, this.rom.length, bank, addr))
+        throw Error("Invalid music header");
+    } finally {
+      this.wasm.dealloc(p, this.rom.length);
+    }
+  }
+  nextMusicChunk(count = 48000): Float32Array {
+    const p = this.wasm.music_next(count);
+    const bytes = new Uint8Array(
+      this.wasm.memory.buffer,
+      p,
+      this.wasm.output_len(),
+    ).slice();
+    return new Float32Array(bytes.buffer);
+  }
+  music(
+    bank = 0x3a,
+    addr = 0x7808,
+    start = 0,
+    count = 48000 * 10,
+  ): Float32Array {
+    const bytes = this.bytes(this.rom, (p, n) =>
+      this.wasm.music(p, n, bank, addr, start, count),
+    );
+    return new Float32Array(bytes.buffer, bytes.byteOffset, bytes.length / 4);
+  }
+}
+export class Battle {
+  constructor(
+    private engine: Engine,
+    private current: BattleSnapshot,
+  ) {}
+  snapshot(): BattleSnapshot {
+    return this.current;
+  }
+  act(index: number): BattleSnapshot {
+    return (this.current = this.engine.act(index));
+  }
+}
+export async function initEngine(rom: Uint8Array): Promise<Engine> {
+  if (rom.length !== 2097152)
+    throw Error("Please choose an English Pokémon Crystal 1.1 ROM.");
+  const hash = Array.from(
+    new Uint8Array(
+      await crypto.subtle.digest("SHA-1", new Uint8Array(rom).buffer),
+    ),
+  )
+    .map((x) => x.toString(16).padStart(2, "0"))
+    .join("");
+  if (hash !== "f4cd194bdee0d04ca4eac29e09b8e4e9d818c133")
+    throw Error(
+      "Unsupported ROM: Pokémon Crystal (English) version 1.1 is required.",
+    );
+  const response = await fetch("./astra_native.wasm");
+  if (!response.ok) throw Error("Native engine unavailable");
+  const { instance } = await WebAssembly.instantiate(
+    await response.arrayBuffer(),
+    {},
+  );
+  return new Engine(instance.exports as unknown as Exports, rom.slice());
+}

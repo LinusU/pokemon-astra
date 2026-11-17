@@ -1,0 +1,19 @@
+{
+  "name": "pokemon-astra",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "sh scripts/build-native.sh && vite --host 0.0.0.0",
+    "build": "sh scripts/build-native.sh && tsc --noEmit && vite build && node scripts/build-service-worker.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:native": "cargo test --manifest-path native/Cargo.toml && node scripts/smoke-native.cjs",
+    "preview": "vite preview --host 127.0.0.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vite": "^6.1.0",
+    "vitest": "^3.0.5"
+  }
+}
