@@ -4,6 +4,71 @@ import { Engine } from "../src/engine";
 const available =
   existsSync("pokecrystal11.gbc") && existsSync("public/astra_native.wasm");
 describe.skipIf(!available)("Crystal ROM native bridge", () => {
+  it("decodes distinct directional walk poses and retains enclosed highlights", async () => {
+    // ImageData is normally supplied by the browser.
+    const previous = globalThis.ImageData;
+    globalThis.ImageData = class {
+      constructor(
+        public data: Uint8ClampedArray,
+        public width: number,
+        public height: number,
+      ) {}
+      colorSpace = "srgb" as const;
+    } as typeof ImageData;
+    try {
+      const { instance } = await WebAssembly.instantiate(
+        readFileSync("public/astra_native.wasm"),
+        {},
+      );
+      const engine = new Engine(
+        instance.exports as never,
+        readFileSync("pokecrystal11.gbc"),
+      );
+      for (const direction of ["down", "up", "left", "right"]) {
+        const still = engine.npc("player", false, direction, 0).data;
+        const walking = engine.npc("player", false, direction, 1).data;
+        expect(Array.from(still)).not.toEqual(Array.from(walking));
+      }
+      for (const direction of ["down", "up"])
+        expect(
+          Array.from(engine.npc("player", false, direction, 1).data),
+        ).not.toEqual(
+          Array.from(engine.npc("player", false, direction, 2).data),
+        );
+      expect(engine.move(7).type).toBe(20); // Fire Punch
+      expect(engine.move(9).type).toBe(23); // Thunder Punch
+      const sprite = engine.sprite(1);
+      expect(sprite.data[3]).toBe(0);
+      expect(
+        Array.from(sprite.data).some(
+          (v, i) =>
+            i % 4 === 0 &&
+            v === 255 &&
+            sprite.data[i + 1] === 255 &&
+            sprite.data[i + 2] === 255 &&
+            sprite.data[i + 3] === 255,
+        ),
+      ).toBe(true);
+    } finally {
+      globalThis.ImageData = previous;
+    }
+  });
+  it("synthesizes all battle sound events from the imported ROM", async () => {
+    const { instance } = await WebAssembly.instantiate(
+      readFileSync("public/astra_native.wasm"),
+      {},
+    );
+    const engine = new Engine(
+      instance.exports as never,
+      readFileSync("pokecrystal11.gbc"),
+    );
+    for (const id of [4, 5, 42, 43, 47, 94, 182]) {
+      const pcm = engine.soundEffect(id);
+      expect(pcm.length).toBeGreaterThan(1000);
+      expect(pcm.some((sample) => Math.abs(sample) > 0.01)).toBe(true);
+    }
+    expect(() => engine.soundEffect(192)).toThrow("Unsupported sound effect");
+  });
   it("offers only balls and items that are actually in the inventory", async () => {
     const { instance } = await WebAssembly.instantiate(
       readFileSync("public/astra_native.wasm"),

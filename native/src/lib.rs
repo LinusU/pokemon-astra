@@ -282,3 +282,22 @@ pub extern "C" fn music_next(count: u32) -> *const u8 {
         o.as_ptr()
     })
 }
+
+/// Decode a Crystal sound-effect header selected by its original SFX id.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sound_effect(ptr: *const u8, len: usize, id: u32) -> *const u8 {
+    let rom = unsafe { std::slice::from_raw_parts(ptr, len) };
+    let mut pcm = Vec::new();
+    if matches!(id, 4 | 5 | 42 | 43 | 47 | 94 | 182) && rom.len() >= 0x100000 {
+        let p = 0xe927c + id as usize * 3;
+        let bank = rom[p];
+        let addr = u16::from_le_bytes([rom[p + 1], rom[p + 2]]);
+        pcm = pokemon_synthesizer::gen2::synthesis(rom, bank, addr, 0, 0x100)
+            .iter().step_by(22).take(47662 * 8).collect();
+    }
+    OUTPUT.with(|o| {
+        let mut o = o.borrow_mut();
+        *o = pcm.iter().flat_map(|s| s.to_le_bytes()).collect();
+        o.as_ptr()
+    })
+}

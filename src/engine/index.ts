@@ -76,6 +76,7 @@ type Exports = {
   music_start(p: number, n: number, bank: number, addr: number): number;
   music_next(count: number): number;
   cry(p: number, n: number, id: number): number;
+  sound_effect(p: number, n: number, id: number): number;
 };
 export class Engine {
   constructor(
@@ -113,8 +114,13 @@ export class Engine {
     const p = 0x51424 + (id - 1) * 32;
     return { ...v, types: [this.rom[p + 7], this.rom[p + 8]] };
   }
-  move(id: number): { id: number; name: string; pp: number } {
-    return this.call({ op: "move", id });
+  move(id: number): { id: number; name: string; pp: number; type: number } {
+    if (id < 1 || id > 251) throw Error("Invalid move");
+    const move = this.call<{ id: number; name: string; pp: number }>({
+      op: "move",
+      id,
+    });
+    return { ...move, type: this.rom[0x41afb + (id - 1) * 7 + 3] };
   }
   /** Original Crystal evolution records and level-up moves, read from the imported ROM. */
   evolutionData(id: number): {
@@ -317,18 +323,64 @@ export class Engine {
           : 0) +
       (frame ? 192 : 0);
     const pixels = new Uint8ClampedArray(16 * 16 * 4);
+    const flip =
+      facing === "right" ||
+      (frame === 2 && (facing === "down" || facing === "up"));
     for (let i = 0; i < 4; i++)
       this.paint(
         pixels,
         16,
         this.rom.subarray(off + i * 16, off + i * 16 + 16),
-        (facing === "right" ? 1 - (i % 2) : i % 2) * 8,
+        (flip ? 1 - (i % 2) : i % 2) * 8,
         Math.floor(i / 2) * 8,
         colors,
-        true,
-        facing === "right",
+        false,
+        flip,
       );
+    this.clearExterior(pixels, 16, 16);
     return new ImageData(pixels, 16, 16);
+  }
+  /** Remove only the background connected to the edge; enclosed highlights stay opaque. */
+  private clearExterior(
+    pixels: Uint8ClampedArray,
+    width: number,
+    height: number,
+  ) {
+    const background = pixels.slice(0, 4);
+    const seen = new Uint8Array(width * height);
+    const queue: number[] = [];
+    const add = (x: number, y: number) => {
+      if (x < 0 || y < 0 || x >= width || y >= height) return;
+      const i = y * width + x,
+        p = i * 4;
+      if (
+        seen[i] ||
+        pixels[p] !== background[0] ||
+        pixels[p + 1] !== background[1] ||
+        pixels[p + 2] !== background[2]
+      )
+        return;
+      seen[i] = 1;
+      queue.push(i);
+    };
+    for (let x = 0; x < width; x++) {
+      add(x, 0);
+      add(x, height - 1);
+    }
+    for (let y = 0; y < height; y++) {
+      add(0, y);
+      add(width - 1, y);
+    }
+    for (let head = 0; head < queue.length; head++) {
+      const i = queue[head],
+        x = i % width,
+        y = Math.floor(i / width);
+      pixels[i * 4 + 3] = 0;
+      add(x - 1, y);
+      add(x + 1, y);
+      add(x, y - 1);
+      add(x, y + 1);
+    }
   }
   private tilesets = new Map<
     string,
@@ -445,9 +497,19 @@ export class Engine {
         const bit = 7 - (x % 8);
         const c = ((bytes[t] >> bit) & 1) | (((bytes[t + 1] >> bit) & 1) << 1);
         const dst = (y * size + x) * 4;
-        pixels.set([...colors[c], c === 0 ? 0 : 255], dst);
+        pixels.set([...colors[c], 255], dst);
       }
+    this.clearExterior(pixels, size, size);
     return new ImageData(pixels, size, size);
+  }
+  /** Synthesize a cartridge sound-effect ID using the imported ROM. Sample rate: 47662 Hz. */
+  soundEffect(id: number): Float32Array {
+    if (![4, 5, 42, 43, 47, 94, 182].includes(id))
+      throw Error("Unsupported sound effect");
+    const bytes = this.bytes(this.rom, (p, n) =>
+      this.wasm.sound_effect(p, n, id),
+    );
+    return new Float32Array(bytes.buffer, bytes.byteOffset, bytes.length / 4);
   }
   cry(id: number): Float32Array {
     if (id < 1 || id > 251) throw Error("Invalid species");

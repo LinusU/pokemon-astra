@@ -18,7 +18,10 @@ const assets = await files("dist");
 if (assets.some((p) => /\.(?:gb|gbc|sav|srm)$/i.test(p)))
   throw Error("Private cartridge/save data found in build output");
 const hash = createHash("sha256");
-for (const file of assets) hash.update(await readFile(`dist/${file}`));
+for (const file of assets) {
+  hash.update(`${file}\0`);
+  hash.update(await readFile(`dist/${file}`));
+}
 const version = hash.digest("hex").slice(0, 16);
 await writeFile(
   "dist/sw.js",
@@ -40,20 +43,16 @@ self.addEventListener('activate',event=>event.waitUntil((async()=>{
 self.addEventListener('fetch',event=>{
  const url=new URL(event.request.url);
  if(event.request.method!=='GET'||url.origin!==ROOT.origin||!url.pathname.startsWith(ROOT.pathname)||/\\.(?:gb|gbc|sav|srm)$/i.test(url.pathname))return;
- if(event.request.mode==='navigate'){
-  event.respondWith((async()=>{
-   try{const response=await fetch(event.request);if(response.ok){const cache=await caches.open(CACHE);await cache.put(ROOT.href,response.clone());}return response;}
-   catch{const cached=await (await caches.open(CACHE)).match(ROOT.href);if(cached)return cached;throw Error('Astra needs one successful online visit.');}
-  })());return;
- }
- // Content-hashed bundles are immutable. Other assets, particularly the WASM
- // bridge, stay fresh online and remain available offline.
- const hashed=/\\/assets\\/[^/]+-[a-zA-Z0-9_-]+\\.(?:js|css)$/.test(url.pathname);
+ // A navigation and every build-managed file come from the same immutable
+ // pre-cache. Never replace one component with a newer network response.
+ const isNavigation=event.request.mode==='navigate';
+ const relative=url.pathname.slice(ROOT.pathname.length);
+ if(!isNavigation&&!FILES.includes(relative))return;
  event.respondWith((async()=>{
-  const cached=await (await caches.open(CACHE)).match(event.request);
-  if(hashed&&cached)return cached;
-  try{const response=await fetch(event.request);if(response.ok){const cache=await caches.open(CACHE);await cache.put(event.request,response.clone());}return response;}
-  catch(error){if(cached)return cached;throw error;}
+  const cache=await caches.open(CACHE);
+  const cached=await cache.match(isNavigation?local('index.html'):local(relative));
+  if(cached)return cached;
+  throw Error('Astra offline cache is incomplete; reconnect and reload.');
  })());
 });
 `,

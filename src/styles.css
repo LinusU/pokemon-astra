@@ -1,3 +1,8 @@
+@font-face {
+  font-family: "VT323";
+  src: url("/fonts/VT323-Regular.ttf") format("truetype");
+  font-display: swap;
+}
 :root {
   font-family: "DM Sans", system-ui, sans-serif;
   color: #f6f1d9;
@@ -356,19 +361,34 @@ canvas {
     display: none;
   }
   .device {
-    height: 96dvh;
+    width: min(calc(133.333dvh - 32px), calc(100vw - 264px));
+    height: auto;
     aspect-ratio: 4/3;
   }
   .controls {
     width: 240px;
+    height: 275px;
     margin: 0 0 0 10px;
     flex-shrink: 0;
   }
+  .button-a {
+    right: 8px;
+    top: 165px;
+  }
+  .button-b {
+    right: 76px;
+    top: 205px;
+  }
+  .button-menu {
+    left: 20px;
+    right: auto;
+    top: 205px;
+  }
 }
-.screen:has(.overlay) {
+.screen[data-scene="title"] {
   background: #274e43 url("/art/welcome.png") center/cover no-repeat;
 }
-.screen:has(.overlay) canvas {
+.screen[data-scene="title"] canvas {
   opacity: 0.28;
 }
 .panel button:focus {
@@ -382,62 +402,157 @@ canvas {
   vertical-align: middle;
   image-rendering: pixelated;
 }
-.battle-sprites {
-  display: flex;
-  justify-content: space-around;
-  height: 70px;
-  background: #c6d8b1;
-  border-bottom: 3px solid #86aa7f;
-}
-.battle-sprites img {
-  height: 68px;
-  width: 68px;
-  object-fit: contain;
-  image-rendering: pixelated;
-}
-.battle-hud {
-  display: flex;
-  justify-content: space-between;
-  gap: 20px;
-  font-size: 12px;
-  margin: 8px 0;
-}
-.battle-hud > div {
-  flex: 1;
-}
-.battle-hud progress {
-  display: block;
-  width: 100%;
-  height: 7px;
-  accent-color: #459268;
-}
-.battle-hud span {
-  font-size: 10px;
-}
-.battle-sprites img:first-child {
-  align-self: end;
-  transform: translateY(8px);
-}
-.battle-sprites img:last-child {
-  align-self: start;
-  transform: translateY(-5px);
-}
-@keyframes battle-arrive {
-  from {
-    opacity: 0.6;
-    transform: translateX(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-.battle-panel .battle-sprites {
-  animation: battle-arrive var(--battle-duration, 450ms) ease-out;
-}
-
 @media (max-height: 550px) and (orientation: landscape) {
   .controls {
     display: block;
+  }
+}
+
+/* Game text is intentionally larger than the surrounding device chrome. */
+.panel,
+.dialogue {
+  font-family: "VT323", monospace;
+  font-weight: 400;
+  font-size: 24px;
+}
+.panel h1,
+.panel h2,
+.panel h3 {
+  font-family: "VT323", monospace;
+  font-weight: 400;
+  line-height: 1.1;
+}
+.panel h1 {
+  font-size: 34px;
+}
+.panel h2 {
+  font-size: 30px;
+}
+.panel h3 {
+  font-size: 25px;
+}
+.panel p {
+  font-size: 23px;
+  line-height: 1.1;
+}
+.panel button,
+.file-label {
+  font-size: 23px;
+  font-weight: 400;
+  padding: 8px 12px;
+}
+.panel .small {
+  font-size: 20px !important;
+}
+.panel .eyebrow {
+  font-family: system-ui, sans-serif;
+  font-size: 9px;
+}
+.dialogue {
+  min-height: 24%;
+  padding: 12px 18px 20px;
+  font-size: clamp(21px, 3.6vw, 32px);
+  line-height: 1.05;
+}
+.dialogue:after {
+  position: absolute;
+  right: 12px;
+  bottom: 6px;
+  font-size: 12px;
+}
+.sound-toggle {
+  border: 1px solid #6f8d77;
+  color: #e7e6cc;
+  background: #213a32;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+@media (max-width: 650px) {
+  .panel {
+    padding: 10px 12px;
+  }
+  .panel h2 {
+    font-size: 25px;
+    margin-bottom: 8px;
+  }
+  .panel p,
+  .panel button,
+  .file-label {
+    font-size: 21px;
+  }
+  .panel .small {
+    font-size: 18px !important;
+  }
+  .brand {
+    font-size: 10px;
+    gap: 7px;
+  }
+  .brand i {
+    width: 23px;
+    height: 23px;
+  }
+  .sound-toggle {
+    font-size: 10px;
+    padding: 5px 7px;
+  }
+  .dialogue {
+    left: 2%;
+    right: 2%;
+    bottom: 2%;
+    border-width: 3px;
+    padding: 8px 10px 18px;
+  }
+}
+
+.panel button .muted {
+  color: #d6e6c9;
+}
+
+.encounter-transition {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  overflow: hidden;
+  pointer-events: none;
+  animation: field-flash 620ms steps(1, end) both;
+}
+.encounter-transition:after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: #142b26;
+  transform-origin: center;
+  animation: field-close 620ms steps(12, end) both;
+}
+@keyframes field-flash {
+  0%,
+  30%,
+  60% {
+    background: transparent;
+  }
+  15%,
+  45% {
+    background: #eaf2cdbb;
+  }
+  100% {
+    background: #142b26;
+  }
+}
+@keyframes field-close {
+  0%,
+  60% {
+    clip-path: inset(50% 0);
+  }
+  100% {
+    clip-path: inset(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .encounter-transition {
+    animation: none;
+  }
+  .encounter-transition:after {
+    animation: none;
   }
 }

@@ -91,4 +91,16 @@ describe("save files", () => {
     expect(recovered.party).toEqual(save.party);
     expect(normalizeSavePosition(recovered)).toBe(recovered);
   });
+  it("moves an old save clear of newly solid NPCs without altering progress", () => {
+    const save = populated(),
+      npc = WORLD.dewdrop.objects.find((o) => o.kind === "person")!;
+    save.x = npc.x + 0.5;
+    save.y = npc.y + 0.5;
+    const recovered = normalizeSavePosition(save);
+    expect(
+      Math.hypot(recovered.x - save.x, recovered.y - save.y),
+    ).toBeGreaterThan(0.6);
+    expect(recovered.party).toEqual(save.party);
+    expect(recovered.flags).toEqual(save.flags);
+  });
 });

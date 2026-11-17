@@ -1,5 +1,13 @@
 import { Input } from "./game/input";
 import { Renderer } from "./game/render";
+import { WorldActors, interactionDistance } from "./game/actors";
+import {
+  connectionAt,
+  connectedBlocked,
+  crossConnection,
+} from "./game/navigation";
+import { GameAudio } from "./game/audio";
+import { BattlePresenter } from "./ui/battle";
 import { get, set, download } from "./game/storage";
 import {
   freshSave,
@@ -22,7 +30,9 @@ import "./styles.css";
 
 const input = new Input(),
   { canvas, layer } = createShell(input),
-  renderer = new Renderer(canvas);
+  renderer = new Renderer(canvas),
+  actors = new WorldActors();
+let battlePresenter: BattlePresenter | undefined;
 let engine: Engine,
   save = freshSave(),
   mode = "loading",
@@ -33,10 +43,7 @@ let engine: Engine,
   battle: any,
   battleObject: WorldObject | undefined,
   battleSpecies = 0,
-  levelsBefore: number[] = [],
-  partyBefore: any[] = [],
   lastAutosave = 0,
-  battleCategory = "",
   encounterTarget = 6;
 const ballIds: Record<string, number> = {
   master_ball: 1,
@@ -76,9 +83,13 @@ function sprite(id: number, back = false) {
     try {
       const pixels = engine.sprite(id, back),
         c = document.createElement("canvas");
-      c.width = pixels.width;
-      c.height = pixels.height;
-      c.getContext("2d")!.putImageData(pixels, 0, 0);
+      c.width = 56;
+      c.height = 56;
+      c.getContext("2d")!.putImageData(
+        pixels,
+        Math.floor((56 - pixels.width) / 2),
+        56 - pixels.height,
+      );
       spriteCache.set(key, c.toDataURL());
     } catch {
       return "";
@@ -86,26 +97,50 @@ function sprite(id: number, back = false) {
   }
   return spriteCache.get(key)!;
 }
-function cry(id: number) {
-  try {
-    const data = engine.cry(id),
-      ctx = new AudioContext(),
-      buffer = ctx.createBuffer(1, data.length, 47662);
-    buffer.copyToChannel(new Float32Array(data), 0);
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(ctx.destination);
-    source.onended = () => void ctx.close();
-    source.start();
-  } catch {}
+const sound = new GameAudio(scene, updateSoundButton);
+function updateSoundButton() {
+  const button = document.querySelector<HTMLButtonElement>("#sound-toggle");
+  if (!button) return;
+  button.textContent = sound.failed
+    ? "♫ Retry sound"
+    : sound.playing
+      ? "♫ Sound on"
+      : sound.enabled
+        ? "♫ Enable sound"
+        : "♫ Sound off";
+  button.setAttribute("aria-pressed", String(sound.enabled));
 }
-let musicContext: AudioContext | undefined,
-  musicTimer: number | undefined,
-  musicNext = 0,
-  musicScene = "",
-  musicPlaying = false;
+function cry(id: number) {
+  sound.cry(id);
+}
+function toggleMusic() {
+  save.settings.music = !sound.enabled;
+  sound.setEnabled(save.settings.music);
+  persist();
+}
+window.addEventListener(
+  "pointerdown",
+  () => {
+    void sound.unlock();
+  },
+  { passive: true },
+);
+window.addEventListener(
+  "keydown",
+  () => {
+    void sound.unlock();
+  },
+  { passive: true },
+);
+document
+  .querySelector("#sound-toggle")
+  ?.addEventListener("pointerdown", (e) => e.stopPropagation());
+document.querySelector("#sound-toggle")?.addEventListener("click", () => {
+  if (sound.enabled && !sound.playing) void sound.unlock();
+  else toggleMusic();
+});
 function scene() {
-  if (mode === "battle")
+  if (mode === "battle" || mode === "encounter")
     return battleObject?.trainer
       ? battleObject.name === "Champion Mira"
         ? "champion"
@@ -121,60 +156,6 @@ function scene() {
         : map?.kind === "route"
           ? "route"
           : "town";
-}
-const tracks: Record<string, [number, number]> = {
-  town: [0x3a, 0x72d3],
-  route: [0x3c, 0x4386],
-  cave: [0x3a, 0x62be],
-  center: [0x3b, 0x55c6],
-  wild: [0x3d, 0x5dc5],
-  trainer: [0x3d, 0x6096],
-  gym: [0x3a, 0x650d],
-  champion: [0x3a, 0x69c1],
-};
-function scheduleMusic() {
-  if (!musicPlaying || !musicContext) return;
-  try {
-    const current = scene();
-    if (current !== musicScene) {
-      musicScene = current;
-      engine.startMusic(...tracks[current]);
-      musicNext = musicContext.currentTime;
-    }
-    while (musicNext < musicContext.currentTime + 0.8) {
-      const data = engine.nextMusicChunk(24000),
-        buffer = musicContext.createBuffer(1, data.length, 48000);
-      buffer.copyToChannel(new Float32Array(data), 0);
-      const source = musicContext.createBufferSource(),
-        gain = musicContext.createGain();
-      gain.gain.value = 0.15;
-      source.buffer = buffer;
-      source.connect(gain).connect(musicContext.destination);
-      source.start(musicNext);
-      musicNext += buffer.duration;
-    }
-    musicTimer = window.setTimeout(scheduleMusic, 250);
-  } catch {
-    musicPlaying = false;
-  }
-}
-function toggleMusic() {
-  if (musicPlaying) {
-    musicPlaying = false;
-    if (musicTimer) clearTimeout(musicTimer);
-    void musicContext?.close();
-    musicContext = undefined;
-    musicScene = "";
-    return;
-  }
-  try {
-    musicContext = new AudioContext();
-    musicPlaying = true;
-    musicNext = 0;
-    scheduleMusic();
-  } catch {
-    musicPlaying = false;
-  }
 }
 const flag = (f?: string) => {
   if (f && !save.flags.includes(f)) save.flags.push(f);
@@ -249,13 +230,16 @@ async function start(bytes: Uint8Array) {
   panel(layer, "Preparing Astra", "<p>Reading your local game data…</p>");
   engine = await initEngine(bytes);
   renderer.setEngine(engine);
+  actors.reset();
   const existing = await get<Save>("save");
   if (isValidSave(existing)) {
     save = normalizeSavePosition(existing);
     renderer.setNight(!!save.settings.night);
+    sound.attach(engine, save.settings.music !== false);
     title();
   } else {
     save = freshSave();
+    sound.attach(engine, true);
     intro();
   }
 }
@@ -269,6 +253,7 @@ function title() {
   p.querySelector("#continue")!.addEventListener("click", () => {
     mode = "world";
     layer.innerHTML = "";
+    void sound.unlock();
   });
   p.querySelector("#new")!.addEventListener("click", () => {
     const confirm = panel(
@@ -293,6 +278,7 @@ function intro() {
   p.querySelector("#begin")!.addEventListener("click", () => {
     mode = "world";
     layer.innerHTML = "";
+    void sound.unlock();
     persist();
   });
 }
@@ -354,11 +340,19 @@ function interact() {
   const map = WORLD[save.map],
     dx = save.facing === "left" ? -1 : save.facing === "right" ? 1 : 0,
     dy = save.facing === "up" ? -1 : save.facing === "down" ? 1 : 0;
+  actors.enter(map);
   const tx = save.x + dx * 0.75,
     ty = save.y + dy * 0.75;
   const o = map.objects
-    .map((o) => ({ o, d: Math.hypot(o.x + 0.5 - tx, o.y + 0.5 - ty) }))
-    .filter((v) => v.d < 1.65)
+    .filter(
+      (o) =>
+        !(
+          ["item", "legendary"].includes(o.kind) &&
+          save.flags.includes(o.setsFlag || o.id)
+        ),
+    )
+    .map((o) => ({ o, d: interactionDistance(map, save, actors.position(o)) }))
+    .filter((v) => Number.isFinite(v.d))
     .sort((a, b) => a.d - b.d)[0]?.o;
   if (!o) {
     if (
@@ -378,6 +372,7 @@ function interact() {
     message("There is nothing to inspect here.");
     return;
   }
+  actors.face(o, save.x, save.y);
   if (!has(o.requires)) {
     message(o.lockedDialogue || "There is more to do before this opens.");
     return;
@@ -387,6 +382,7 @@ function interact() {
     return;
   }
   if (o.kind === "healer") {
+    sound.cue("heal");
     save.center = save.map;
     save.party = save.party.map((m) => engine.healPokemon(m));
     persist();
@@ -424,7 +420,7 @@ function interact() {
     }
   }
   if (o.setsFlag && save.flags.includes(o.setsFlag) && !o.repeatable) {
-    message(`${o.name}: Already completed.`);
+    message(o.victoryDialogue || o.dialogue);
     return;
   }
   flag(o.setsFlag);
@@ -600,7 +596,7 @@ function view(v: string) {
     ).join("")}</div>`;
   } else if (v === "journal") {
     title = "Beacon journal";
-    body = `<p><strong>Next objective</strong><br>${escapeHtml(nextObjective())}</p><p>${save.badges ? BADGES.slice(0, save.badges).join(" · ") : "Begin your survey with Professor Alder."}</p><div class="list">${QUESTS.map((q) => `<div><strong>${save.flags.includes(q.completedFlag) ? "✓" : "○"} ${escapeHtml(q.name)}</strong><br><span class="small muted">${escapeHtml(q.description)}</span></div>`).join("")}</div>`;
+    body = `<p><strong>Next objective</strong><br>${escapeHtml(nextObjective())}</p><p>${save.badges ? BADGES.slice(0, save.badges).join(" · ") : save.flags.includes("partner") ? "Your beacon survey is underway. First stop: Bramble Gym." : "Begin your survey with Professor Alder."}</p><div class="list">${QUESTS.map((q) => `<div><strong>${save.flags.includes(q.completedFlag) ? "✓" : "○"} ${escapeHtml(q.name)}</strong><br><span class="small muted">${escapeHtml(q.id === "parcel" && save.flags.includes("found_parcel") && !save.flags.includes(q.completedFlag) ? "Parcel received. Follow Orchard Lane east and deliver it to the Bramble courier for Great Balls." : q.description)}</span></div>`).join("")}</div>`;
   } else if (v === "map") {
     title = "Astra region";
     body = `<p class="small">Places visited: ${save.visited.length}. ${save.abilities.includes("fly") ? "Choose a place to fly." : ""}</p><div class="list">${save.visited.map((id) => `<button data-travel="${id}" ${save.abilities.includes("fly") ? "" : "disabled"}>${escapeHtml(WORLD[id]?.name || id)}</button>`).join("")}</div>`;
@@ -609,7 +605,7 @@ function view(v: string) {
     body = `<p class="small">Deposit a party member to make room for captures. Select a stored Pokémon to withdraw it.</p><strong>Party</strong><div class="list">${save.party.map((m, i) => `<button data-deposit="${i}">Deposit ${escapeHtml(engine.species(m.species).name)} · Lv ${m.level}</button>`).join("")}</div><strong>Storage</strong><div class="list">${save.storage.map((m, i) => `<button data-store="${i}">Withdraw ${escapeHtml(engine.species(m.species).name)} · Lv ${m.level}</button>`).join("") || "<p>No Pokémon in storage yet.</p>"}</div>`;
   } else {
     title = "Settings & save";
-    body = `<p>Battle speed: ${save.settings.battleSpeed}×</p><div class="buttons"><button id="speed">Change speed</button><button id="time">${save.settings.night ? "Switch to day" : "Camp until night"}</button><button id="music">${musicPlaying ? "Mute music" : "Play music"}</button><button id="export">Export save</button><label class="file-label">Import save<input id="import" type="file" accept="application/json,.json"></label></div><p class="small muted">Controller: ${escapeHtml(
+    body = `<p>Battle speed: ${save.settings.battleSpeed}×</p><div class="buttons"><button id="speed">Change speed</button><button id="time">${save.settings.night ? "Switch to day" : "Camp until night"}</button><button id="music">${sound.enabled ? "Mute sound" : "Play sound"}</button><button id="export">Export save</button><label class="file-label">Import save<input id="import" type="file" accept="application/json,.json"></label></div><p class="small muted">Controller: ${escapeHtml(
       Array.from(navigator.getGamepads?.() || [])
         .filter((p): p is Gamepad => !!p)
         .map((p) => p.id)
@@ -828,9 +824,6 @@ function startBattle(species: number, level: number, o?: WorldObject) {
   try {
     battleObject = o;
     battleSpecies = species;
-    battleCategory = "";
-    levelsBefore = save.party.map((m) => m.level);
-    partyBefore = structuredClone(save.party);
     if (!save.seen.includes(species)) save.seen.push(species);
     const opponent =
       o?.trainer && o.kind !== "legendary"
@@ -852,52 +845,15 @@ function startBattle(species: number, level: number, o?: WorldObject) {
       seen: save.seen,
       caught: save.caught,
     });
-    playBattleCries(battle.snapshot());
-    showBattle();
+    mode = "encounter";
+    layer.innerHTML =
+      '<div class="encounter-transition" aria-hidden="true"></div>';
+    window.setTimeout(showBattle, 620);
   } catch (e) {
     message(
       `Battle could not start: ${e instanceof Error ? e.message : String(e)}`,
     );
   }
-}
-function battleText(event: any) {
-  const m = event?.Message;
-  if (!m) return "";
-  if (typeof m === "string")
-    return (
-      (
-        {
-          CriticalHit: "A critical hit!",
-          SuperEffective: "It is super effective!",
-          NotVeryEffective: "It is not very effective.",
-          BallBrokeFree: "Oh no! The Pokémon broke free!",
-          BallAppearedCaught: "It looked like it was caught!",
-          BallAlmostHadIt: "Almost had it!",
-          BallSoClose: "So close! One more try?",
-          BallBlocked: "The trainer blocked the ball!",
-          BallDontBeAThief: "You cannot catch another trainer's Pokémon.",
-        } as Record<string, string>
-      )[m] || m.replace(/([a-z])([A-Z])/g, "$1 $2")
-    );
-  const [kind, data] = Object.entries(m)[0] as [string, any];
-  if (kind === "UsedMove")
-    return `${data.user.name} used ${engine.move(data.mv).name}!`;
-  if (kind === "GainedExp") return `${data.mon} gained ${data.exp} EXP!`;
-  if (kind === "MonFainted" || kind === "EnemyMonFainted")
-    return `${data.mon} fainted!`;
-  if (kind === "AttackMissed") return `${data.user.name}'s attack missed!`;
-  if (kind === "WildAppeared") return `Wild ${data.mon} appeared!`;
-  if (kind === "EnemySentOut") return `The trainer sent out ${data.mon}!`;
-  if (kind === "PlayerSentOut") return `Go, ${data.mon}!`;
-  return kind.replace(/([a-z])([A-Z])/g, "$1 $2");
-}
-function playBattleCries(snapshot: any) {
-  const cries = snapshot.events.flatMap((event: any) =>
-    typeof event.Cry === "number" ? [event.Cry] : [],
-  );
-  cries.forEach((species: number, i: number) =>
-    window.setTimeout(() => cry(species), i * 400),
-  );
 }
 function showBattle() {
   mode = "battle";
@@ -953,7 +909,13 @@ function showBattle() {
     message(
       caughtSpecies
         ? `${engine.species(caughtSpecies).name} was caught!`
-        : `Battle finished: ${s.outcome}.`,
+        : won
+          ? battleObject?.trainer
+            ? `You defeated ${battleObject.trainer.name || battleObject.name}!`
+            : "You won the battle!"
+          : ["lose", "loss", "lost", "defeat"].includes(s.outcome.toLowerCase())
+            ? "You have no Pokémon left to battle!"
+            : "Got away safely!",
       () =>
         victory
           ? message(victory, () => postBattle(result.may_evolve))
@@ -961,104 +923,38 @@ function showBattle() {
     );
     return;
   }
-  const a = s.state.player.active,
-    e = s.state.enemy.active;
-  const learnEvent = s.events
-    .map((x: any) => x.Message?.AskForgetMove)
-    .find(Boolean);
-  const learningMon = learnEvent
-    ? s.state.player.party?.[s.state.player.active_slot] || a
-    : a;
-  const actions = s.legal as any[];
-  const label = (v: any) => {
-    if (typeof v === "string") return v;
-    const [key, value] = Object.entries(v)[0] as [string, any];
-    if (key === "Move")
-      return `${engine.move(a.moves[value.slot]).name} · PP ${a.pp[value.slot]}`;
-    if (key === "Switch" || key === "ForcedSwitch")
-      return `Switch: ${engine.species(save.party[value.slot]?.species || 1).name}`;
-    if (key === "Item")
-      return `Use ${
-        Object.entries(ballIds)
-          .find(([, id]) => id === value.id)?.[0]
-          .replaceAll("_", " ") ||
-        (value.id === 18 ? "Potion" : `item ${value.id}`)
-      }`;
-    if (key === "LearnMove")
-      return value.slot === null
-        ? "Keep current moves"
-        : `Forget ${engine.move(learningMon.moves[value.slot]).name}`;
-    if (key === "OfferSwitch")
-      return value.keep ? "Keep battling" : `Switch Pokémon`;
-    return key;
-  };
-  const group = (v: any) => {
-    const k = typeof v === "string" ? v : Object.keys(v)[0];
-    return k === "Move" || k === "Fight"
-      ? "FIGHT"
-      : k === "Item"
-        ? "BAG"
-        : k === "Switch"
-          ? "PARTY"
-          : k === "Run"
-            ? "RUN"
-            : "";
-  };
-  const standard = s.site === "BattleMenu";
-  const visible =
-    standard && battleCategory
-      ? actions
-          .map((v, i) => ({ v, i }))
-          .filter(({ v }) => group(v) === battleCategory)
-      : actions.map((v, i) => ({ v, i }));
-  const controls =
-    standard && !battleCategory
-      ? ["FIGHT", "BAG", "PARTY", "RUN"]
-          .filter((g) => actions.some((v) => group(v) === g))
-          .map((g) => `<button data-group="${g}">${g}</button>`)
-          .join("")
-      : visible
-          .map(
-            ({ v, i }) =>
-              `<button data-action-index="${i}">${escapeHtml(label(v))}</button>`,
-          )
-          .join("") + (standard ? "<button data-back>Back</button>" : "");
-  const p = panel(
+  battlePresenter = new BattlePresenter({
     layer,
-    `${battleObject?.trainer?.name || "Wild Pokémon"} battle`,
-    `<div class="battle-sprites"><img src="${sprite(a.species, true)}" alt=""><img src="${sprite(e.species)}" alt=""></div><div class="battle-hud"><div><strong>${escapeHtml(engine.species(e.species).name)}</strong> · Lv ${e.level}<progress max="${e.max_hp}" value="${e.hp}"></progress><span>${e.hp} / ${e.max_hp}</span></div><div><strong>${escapeHtml(engine.species(a.species).name)}</strong> · Lv ${a.level}<progress max="${a.max_hp}" value="${a.hp}"></progress><span>${a.hp} / ${a.max_hp}</span></div></div><p class="small muted">${escapeHtml(s.events.map(battleText).filter(Boolean).slice(-4).join(" · "))}</p>${s.site === "LearnMove" ? `<p>${escapeHtml(learnEvent?.mon || "Your Pokémon")} wants to learn ${learnEvent ? escapeHtml(engine.move(learnEvent.mv).name) : "a move"}. Choose a move to forget, or keep your current moves.</p>` : ""}<div class="menu-grid">${controls}</div>`,
-    "battle-panel",
-  );
-  p.style.setProperty(
-    "--battle-duration",
-    `${450 / save.settings.battleSpeed}ms`,
-  );
-  p.querySelectorAll<HTMLButtonElement>("[data-group]").forEach(
-    (b) =>
-      (b.onclick = () => {
-        battleCategory = b.dataset.group!;
-        showBattle();
-      }),
-  );
-  p.querySelector("[data-back]")?.addEventListener("click", () => {
-    battleCategory = "";
-    showBattle();
+    trainerName: battleObject?.trainer
+      ? battleObject.trainer.name || battleObject.name
+      : undefined,
+    prizeMoney: battleObject?.trainer?.reward ?? 0,
+    snapshot: s,
+    act: (index) => battle.act(index),
+    sprite,
+    species: (id) => engine.species(id),
+    move: (id) => engine.move(id),
+    cry,
+    sound: (id) => sound.soundEffect(id),
+    itemName: (id) =>
+      (
+        ({
+          1: "Master Ball",
+          2: "Ultra Ball",
+          4: "Great Ball",
+          5: "Poké Ball",
+          18: "Potion",
+        }) as Record<number, string>
+      )[id] || "item",
+    party: () => save.party,
+    speed: save.settings.battleSpeed,
+    finish: () => {
+      battlePresenter = undefined;
+      showBattle();
+    },
+    error: (e) =>
+      message(`Battle error: ${e instanceof Error ? e.message : String(e)}`),
   });
-  p.querySelectorAll<HTMLButtonElement>("[data-action-index]").forEach(
-    (b) =>
-      (b.onclick = () => {
-        try {
-          battle.act(Number(b.dataset.actionIndex));
-          playBattleCries(battle.snapshot());
-          battleCategory = "";
-          showBattle();
-        } catch (e) {
-          message(
-            `Battle error: ${e instanceof Error ? e.message : String(e)}`,
-          );
-        }
-      }),
-  );
 }
 function postBattle(evolvable: number[]) {
   const tasks: (() => void)[] = [];
@@ -1112,24 +1008,46 @@ function postBattle(evolvable: number[]) {
   next();
 }
 function blocked(x: number, y: number) {
-  const map = WORLD[save.map],
-    r = 0.22;
-  return [
-    [x - r, y - r],
-    [x + r, y - r],
-    [x - r, y + r],
-    [x + r, y + r],
-  ].some(([px, py]) => {
-    const t = map.tiles[Math.floor(py)]?.[Math.floor(px)];
-    return (
-      !t ||
-      "#rwBCPTS".includes(t) ||
-      (t === "~" && !save.abilities.includes("surf"))
-    );
-  });
+  const map = WORLD[save.map];
+  return (
+    connectedBlocked(map, x, y, save.abilities.includes("surf"), (e) =>
+      has(e.requires),
+    ) || actors.solid(map, x, y)
+  );
+}
+function challengeTrainer(o: WorldObject) {
+  save.facing =
+    actors.position(o).x < save.x - 0.5
+      ? "left"
+      : actors.position(o).x > save.x + 0.5
+        ? "right"
+        : actors.position(o).y < save.y
+          ? "up"
+          : "down";
+  message(o.dialogue, () =>
+    startBattle(o.trainer!.team[0].species, o.trainer!.team[0].level, o),
+  );
 }
 function update(dt: number) {
   if (mode !== "world") return;
+  const currentMap = WORLD[save.map];
+  actors.update(currentMap, dt, save);
+  if (actors.approaching) {
+    const challenger = actors.approach(currentMap, dt, save);
+    if (challenger) challengeTrainer(challenger);
+    return;
+  }
+  if (save.party.some((mon) => mon.hp > 0)) {
+    const noticed = actors.spotTrainer(
+      currentMap,
+      save,
+      (o) => !save.flags.includes(o.setsFlag || o.id) && has(o.requires),
+    );
+    if (noticed) {
+      sound.cue("notice");
+      return;
+    }
+  }
   if (input.hit("a")) {
     interact();
     return;
@@ -1152,19 +1070,43 @@ function update(dt: number) {
       : dy > 0
         ? "down"
         : "up";
-  const dist = dt * (input.held("speed") ? 5 : 3.2);
+  const dist = dt * (input.held("speed") ? 7.2 : 5.2);
   const oldX = save.x,
     oldY = save.y;
-  const nx = save.x + dx * dist,
-    ny = save.y + dy * dist;
-  if (!blocked(nx, save.y)) save.x = nx;
-  if (!blocked(save.x, ny)) save.y = ny;
+  // Short collision steps keep movement smooth and prevent tunnelling on slow frames.
+  const steps = Math.max(1, Math.ceil(dist / 0.12));
+  for (let i = 0; i < steps; i++) {
+    const nx = save.x + (dx * dist) / steps,
+      ny = save.y + (dy * dist) / steps;
+    if (!blocked(nx, save.y)) save.x = nx;
+    if (!blocked(save.x, ny)) save.y = ny;
+  }
   const moved = Math.hypot(save.x - oldX, save.y - oldY);
   if (moved === 0) return;
   const map = WORLD[save.map];
-  const exit = map.exits.find(
-    (e) => Math.floor(save.x) === e.x && Math.floor(save.y) === e.y,
-  );
+  const exit =
+    connectionAt(map, save.x, save.y) ||
+    map.exits.find((e) => {
+      if (!e.direction)
+        return Math.floor(save.x) === e.x && Math.floor(save.y) === e.y;
+      if (has(e.requires)) return false;
+      const width = (e.span ?? 1) + 0.3;
+      if (e.direction === "west")
+        return dx < 0 && save.x < 0.6 && Math.abs(save.y - e.y - 0.5) < width;
+      if (e.direction === "east")
+        return (
+          dx > 0 &&
+          save.x > map.width - 0.6 &&
+          Math.abs(save.y - e.y - 0.5) < width
+        );
+      if (e.direction === "north")
+        return dy < 0 && save.y < 0.6 && Math.abs(save.x - e.x - 0.5) < width;
+      return (
+        dy > 0 &&
+        save.y > map.height - 0.6 &&
+        Math.abs(save.x - e.x - 0.5) < width
+      );
+    });
   if (!exit) exitLock = false;
   else if (!exitLock) {
     exitLock = true;
@@ -1172,9 +1114,12 @@ function update(dt: number) {
       message(exit.lockedDialogue || "The way is closed.");
       return;
     }
+    const arrival = crossConnection(map, exit, save.x, save.y);
     save.map = exit.to;
-    save.x = exit.toX + 0.5;
-    save.y = exit.toY + 0.5;
+    save.x = arrival.x;
+    save.y = arrival.y;
+    actors.enter(WORLD[save.map]);
+    if (!exit.direction) save = normalizeSavePosition(save);
     if (!save.visited.includes(save.map) && WORLD[save.map].kind === "town")
       save.visited.push(save.map);
     renderer.cameraX = 0;
@@ -1214,12 +1159,13 @@ function update(dt: number) {
   }
 }
 function frame(now: number) {
-  const dt = Math.min((now - last) / 1000, 0.05);
+  const dt = Math.min((now - last) / 1000, 0.15);
   last = now;
   input.update();
   const wasWorld = mode === "world";
   if (mode === "dialogue" && (input.hit("a") || input.hit("b"))) advance();
   else if (mode === "menu" && input.hit("b")) close();
+  else if (mode === "battle" && input.hit("b")) battlePresenter?.back();
   else if (!["world", "loading", "dialogue"].includes(mode)) {
     const buttons = Array.from(
       layer.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"),
@@ -1238,6 +1184,11 @@ function frame(now: number) {
     }
   }
   if (wasWorld) update(dt);
+  const screen = canvas.parentElement!;
+  screen.dataset.scene = ["welcome", "title", "intro", "loading"].includes(mode)
+    ? "title"
+    : mode;
+  actors.enter(WORLD[save.map]);
   if (WORLD[save.map])
     renderer.render(
       WORLD[save.map],
@@ -1246,18 +1197,34 @@ function frame(now: number) {
       save.facing,
       now,
       save.flags,
+      { npcs: actors.states, hideHud: mode !== "world" },
     );
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
-if ("serviceWorker" in navigator)
-  window.addEventListener("load", () => {
-    if (import.meta.env.PROD) void navigator.serviceWorker.register("/sw.js");
-    else
-      void navigator.serviceWorker
-        .getRegistrations()
-        .then((rs) => Promise.all(rs.map((r) => r.unregister())));
-  });
+if ("serviceWorker" in navigator) {
+  if (import.meta.env.PROD) {
+    const status = document.createElement("span");
+    status.id = "offline-status";
+    status.setAttribute("role", "status");
+    status.textContent = "Saving for offline play…";
+    document.querySelector(".statusbar > span")?.replaceWith(status);
+    void navigator.serviceWorker
+      .register("/sw.js", { updateViaCache: "none" })
+      .then(async () => {
+        await navigator.serviceWorker.ready;
+        status.textContent = "✓ Offline ready";
+      })
+      .catch((error) => {
+        status.textContent = "Offline setup unavailable — retry online";
+        console.warn("Offline setup failed", error);
+      });
+  } else {
+    void navigator.serviceWorker
+      .getRegistrations()
+      .then((rs) => Promise.all(rs.map((r) => r.unregister())));
+  }
+}
 void get<Uint8Array>("rom")
   .then((rom) => (rom ? start(rom).catch(() => welcome()) : welcome()))
   .catch(() => welcome());

@@ -29,7 +29,9 @@ Production builds generate a versioned offline service worker covering the appli
 - 16 journal quests, optional trainers, evolution-item rewards, a postgame reserve, and retryable legendary encounters. All 251 species have an obtainable habitat, gift, or static encounter; no trade or event service is necessary.
 - Badge field abilities open return paths and hidden areas. Surf enables water traversal; Fly travels between visited settlements. Field abilities do not occupy Pokémon move slots.
 - Six-member party, storage, Pokédex habitat hints, native battles/catching/experience/move decisions, evolution stones and Link Cables, friendship/time/stat evolutions, shops, fishing, repels, healing, and autosave.
-- Smooth movement with diagonal normalization and collision, quick dialogue, encounter pacing, battle presentation speeds, and an explicit day/night camp option.
+- Smooth, animated movement with diagonal normalization, solid roaming NPCs, trainer sightlines and approaches, grass rustles, and continuous outdoor map boundaries. Dewdrop and Mossford have distinct authored layouts.
+- Fixed battle HUDs, A-acknowledged text, animated HP/experience, move effects, send-outs, fainting, and Poké Ball throws. Encounter transitions and battle exits preserve the overworld.
+- Self-hosted VT323 game text, ROM music/cries/sound effects, saved sound controls, and an explicit day/night camp option.
 
 The region plan is in [docs/DESIGN.md](docs/DESIGN.md); implemented content and contracts are in [docs/WORLD.md](docs/WORLD.md).
 
@@ -50,7 +52,7 @@ Saves and cartridge bytes stay in this browser's IndexedDB. **Settings & save �
 All three run in the browser via `native/`, compiled to `public/astra_native.wasm`:
 
 - [pokemon-crystal-battle-engine](https://github.com/LinusU/pokemon-crystal-battle-engine): actual typed native battle engine, not a replacement damage formula. The vendored bridge adds serialization, interactive move replacement, and full-party capture results for storage.
-- [pokemon-synthesizer](https://github.com/LinusU/pokemon-synthesizer): continuous Gen 2 scene music and cries synthesized from the imported ROM. Version 0.2.3 **does implement the music wave channel**; its README checkbox was stale.
+- [pokemon-synthesizer](https://github.com/LinusU/pokemon-synthesizer): continuous Gen 2 scene music, cries, and supported native battle sound events synthesized from the imported ROM. Version 0.2.3 **does implement the music wave channel**; its README checkbox was stale.
 - [pokemon-sprite-compression](https://github.com/LinusU/pokemon-sprite-compression): ROM decompression for 251 front/back Pokémon sprites and Crystal overworld tiles.
 
 Pinned revisions and local changes are recorded in [vendor/README.md](vendor/README.md). No ROM graphics or sounds are extracted into published assets. The new environmental atlas and welcome illustration are original generated artwork; provenance/prompts are in [docs/art](docs/art).
@@ -58,7 +60,7 @@ Pinned revisions and local changes are recorded in [vendor/README.md](vendor/REA
 ## Verification
 
 ```sh
-npm test                 # content, progression, input and save validation
+npm test                 # world, actors, navigation, audio, battle and save checks
 npm run typecheck
 npm run build
 npm run test:native      # Rust tests + local-ROM WASM integration smoke test

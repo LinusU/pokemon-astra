@@ -49,6 +49,7 @@ export type ObjectKind =
   | "shop"
   | "starter"
   | "gate";
+export type Direction = "north" | "south" | "east" | "west";
 export interface WorldObject {
   id: string;
   kind: ObjectKind;
@@ -64,8 +65,14 @@ export interface WorldObject {
   trainer?: Trainer;
   repeatable?: boolean;
   quest?: string;
+  facing?: "up" | "down" | "left" | "right";
+  roam?: number;
+  sightRange?: number;
 }
 export interface Exit {
+  direction?: Direction;
+  span?: number;
+  entrance?: "door" | "cave" | "stairs";
   x: number;
   y: number;
   to: string;
@@ -1152,15 +1159,12 @@ function pickup(
     setsFlag: `found_${id}`,
   });
 }
-pickup(
-  "mossford",
-  "parcel",
-  "Lost parcel",
-  "You pick up a parcel addressed to Bramble.",
-);
 // The courier starts the quest and the recipient finishes it.
 const parcel = questById("parcel");
-parcel.dialogue = "Please take this parcel to the Bramble courier.";
+parcel.dialogue =
+  "Heading to Bramble? Please take this delivery along Orchard Lane. You received the courier’s parcel!";
+parcel.victoryDialogue =
+  "The parcel is safely in your pack. Follow Orchard Lane east to Bramble and find the courier there.";
 parcel.setsFlag = "found_parcel";
 parcel.reward = undefined;
 parcel.quest = undefined;
@@ -1168,7 +1172,8 @@ obj("bramble", {
   id: "parcel_recipient",
   kind: "person",
   name: "Bramble courier",
-  dialogue: "You found the parcel! Please take these Great Balls.",
+  dialogue:
+    "My delivery from Mossford! Thank you for bringing it. Please take these Great Balls.",
   requires: { flags: ["found_parcel"] },
   lockedDialogue: "I am waiting for a delivery from Mossford.",
   setsFlag: "quest_parcel_complete",
@@ -1295,7 +1300,9 @@ for (const [id] of townData) {
               number
             >
           )[exit.to] ?? i)
-        : i;
+        : id === "mossford"
+          ? ([2, 3][i] ?? i)
+          : i;
     const [x, y] = sites[siteIndex];
     for (let dx = 0; dx < 7; dx++) {
       grid[y][x + dx] = "r";
@@ -1488,7 +1495,7 @@ const townFlavor: Record<string, string> = {
   dewdrop:
     "Alder’s garden points toward the lab. The first beacon watches over the village.",
   mossford:
-    "The orchard windmills turn with the breeze. A courier waits for a missing parcel.",
+    "The orchard windmills turn with the breeze. A courier prepares a delivery for Bramble.",
   bramble: "Lanterns mark the forest path. Fern keeps the Canopy beacon.",
   tideglass:
     "The fog signal guides ships through the harbor. Marina tends the Tidal beacon.",
@@ -1926,7 +1933,7 @@ const townVoices: Record<string, [string, string][]> = {
     ],
     [
       "Courier’s friend",
-      "A parcel went missing on the way to Bramble. The courier would be grateful for a hand.",
+      "The courier has a delivery for Bramble. Perhaps you could carry it along Orchard Lane.",
     ],
   ],
   bramble: [
@@ -2092,4 +2099,581 @@ for (const [, id] of rivals) {
         : id === "rival_3"
           ? "The rangers’ report is hard to ignore. I’m going to find out what Meridian is hiding."
           : "We can protect Astra together. Let’s stop the Engine and meet again after the League.";
+}
+
+// Outdoor connections are roads, not interior warps. The main road travels east;
+// the two northern and southern branches leave their origin in those directions.
+// Each route carries that orientation through to its far end.
+const branchDirections: Record<string, Direction> = {
+  "21": "north",
+  "22": "south",
+  "23": "north",
+  "24": "south",
+  "25": "south",
+};
+const opposite: Record<Direction, Direction> = {
+  north: "south",
+  south: "north",
+  east: "west",
+  west: "east",
+};
+const edgeUse = new Map<string, number>();
+function roadEndpoint(m: WorldMap, direction: Direction): [number, number] {
+  const key = `${m.id}:${direction}`;
+  const used = edgeUse.get(key) ?? 0;
+  edgeUse.set(key, used + 1);
+  // Space junctions apart so separate roads cannot trigger one another.
+  const offset = used === 0 ? 0 : Math.ceil(used / 2) * 5 * (used % 2 ? -1 : 1);
+  return direction === "west"
+    ? [0, Math.floor(m.height / 2) + offset]
+    : direction === "east"
+      ? [m.width - 1, Math.floor(m.height / 2) + offset]
+      : direction === "north"
+        ? [Math.floor(m.width / 2) + offset, 0]
+        : [Math.floor(m.width / 2) + offset, m.height - 1];
+}
+function moveRoad(m: WorldMap, exit: Exit, direction: Direction) {
+  const old: [number, number] = [exit.x, exit.y];
+  const [x, y] = roadEndpoint(m, direction);
+  exit.x = x;
+  exit.y = y;
+  exit.direction = direction;
+  exit.span = 1;
+  // Find a corridor to the existing path without cutting through buildings.
+  const grid = m.tiles.map((row) => row.split(""));
+  const queue: [number, number][] = [[x, y]];
+  const previous = new Map<string, string | null>([[`${x},${y}`, null]]);
+  for (let i = 0; i < queue.length; i++) {
+    const [cx, cy] = queue[i];
+    if (cx === old[0] && cy === old[1]) break;
+    for (const [nx, ny] of [
+      [cx + 1, cy],
+      [cx - 1, cy],
+      [cx, cy + 1],
+      [cx, cy - 1],
+    ]) {
+      const key = `${nx},${ny}`;
+      if (
+        nx < 0 ||
+        ny < 0 ||
+        nx >= m.width ||
+        ny >= m.height ||
+        previous.has(key)
+      )
+        continue;
+      if (
+        (nx === 0 || ny === 0 || nx === m.width - 1 || ny === m.height - 1) &&
+        !(nx === x && ny === y)
+      )
+        continue;
+      if ("rwd".includes(grid[ny][nx])) continue;
+      previous.set(key, `${cx},${cy}`);
+      queue.push([nx, ny]);
+    }
+  }
+  let key: string | null = `${old[0]},${old[1]}`;
+  if (!previous.has(key)) throw Error(`No road to ${m.id} ${exit.label}`);
+  while (key !== null) {
+    const [px, py] = key.split(",").map(Number);
+    grid[py][px] = grid[py][px] === "~" ? "=" : ".";
+    key = previous.get(key)!;
+  }
+  m.tiles = grid.map((row) => row.join(""));
+}
+for (const [n, , a, b] of routeData) {
+  const route = WORLD[`route${n}`],
+    outward = branchDirections[n] ?? "east";
+  const start = WORLD[a].exits.find((e) => e.to === route.id)!;
+  const back = route.exits.find((e) => e.to === a)!;
+  moveRoad(WORLD[a], start, outward);
+  moveRoad(route, back, opposite[outward]);
+  start.toX = back.x;
+  start.toY = back.y;
+  back.toX = start.x;
+  back.toY = start.y;
+  if (WORLD[b].kind === "town") {
+    const forward = route.exits.find((e) => e.to === b)!;
+    const arrival = WORLD[b].exits.find((e) => e.to === route.id)!;
+    moveRoad(route, forward, outward);
+    moveRoad(WORLD[b], arrival, opposite[outward]);
+    forward.toX = arrival.x;
+    forward.toY = arrival.y;
+    arrival.toX = forward.x;
+    arrival.toY = forward.y;
+  }
+}
+
+// Irregular groves frame the roads, while the first settlements have their own
+// landmarks: Dewdrop's pond and flower garden, Mossford's orchard and stream.
+for (const m of Object.values(WORLD).filter(
+  (m) => m.kind === "town" || m.kind === "route",
+)) {
+  const grid = m.tiles.map((row) => row.split(""));
+  const protectedCell = (x: number, y: number) =>
+    m.exits.some((e) => Math.abs(e.x - x) + Math.abs(e.y - y) <= 2) ||
+    m.objects.some((o) => Math.abs(o.x - x) + Math.abs(o.y - y) <= 1);
+  const seed = [...m.id].reduce((sum, c) => sum + c.charCodeAt(0), 0);
+  for (let y = 1; y < m.height - 1; y++)
+    for (let x = 1; x < m.width - 1; x++) {
+      const fringe = Math.min(x, y, m.width - 1 - x, m.height - 1 - y);
+      if (
+        fringe <= 2 &&
+        grid[y][x] === "," &&
+        !protectedCell(x, y) &&
+        (x * 13 + y * 7 + seed) % 11 < (fringe === 1 ? 6 : 3)
+      )
+        grid[y][x] = "#";
+    }
+  if (m.id === "dewdrop") {
+    for (let y = 18; y <= 20; y++)
+      for (let x = 23; x <= 27; x++)
+        if (grid[y][x] === "," && !protectedCell(x, y)) grid[y][x] = "~";
+    for (let y = 8; y <= 10; y++)
+      for (let x = 3; x <= 7; x++) if (grid[y][x] === ",") grid[y][x] = "f";
+  }
+  if (m.id === "route01") {
+    // A meadow pond nestles north of the path; flowers mark its bank.
+    for (let y = 3; y <= 5; y++)
+      for (let x = 25; x <= 31; x++)
+        if ((grid[y][x] === "," || grid[y][x] === "g") && !protectedCell(x, y))
+          grid[y][x] = y === 3 && (x === 25 || x === 31) ? "f" : "~";
+    for (let x = 23; x <= 32; x++) if (grid[6][x] === ",") grid[6][x] = "f";
+  }
+  if (m.id === "route02") {
+    // Orchard rows run alongside the lane, with grassy clearings between them.
+    for (let y = 4; y < m.height - 4; y += 5)
+      for (const x of [4, 8, m.width - 9, m.width - 5])
+        if ((grid[y][x] === "," || grid[y][x] === "g") && !protectedCell(x, y))
+          grid[y][x] = "#";
+  }
+  if (m.id === "mossford") {
+    for (let y = 6; y < m.height - 5; y += 4)
+      for (let x = m.width - 8; x < m.width - 2; x += 3)
+        if (grid[y][x] === "," && !protectedCell(x, y)) grid[y][x] = "#";
+    for (let x = 2; x < m.width - 2; x++)
+      if (grid[m.height - 3][x] === "," && !protectedCell(x, m.height - 3))
+        grid[m.height - 3][x] = "~";
+  }
+  m.tiles = grid.map((row) => row.join(""));
+}
+for (const m of Object.values(WORLD))
+  for (const o of m.objects) {
+    if (["person", "healer", "shop", "starter"].includes(o.kind)) {
+      o.facing = "down";
+      if (o.kind === "person" && o.id.startsWith("resident_")) o.roam = 1;
+    }
+    if (o.kind === "trainer") {
+      o.facing = "down";
+      o.sightRange = 3;
+    }
+  }
+// Ensure every landmark joins the street network even where a grove meets a door.
+for (const m of Object.values(WORLD).filter(
+  (m) => m.kind === "town" || m.kind === "route",
+)) {
+  const grid = m.tiles.map((row) => row.split(""));
+  const origin = m.exits[0];
+  for (const target of [...m.exits, ...m.objects]) {
+    const queue: [number, number][] = [[origin.x, origin.y]];
+    const prev = new Map<string, string | null>([
+      [`${origin.x},${origin.y}`, null],
+    ]);
+    for (let i = 0; i < queue.length; i++) {
+      const [x, y] = queue[i];
+      if (x === target.x && y === target.y) break;
+      for (const [nx, ny] of [
+        [x + 1, y],
+        [x - 1, y],
+        [x, y + 1],
+        [x, y - 1],
+      ]) {
+        const k = `${nx},${ny}`;
+        if (nx < 0 || ny < 0 || nx >= m.width || ny >= m.height || prev.has(k))
+          continue;
+        if (
+          (nx === 0 || ny === 0 || nx === m.width - 1 || ny === m.height - 1) &&
+          !(nx === target.x && ny === target.y)
+        )
+          continue;
+        if ("rw".includes(grid[ny][nx])) continue;
+        prev.set(k, `${x},${y}`);
+        queue.push([nx, ny]);
+      }
+    }
+    let key: string | null = `${target.x},${target.y}`;
+    if (!prev.has(key)) throw Error(`No path to ${m.id} ${key}`);
+    while (key !== null) {
+      const [x, y] = key.split(",").map(Number);
+      if ("#~".includes(grid[y][x]))
+        grid[y][x] = grid[y][x] === "~" ? "=" : ".";
+      key = prev.get(key)!;
+    }
+  }
+  m.tiles = grid.map((row) => row.join(""));
+}
+
+// The opening is hand-composed as a village, riverside orchard town and two
+// different stretches of countryside. Coordinates below are part of the map
+// design: roads meet doors and junctions rather than being inferred from exits.
+function openingMap(id: string, base: string) {
+  const m = WORLD[id];
+  const g = Array.from(
+    { length: m.height },
+    () => Array(m.width).fill(base) as string[],
+  );
+  const rect = (x1: number, y1: number, x2: number, y2: number, c: string) => {
+    for (let y = Math.max(0, y1); y <= Math.min(m.height - 1, y2); y++)
+      for (let x = Math.max(0, x1); x <= Math.min(m.width - 1, x2); x++)
+        g[y][x] = c;
+  };
+  const road = (points: [number, number][], width = 1) => {
+    for (let i = 1; i < points.length; i++) {
+      let [x, y] = points[i - 1];
+      const [tx, ty] = points[i];
+      const paint = () => {
+        for (let dy = -width; dy <= width; dy++)
+          for (let dx = -width; dx <= width; dx++) {
+            const xx = x + dx,
+              yy = y + dy;
+            if (xx >= 0 && yy >= 0 && xx < m.width && yy < m.height)
+              g[yy][xx] = "~=".includes(g[yy][xx]) ? "=" : ".";
+          }
+      };
+      paint();
+      while (x !== tx) {
+        x += Math.sign(tx - x);
+        paint();
+      }
+      while (y !== ty) {
+        y += Math.sign(ty - y);
+        paint();
+      }
+    }
+  };
+  const building = (to: string, x: number, y: number) => {
+    rect(x, y, x + 6, y + 1, "r");
+    rect(x, y + 2, x + 6, y + 2, "w");
+    const e = m.exits.find((e) => e.to === to)!;
+    e.x = x + 3;
+    e.y = y + 2;
+    e.entrance = "door";
+    g[e.y][e.x] = "d";
+    const back = WORLD[to].exits.find((exit) => exit.to === id)!;
+    back.toX = e.x;
+    back.toY = e.y;
+    back.entrance = "door";
+  };
+  const place = (positions: Record<string, [number, number]>) => {
+    for (const [objectId, [x, y]] of Object.entries(positions)) {
+      const o = m.objects.find((object) => object.id === objectId);
+      if (o) {
+        o.x = x;
+        o.y = y;
+        if ("#~rw".includes(g[y][x])) g[y][x] = ",";
+      }
+    }
+  };
+  // An uneven tree line suggests the landscape continues beyond the map.
+  for (let x = 0; x < m.width; x++) {
+    g[0][x] = "#";
+    g[m.height - 1][x] = "#";
+  }
+  for (let y = 0; y < m.height; y++) {
+    g[y][0] = "#";
+    g[y][m.width - 1] = "#";
+  }
+  if (id === "dewdrop") {
+    rect(1, 1, 4, 7, "#");
+    rect(1, 2, 2, 11, "#");
+    rect(27, 1, 30, 7, "#");
+    rect(1, 18, 2, 26, "#");
+    rect(27, 20, 30, 26, "#");
+    rect(21, 24, 29, 26, "#");
+    // Pond on the southeast green, with an irregular shore and flower garden.
+    rect(22, 17, 27, 20, "~");
+    rect(23, 16, 26, 21, "~");
+    rect(3, 9, 8, 11, "f");
+    rect(19, 5, 25, 7, "f");
+    // The village green opens onto a square; lanes link homes and the lab.
+    rect(12, 11, 19, 17, ".");
+    road(
+      [
+        [0, 14],
+        [31, 14],
+      ],
+      1,
+    );
+    road(
+      [
+        [16, 0],
+        [16, 27],
+      ],
+      1,
+    );
+    road(
+      [
+        [5, 24],
+        [5, 20],
+        [16, 20],
+      ],
+      1,
+    );
+    road(
+      [
+        [6, 6],
+        [6, 14],
+      ],
+      1,
+    );
+    road(
+      [
+        [14, 6],
+        [14, 12],
+      ],
+      1,
+    );
+    road(
+      [
+        [24, 8],
+        [24, 14],
+      ],
+      1,
+    );
+    building("home", 3, 21);
+    building("lab", 11, 3);
+    building("dewdrop_center", 3, 3);
+    building("dewdrop_mart", 21, 5);
+    place({
+      robin_start: [14, 13],
+      quest_hearth: [18, 16],
+      sign_dewdrop: [12, 15],
+      resident_dewdrop_0: [8, 10],
+      resident_dewdrop_1: [21, 13],
+    });
+  } else if (id === "mossford") {
+    // The river bends along the south side, crossed by a market bridge.
+    rect(1, 21, 30, 23, "~");
+    rect(1, 19, 7, 22, "~");
+    rect(23, 23, 30, 25, "~");
+    rect(1, 1, 4, 8, "#");
+    rect(27, 1, 30, 6, "#");
+    rect(1, 25, 4, 26, "#");
+    // An orchard occupies the northwest terraces and eastern river bank.
+    for (const [x, y] of [
+      [6, 3],
+      [9, 3],
+      [6, 6],
+      [9, 6],
+      [5, 9],
+      [9, 9],
+      [24, 10],
+      [27, 10],
+      [24, 13],
+      [27, 13],
+      [23, 17],
+      [27, 17],
+    ] as const)
+      rect(x, y, x + 1, y + 1, "#");
+    rect(11, 11, 19, 17, ".");
+    road(
+      [
+        [0, 14],
+        [31, 14],
+      ],
+      1,
+    );
+    road(
+      [
+        [16, 0],
+        [16, 26],
+        [16, 27],
+      ],
+      1,
+    );
+    road(
+      [
+        [16, 8],
+        [22, 8],
+        [22, 6],
+      ],
+      1,
+    );
+    road(
+      [
+        [16, 19],
+        [8, 19],
+        [8, 25],
+      ],
+      1,
+    );
+    building("mossford_center", 19, 3);
+    building("mossford_mart", 5, 16);
+    place({
+      robin_mossford: [13, 12],
+      quest_parcel: [18, 13],
+      quest_pollinators: [11, 10],
+      quest_medicine: [19, 16],
+      sign_mossford: [13, 17],
+      resident_mossford_0: [21, 10],
+      resident_mossford_1: [11, 19],
+    });
+  } else if (id === "route01") {
+    // Meadow folds around a northern pond and a southern stand of old trees.
+    rect(2, 2, 10, 4, "#");
+    rect(1, 2, 3, 8, "#");
+    rect(30, 1, 38, 4, "#");
+    rect(2, 19, 12, 22, "#");
+    rect(27, 19, 38, 22, "#");
+    rect(25, 5, 33, 8, "~");
+    rect(26, 4, 31, 9, "~");
+    rect(8, 6, 17, 9, "f");
+    rect(7, 16, 16, 18, "g");
+    rect(23, 15, 33, 18, "g");
+    road(
+      [
+        [0, 12],
+        [8, 12],
+        [8, 14],
+        [20, 14],
+        [20, 11],
+        [32, 11],
+        [32, 12],
+        [39, 12],
+      ],
+      1,
+    );
+    road(
+      [
+        [20, 11],
+        [20, 8],
+      ],
+      0,
+    );
+    road(
+      [
+        [26, 14],
+        [26, 17],
+      ],
+      0,
+    );
+    place({
+      trainer_route01: [13, 11],
+      item_route01: [26, 17],
+      route01_optional_0: [22, 10],
+      route01_optional_1: [18, 17],
+    });
+  } else {
+    // Long orchard lane: the path bends around the stream and through two groves.
+    rect(1, 1, 5, 8, "#");
+    rect(20, 1, 26, 8, "#");
+    rect(1, 30, 6, 38, "#");
+    rect(21, 30, 26, 38, "#");
+    for (const y of [5, 10, 15, 25, 30, 35])
+      for (const x of [7, 11, 18, 22]) rect(x, y, x + 1, y + 1, "#");
+    rect(1, 25, 26, 27, "~");
+    rect(1, 24, 8, 26, "~");
+    rect(3, 10, 5, 15, "f");
+    rect(22, 12, 25, 17, "g");
+    rect(4, 31, 12, 34, "g");
+    road(
+      [
+        [0, 20],
+        [7, 20],
+        [7, 17],
+        [14, 17],
+        [14, 23],
+        [20, 23],
+        [20, 20],
+        [27, 20],
+      ],
+      1,
+    );
+    road(
+      [
+        [14, 23],
+        [14, 29],
+        [20, 29],
+      ],
+      1,
+    );
+    place({
+      trainer_route02: [10, 15],
+      item_route02: [20, 29],
+      rival_1: [17, 20],
+      route02_optional_0: [12, 22],
+      route02_optional_1: [22, 18],
+      evolution_supply_0: [8, 23],
+    });
+  }
+  // Map-edge road mouths use the full width of their connected lanes.
+  for (const e of m.exits)
+    if (e.direction) {
+      g[e.y][e.x] = ".";
+      const dx = e.direction === "west" ? 1 : e.direction === "east" ? -1 : 0;
+      const dy = e.direction === "north" ? 1 : e.direction === "south" ? -1 : 0;
+      g[e.y + dy][e.x + dx] = ".";
+    }
+  m.tiles = g.map((row) => row.join(""));
+}
+openingMap("dewdrop", ",");
+openingMap("mossford", ",");
+openingMap("route01", "g");
+openingMap("route02", "g");
+
+for (const m of Object.values(WORLD))
+  for (const e of m.exits) {
+    if (e.direction) continue;
+    const dest = WORLD[e.to];
+    e.entrance =
+      m.kind === "dungeon" && dest.kind === "dungeon"
+        ? "stairs"
+        : m.kind === "dungeon" || dest.kind === "dungeon"
+          ? "cave"
+          : "door";
+  }
+// Directions describe a person's pose or a trainer's actual line of sight.
+const facings = ["down", "left", "up", "right"] as const;
+for (const m of Object.values(WORLD))
+  m.objects.forEach((o, i) => {
+    if (o.facing) o.facing = facings[(i + m.id.length) % facings.length];
+  });
+for (const [mapId, id, facing] of [
+  ["route01", "trainer_route01", "down"],
+  ["route01", "route01_optional_0", "down"],
+  ["route01", "route01_optional_1", "up"],
+  ["route02", "trainer_route02", "down"],
+  ["route02", "route02_optional_0", "up"],
+  ["route02", "route02_optional_1", "down"],
+  ["route02", "rival_1", "left"],
+  ["dewdrop", "robin_start", "down"],
+  ["mossford", "quest_parcel", "left"],
+] as const) {
+  const o = WORLD[mapId].objects.find((object) => object.id === id);
+  if (o) o.facing = facing;
+}
+// The road span is one tile on either side of its center. Keep the matching
+// destination's edge and inner approach clear for every preserved lateral offset.
+for (const m of Object.values(WORLD)) {
+  const roads = m.exits.filter((e) => e.direction);
+  if (!roads.length) continue;
+  const grid = m.tiles.map((row) => row.split(""));
+  for (const e of roads)
+    for (let lateral = -1; lateral <= 1; lateral++)
+      for (let inset = 0; inset <= 1; inset++) {
+        const vertical = e.direction === "north" || e.direction === "south";
+        const x =
+          e.x + (vertical ? lateral : e.direction === "west" ? inset : -inset);
+        const y =
+          e.y +
+          (vertical ? (e.direction === "north" ? inset : -inset) : lateral);
+        if (
+          x >= 0 &&
+          y >= 0 &&
+          x < m.width &&
+          y < m.height &&
+          !"rwd".includes(grid[y][x])
+        )
+          grid[y][x] = "~=".includes(grid[y][x]) ? "=" : ".";
+      }
+  m.tiles = grid.map((row) => row.join(""));
 }

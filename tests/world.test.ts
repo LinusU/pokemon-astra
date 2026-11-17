@@ -280,3 +280,171 @@ describe("authored region", () => {
     );
   });
 });
+
+describe("regional geography", () => {
+  it("connects outdoor roads across opposite map edges", () => {
+    const opposite = {
+      north: "south",
+      south: "north",
+      east: "west",
+      west: "east",
+    } as const;
+    for (const m of maps)
+      for (const e of m.exits.filter((exit) => exit.direction)) {
+        const back = WORLD[e.to].exits.find(
+          (candidate) =>
+            candidate.to === m.id &&
+            candidate.x === e.toX &&
+            candidate.y === e.toY,
+        )!;
+        expect(back.direction, `${m.id} to ${e.to}`).toBe(
+          opposite[e.direction!],
+        );
+        expect(e.span).toBe(1);
+        expect(
+          e.direction === "west"
+            ? e.x === 0
+            : e.direction === "east"
+              ? e.x === m.width - 1
+              : e.direction === "north"
+                ? e.y === 0
+                : e.y === m.height - 1,
+        ).toBe(true);
+        const ix =
+          e.x + (e.direction === "west" ? 1 : e.direction === "east" ? -1 : 0);
+        const iy =
+          e.y +
+          (e.direction === "north" ? 1 : e.direction === "south" ? -1 : 0);
+        expect(
+          "#rw~BCPTS".includes(m.tiles[iy][ix]),
+          `${m.id} road approach`,
+        ).toBe(false);
+      }
+    for (const n of [
+      "01",
+      "02",
+      "04",
+      "06",
+      "08",
+      "10",
+      "12",
+      "14",
+      "16",
+      "18",
+      "20",
+      "21",
+      "22",
+      "23",
+      "24",
+    ]) {
+      const roads = WORLD[`route${n}`].exits.filter((e) => e.direction);
+      expect(roads).toHaveLength(2);
+      expect(roads[1].direction).toBe(opposite[roads[0].direction!]);
+    }
+  });
+  it("gives the parcel through the courier and gives the opening towns distinct landmarks", () => {
+    const courier = WORLD.mossford.objects.find(
+      (o) => o.id === "quest_parcel",
+    )!;
+    expect(courier.kind).toBe("person");
+    expect(courier.setsFlag).toBe("found_parcel");
+    expect(
+      maps.flatMap((m) => m.objects).some((o) => o.id === "pickup_parcel"),
+    ).toBe(false);
+    expect(WORLD.dewdrop.tiles.join("")).toContain("~");
+    expect(WORLD.mossford.tiles.join("")).toContain("~");
+    expect(WORLD.dewdrop.tiles).not.toEqual(WORLD.mossford.tiles);
+    expect(WORLD.dewdrop.exits.find((e) => e.to === "home")).toBeDefined();
+    expect(
+      WORLD.mossford.exits.find((e) => e.to === "mossford_mart")?.y,
+    ).toBeGreaterThan(WORLD.mossford.height / 2);
+  });
+});
+
+describe("opening composition", () => {
+  it("uses bridges and distinct settlement and route layouts", () => {
+    expect(WORLD.mossford.tiles.join("")).toContain("=");
+    expect(WORLD.route02.tiles.join("")).toContain("=");
+    expect(WORLD.route01.tiles.join("")).toContain("~");
+    expect(WORLD.dewdrop.exits.find((e) => e.to === "home")?.entrance).toBe(
+      "door",
+    );
+    expect(
+      WORLD.route03.exits.find((e) => e.to === "lantern_1")?.entrance,
+    ).toBe("cave");
+    expect(
+      WORLD.lantern_1.exits.find((e) => e.to === "lantern_2")?.entrance,
+    ).toBe("stairs");
+  });
+  it("gives opening trainers varied directions toward the road", () => {
+    const trainers = [WORLD.route01, WORLD.route02].flatMap((m) =>
+      m.objects.filter((o) => o.kind === "trainer"),
+    );
+    expect(new Set(trainers.map((o) => o.facing)).size).toBeGreaterThan(1);
+    expect(trainers.every((o) => o.sightRange && o.facing)).toBe(true);
+  });
+});
+
+it("keeps doors and conversations reachable around solid people", () => {
+  for (const m of maps) {
+    const id = m.id;
+    const solid = new Set(
+      m.objects
+        .filter((o) =>
+          ["person", "trainer", "leader", "healer", "shop", "starter"].includes(
+            o.kind,
+          ),
+        )
+        .map((o) => `${o.x},${o.y}`),
+    );
+    const start = m.exits.find((e) => e.direction) ?? m.exits[0];
+    const queue: [number, number][] = [[start.x, start.y]],
+      seen = new Set<string>();
+    for (let i = 0; i < queue.length; i++) {
+      const [x, y] = queue[i],
+        key = `${x},${y}`;
+      if (
+        x < 0 ||
+        y < 0 ||
+        x >= m.width ||
+        y >= m.height ||
+        seen.has(key) ||
+        solid.has(key) ||
+        "#rw~BCPTS".includes(m.tiles[y][x])
+      )
+        continue;
+      seen.add(key);
+      queue.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+    }
+    for (const e of m.exits)
+      expect(seen.has(`${e.x},${e.y}`), `${id} exit ${e.to}`).toBe(true);
+    for (const o of m.objects) {
+      const adjacent = [
+        [o.x + 1, o.y],
+        [o.x - 1, o.y],
+        [o.x, o.y + 1],
+        [o.x, o.y - 1],
+      ].some(([x, y]) => seen.has(`${x},${y}`));
+      expect(adjacent, `${id} interaction ${o.id}`).toBe(true);
+    }
+  }
+});
+
+it("keeps the full three-cell width of every road mouth open", () => {
+  for (const m of maps)
+    for (const e of m.exits.filter((exit) => exit.direction)) {
+      const vertical = e.direction === "north" || e.direction === "south";
+      for (let side = -1; side <= 1; side++)
+        for (let inset = 0; inset <= 1; inset++) {
+          const x =
+            e.x + (vertical ? side : e.direction === "west" ? inset : -inset);
+          const y =
+            e.y +
+            (vertical ? (e.direction === "north" ? inset : -inset) : side);
+          expect(
+            "#rw~BCPTS".includes(m.tiles[y][x]),
+            `${m.id} ${e.label} ${side},${inset}`,
+          ).toBe(false);
+        }
+    }
+});

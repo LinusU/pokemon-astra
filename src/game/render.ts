@@ -1,5 +1,19 @@
-import type { WorldMap, WorldObject } from "../world";
+import { WORLD, type WorldMap, type WorldObject } from "../world";
 import type { Engine } from "../engine";
+
+export interface RendererVisualState {
+  npcs?: Record<
+    string,
+    {
+      x: number;
+      y: number;
+      facing?: string;
+      moving?: boolean;
+      notice?: boolean;
+    }
+  >;
+  hideHud?: boolean;
+}
 
 type Palette = {
   grass: string;
@@ -136,31 +150,37 @@ export class Renderer {
   cameraX = 0;
   cameraY = 0;
   private engine?: Engine;
-  private terrain?: HTMLCanvasElement;
+  private terrains = new Map<string, HTMLCanvasElement>();
   private mapId = "";
   private art = new Image();
   private sprites = new Map<string, HTMLCanvasElement>();
   private lastX = 0;
   private lastY = 0;
   private movingUntil = 0;
+  private grassTile = "";
+  private rustles: { x: number; y: number; start: number }[] = [];
   private night = false;
+  private enteredAt = 0;
   constructor(public canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext("2d")!;
     this.ctx.imageSmoothingEnabled = false;
     this.art.onload = () => {
-      this.mapId = "";
+      this.terrains.clear();
     };
     this.art.src = "./assets/astra-environments.png";
+    document.fonts?.ready.then(() => {
+      this.terrains.clear();
+    });
   }
   setEngine(engine: Engine) {
     this.engine = engine;
     this.sprites.clear();
-    this.mapId = "";
+    this.terrains.clear();
   }
   setNight(night: boolean) {
     if (this.night !== night) {
       this.night = night;
-      this.mapId = "";
+      this.terrains.clear();
       this.sprites.clear();
     }
   }
@@ -272,30 +292,9 @@ export class Renderer {
           this.rock(c, px, py, p);
         return;
       }
-      const anchorX = x - (x % 2),
-        anchorY = y - (y % 2);
-      const fullTree = [0, 1].every((dy) =>
-        [0, 1].every((dx) => m.tiles[anchorY + dy]?.[anchorX + dx] === "#"),
-      );
-      if (!fullTree && this.engine) {
-        const tree = this.sprite("complete-tree:" + this.night, () => {
-          const out = new ImageData(32, 32);
-          for (let quad = 0; quad < 4; quad++) {
-            const piece = this.engine!.cell("johto", 20 + quad, 0, this.night);
-            for (let row = 0; row < 16; row++)
-              out.data.set(
-                piece.data.subarray(row * 64, row * 64 + 64),
-                ((Math.floor(quad / 2) * 16 + row) * 32 + (quad % 2) * 16) * 4,
-              );
-          }
-          return out;
-        });
-        if (tree) {
-          c.drawImage(tree, px, py, 16, 16);
-          return;
-        }
-      }
-      if (this.cell(c, "johto", 20 + q, px, py)) {
+      // Johto cell 20 is a complete 16×16 tree. Adjacent metatile
+      // quadrants include other objects, so do not assemble them as a tree.
+      if (this.cell(c, "johto", 20, px, py)) {
         if (m.palette === "autumn") {
           c.fillStyle = "#d784322d";
           c.fillRect(px, py, 16, 16);
@@ -521,8 +520,7 @@ export class Renderer {
     c.fillStyle = p.ink;
     c.fillRect(x + 1, y + 12, 13, 2);
   }
-  private rebuild(m: WorldMap) {
-    this.mapId = m.id;
+  private rebuild(m: WorldMap): HTMLCanvasElement {
     const c = document.createElement("canvas");
     c.width = m.width * 16;
     c.height = m.height * 16;
@@ -545,6 +543,29 @@ export class Renderer {
             this.atlas(ctx, slot, x * 16, y * 16);
         }
     for (const e of m.exits) {
+      const px = e.x * 16,
+        py = e.y * 16;
+      if (e.entrance === "cave") {
+        // A dark opening framed by stone, visible even when approached from below.
+        ctx.fillStyle = p.ink;
+        ctx.fillRect(px - 3, py - 8, 22, 23);
+        ctx.fillStyle = p.shade;
+        ctx.fillRect(px - 2, py - 7, 20, 6);
+        ctx.fillRect(px - 2, py - 1, 4, 14);
+        ctx.fillRect(px + 14, py - 1, 4, 14);
+        ctx.fillStyle = "#273b38";
+        ctx.fillRect(px + 2, py, 12, 14);
+        ctx.fillStyle = p.path;
+        ctx.fillRect(px + 2, py + 14, 12, 2);
+      } else if (e.entrance === "stairs") {
+        ctx.fillStyle = p.ink;
+        ctx.fillRect(px + 1, py + 1, 14, 14);
+        ctx.fillStyle = p.shade;
+        ctx.fillRect(px + 2, py + 2, 12, 12);
+        ctx.fillStyle = p.path;
+        for (let step = 0; step < 4; step++)
+          ctx.fillRect(px + 3, py + 3 + step * 3, 10, 1);
+      }
       if (m.tiles[e.y]?.[e.x] === "d") {
         const label = e.to.endsWith("_center")
           ? "P.C."
@@ -558,33 +579,52 @@ export class Renderer {
                   ? "HOME"
                   : "";
         if (label) {
-          ctx.font = "bold 5px monospace";
-          ctx.textAlign = "center";
+          const glyphs: Record<string, string[]> = {
+            P: ["111", "101", "111", "100", "100"],
+            C: ["111", "100", "100", "100", "111"],
+            L: ["100", "100", "100", "100", "111"],
+            A: ["010", "101", "111", "101", "101"],
+            B: ["110", "101", "110", "101", "110"],
+            S: ["111", "100", "111", "001", "111"],
+            H: ["101", "101", "111", "101", "101"],
+            O: ["111", "101", "101", "101", "111"],
+            G: ["111", "100", "101", "101", "111"],
+            Y: ["101", "101", "010", "010", "010"],
+            M: ["101", "111", "111", "101", "101"],
+            E: ["111", "100", "110", "100", "111"],
+            ".": ["000", "000", "000", "000", "010"],
+          };
           ctx.fillStyle = "#f8e5b1";
-          ctx.fillRect(e.x * 16 - 7, e.y * 16 - 18, 30, 8);
+          ctx.fillRect(px - 8, py - 20, 32, 10);
           ctx.fillStyle = p.ink;
-          ctx.fillText(label, e.x * 16 + 8, e.y * 16 - 12);
-          ctx.textAlign = "left";
-        }
-      } else {
-        const x = e.x * 16 + 8,
-          y = e.y * 16 + 8;
-        ctx.fillStyle = "#f4e2a0";
-        ctx.fillRect(x - 3, y - 3, 6, 6);
-        ctx.fillStyle = p.ink;
-        if (e.x <= 2) {
-          ctx.fillRect(x - 3, y, 5, 1);
-          ctx.fillRect(x - 3, y - 1, 1, 3);
-        } else if (e.x >= m.width - 3) {
-          ctx.fillRect(x - 2, y, 5, 1);
-          ctx.fillRect(x + 2, y - 1, 1, 3);
-        } else {
-          ctx.fillRect(x, y - 2, 1, 5);
-          ctx.fillRect(x - 1, y + 2, 3, 1);
+          const start = px + 8 - (label.length * 4 - 1) / 2;
+          for (let i = 0; i < label.length; i++) {
+            const glyph = glyphs[label[i]];
+            if (!glyph) continue;
+            for (let row = 0; row < 5; row++)
+              for (let col = 0; col < 3; col++)
+                if (glyph[row][col] === "1")
+                  ctx.fillRect(
+                    Math.round(start + i * 4 + col),
+                    py - 18 + row,
+                    1,
+                    1,
+                  );
+          }
         }
       }
     }
-    this.terrain = c;
+    return c;
+  }
+  private terrainFor(map: WorldMap): HTMLCanvasElement {
+    let terrain = this.terrains.get(map.id);
+    if (!terrain) {
+      terrain = this.rebuild(map);
+      if (this.terrains.size >= 16)
+        this.terrains.delete(this.terrains.keys().next().value!);
+      this.terrains.set(map.id, terrain);
+    }
+    return terrain;
   }
   private person(o: WorldObject): string {
     if (o.kind === "starter") return "professor";
@@ -628,15 +668,36 @@ export class Renderer {
     o: WorldObject,
     time: number,
     done: boolean,
+    state?: RendererVisualState["npcs"] extends
+      | Record<string, infer T>
+      | undefined
+      ? T
+      : never,
   ) {
-    const x = o.x * 16 + 8,
-      y = o.y * 16 + 8;
+    const x = state ? state.x * 16 : o.x * 16 + 8,
+      y = state ? state.y * 16 : o.y * 16 + 8;
     if (
       ["person", "trainer", "leader", "healer", "shop", "starter"].includes(
         o.kind,
       )
     ) {
-      this.npc(c, this.person(o), x, y);
+      this.npc(
+        c,
+        this.person(o),
+        x,
+        y,
+        state?.facing ?? "down",
+        state?.moving ? [0, 1, 0, 2][Math.floor(time / 110) % 4] : 0,
+      );
+      if (state?.notice) {
+        c.fillStyle = "#253e38";
+        c.fillRect(x - 5, y - 24, 10, 11);
+        c.fillStyle = "#fff8df";
+        c.fillRect(x - 4, y - 23, 8, 9);
+        c.fillStyle = "#b34435";
+        c.fillRect(x - 1, y - 22, 2, 4);
+        c.fillRect(x - 1, y - 17, 2, 1);
+      }
       if (o.kind === "leader" && !done) {
         c.fillStyle = "#e3bd61";
         c.fillRect(x - 2, y - 16, 4, 3);
@@ -689,64 +750,238 @@ export class Renderer {
     facing: string,
     time: number,
     flags: string[] = [],
+    visualState: RendererVisualState = {},
   ) {
     const c = this.ctx,
       changed = this.mapId !== map.id;
-    if (changed || !this.terrain) this.rebuild(map);
-    const targetX = Math.max(
-      0,
-      Math.min(
-        Math.max(0, map.width * WORLD_SCALE - 320),
-        x * WORLD_SCALE - 160,
-      ),
-    );
-    const targetY = Math.max(
-      0,
-      Math.min(
-        Math.max(0, map.height * WORLD_SCALE - 240),
-        y * WORLD_SCALE - 120,
-      ),
-    );
+    if (changed) this.mapId = map.id;
+    const terrain = this.terrainFor(map);
+    const targetX = this.outdoor(map)
+      ? x * WORLD_SCALE - 160
+      : map.width * WORLD_SCALE < 320
+        ? (map.width * WORLD_SCALE - 320) / 2
+        : Math.max(
+            0,
+            Math.min(map.width * WORLD_SCALE - 320, x * WORLD_SCALE - 160),
+          );
+    const targetY = this.outdoor(map)
+      ? y * WORLD_SCALE - 120
+      : map.height * WORLD_SCALE < 240
+        ? (map.height * WORLD_SCALE - 240) / 2
+        : Math.max(
+            0,
+            Math.min(map.height * WORLD_SCALE - 240, y * WORLD_SCALE - 120),
+          );
     if (changed) {
-      this.cameraX = targetX;
-      this.cameraY = targetY;
-    } else {
-      this.cameraX += (targetX - this.cameraX) * 0.16;
-      this.cameraY += (targetY - this.cameraY) * 0.16;
+      this.enteredAt = time;
+      this.grassTile = `${Math.floor(x)},${Math.floor(y)}`;
+      this.rustles = [];
     }
+    const tileX = Math.floor(x),
+      tileY = Math.floor(y),
+      tileKey = `${tileX},${tileY}`;
+    if (
+      tileKey !== this.grassTile &&
+      Math.hypot(x - this.lastX, y - this.lastY) > 0.001 &&
+      map.tiles[tileY]?.[tileX] === "g"
+    )
+      this.rustles.push({ x: tileX, y: tileY, start: time });
+    this.grassTile = tileKey;
+    this.rustles = this.rustles.filter((r) => time - r.start < 380);
+    this.cameraX = targetX;
+    this.cameraY = targetY;
     if (Math.hypot(x - this.lastX, y - this.lastY) > 0.001)
       this.movingUntil = time + 80;
     this.lastX = x;
     this.lastY = y;
-    c.fillStyle = "#233d37";
+    c.fillStyle = this.outdoor(map)
+      ? (PALETTES[map.palette] || PALETTES.meadow).shade
+      : "#233d37";
     c.fillRect(0, 0, 320, 240);
     c.save();
     c.translate(-Math.round(this.cameraX), -Math.round(this.cameraY));
-    c.drawImage(this.terrain!, 0, 0);
+    if (this.outdoor(map)) {
+      const p = PALETTES[map.palette] || PALETTES.meadow;
+      const minX = Math.floor(this.cameraX / 16),
+        maxX = Math.ceil((this.cameraX + 320) / 16);
+      const minY = Math.floor(this.cameraY / 16),
+        maxY = Math.ceil((this.cameraY + 240) / 16);
+      for (let ty = minY; ty < maxY; ty++)
+        for (let tx = minX; tx < maxX; tx++) {
+          if (tx >= 0 && ty >= 0 && tx < map.width && ty < map.height) continue;
+          const px = tx * 16,
+            py = ty * 16;
+          if (map.palette === "coast" || map.palette === "wetland") {
+            c.fillStyle = p.water;
+            c.fillRect(px, py, 16, 16);
+            c.fillStyle = "#d9eee080";
+            c.fillRect(px + ((tx * 7 + ty * 3 + 1000) % 10), py + 6, 4, 1);
+          } else {
+            const q = (((ty % 2) + 2) % 2) * 2 + (((tx % 2) + 2) % 2);
+            c.fillStyle = p.grass;
+            c.fillRect(px, py, 16, 16);
+            this.cell(c, "johto", 8 + q, px, py);
+            if (
+              ["volcanic", "mountain", "desert", "snow"].includes(map.palette)
+            ) {
+              if (
+                !this.cell(
+                  c,
+                  map.palette === "snow" ? "ice" : "cave",
+                  4 + q,
+                  px,
+                  py,
+                )
+              )
+                this.rock(c, px, py, p);
+            } else if (!this.cell(c, "johto", 20, px, py)) {
+              c.fillStyle = p.ink;
+              c.fillRect(px + 2, py + 4, 12, 11);
+              c.fillStyle = p.shade;
+              c.fillRect(px + 3, py + 1, 10, 11);
+            }
+          }
+        }
+    }
     const done = new Set(flags);
+    if (this.outdoor(map)) {
+      for (const e of map.exits) {
+        const neighbor = WORLD[e.to];
+        if (!e.direction || !neighbor || !this.outdoor(neighbor)) continue;
+        const ox =
+          e.direction === "east"
+            ? map.width * 16
+            : e.direction === "west"
+              ? -neighbor.width * 16
+              : (e.x - e.toX) * 16;
+        const oy =
+          e.direction === "south"
+            ? map.height * 16
+            : e.direction === "north"
+              ? -neighbor.height * 16
+              : (e.y - e.toY) * 16;
+        if (
+          ox >= this.cameraX + 320 ||
+          oy >= this.cameraY + 240 ||
+          ox + neighbor.width * 16 <= this.cameraX ||
+          oy + neighbor.height * 16 <= this.cameraY
+        )
+          continue;
+        c.save();
+        c.translate(ox, oy);
+        c.drawImage(this.terrainFor(neighbor), 0, 0);
+        for (const o of [...neighbor.objects].sort((a, b) => a.y - b.y))
+          this.object(c, o, time, !!o.setsFlag && done.has(o.setsFlag), {
+            x: o.x + 0.5,
+            y: o.y + 0.5,
+            facing:
+              o.facing ?? ["down", "left", "up", "right"][o.id.length % 4],
+          });
+        c.restore();
+      }
+    }
+    c.drawImage(terrain, 0, 0);
     const objects = map.objects.filter(
       (o) => !(o.kind === "item" && o.setsFlag && done.has(o.setsFlag)),
     );
-    const behind = objects.filter((o) => o.y + 0.5 <= y),
-      front = objects.filter((o) => o.y + 0.5 > y);
-    for (const o of behind)
-      this.object(c, o, time, !!o.setsFlag && done.has(o.setsFlag));
-    this.npc(
-      c,
-      "player",
-      x * 16,
-      y * 16,
-      facing,
-      time < this.movingUntil ? 1 + (Math.floor(time / 130) % 2) : 0,
-    );
-    for (const o of front)
-      this.object(c, o, time, !!o.setsFlag && done.has(o.setsFlag));
+    const actors = objects.map((o) => ({
+      y: visualState.npcs?.[o.id]?.y ?? o.y + 0.5,
+      object: o,
+    }));
+    const sorted: { y: number; object?: WorldObject }[] = [...actors, { y }];
+    sorted.sort((a, b) => a.y - b.y);
+    for (const actor of sorted) {
+      if (actor.object) {
+        const o = actor.object;
+        this.object(
+          c,
+          o,
+          time,
+          !!o.setsFlag && done.has(o.setsFlag),
+          visualState.npcs?.[o.id],
+        );
+      } else {
+        this.npc(
+          c,
+          "player",
+          x * 16,
+          y * 16,
+          facing,
+          time < this.movingUntil
+            ? [0, 1, 0, 2][Math.floor(time / 110) % 4]
+            : 0,
+        );
+      }
+      // Grass overlaps feet, while the rest of each character remains in front.
+      const ax = actor.object
+        ? (visualState.npcs?.[actor.object.id]?.x ?? actor.object.x + 0.5)
+        : x;
+      const ay = actor.y;
+      const tx = Math.floor(ax),
+        ty = Math.floor(ay);
+      if (map.tiles[ty]?.[tx] === "g") {
+        const p = PALETTES[map.palette] || PALETTES.meadow;
+        c.fillStyle = p.ink;
+        for (let i = 0; i < 5; i++) {
+          const gx = tx * 16 + 1 + i * 3;
+          c.fillRect(gx, ty * 16 + 13 - (i % 2), 1, 3);
+          c.fillRect(gx - 1, ty * 16 + 12 - (i % 2), 1, 2);
+        }
+      }
+    }
+    for (const rustle of this.rustles) {
+      const p = PALETTES[map.palette] || PALETTES.meadow;
+      const progress = Math.max(0, (time - rustle.start) / 380);
+      const spread = Math.round(progress * 3),
+        hop = Math.round(3 * Math.sin(progress * Math.PI));
+      c.save();
+      c.globalAlpha = 1 - progress;
+      c.fillStyle = p.ink;
+      c.fillRect(rustle.x * 16 + 3 - spread, rustle.y * 16 + 12 - hop, 3, 1);
+      c.fillRect(rustle.x * 16 + 10 + spread, rustle.y * 16 + 11 - hop, 3, 1);
+      c.fillStyle = p.shade;
+      c.fillRect(rustle.x * 16 + 5 - spread, rustle.y * 16 + 8 - hop, 2, 2);
+      c.fillRect(rustle.x * 16 + 9 + spread, rustle.y * 16 + 8 - hop, 2, 2);
+      c.restore();
+    }
+    // Small animated highlights add movement without rebuilding the terrain cache.
+    for (
+      let ty = Math.max(0, Math.floor(this.cameraY / 16));
+      ty < Math.min(map.height, Math.ceil((this.cameraY + 240) / 16));
+      ty++
+    )
+      for (
+        let tx = Math.max(0, Math.floor(this.cameraX / 16));
+        tx < Math.min(map.width, Math.ceil((this.cameraX + 320) / 16));
+        tx++
+      ) {
+        const tile = map.tiles[ty][tx];
+        if (tile === "~") {
+          c.fillStyle = "#e1f4df80";
+          c.fillRect(
+            tx * 16 + ((Math.floor(time / 450) + ty * 3) % 12),
+            ty * 16 + 7,
+            3,
+            1,
+          );
+        }
+        if (tile === "f" && (tx + ty + Math.floor(time / 1000)) % 4 === 0) {
+          c.fillStyle = "#fff4d0";
+          c.fillRect(tx * 16 + 4, ty * 16 + 4, 1, 2);
+        }
+      }
     c.restore();
     if (this.night) {
       c.fillStyle = "#20355d22";
       c.fillRect(0, 0, 320, 240);
     }
-    c.font = "bold 8px monospace";
+    if (visualState.hideHud) return;
+    c.font = "12px VT323, monospace";
+    c.save();
+    c.globalAlpha = Math.max(
+      0,
+      Math.min(1, (this.enteredAt + 3500 - time) / 500),
+    );
     const title = map.name.toUpperCase(),
       width = Math.min(290, c.measureText(title).width + 18);
     c.fillStyle = "#244c42e8";
@@ -755,13 +990,21 @@ export class Renderer {
     c.fillRect(7, 7, 2, 17);
     c.fillStyle = "#f5efcf";
     c.fillText(title, 15, 19);
+    c.restore();
+    const distance = (o: WorldObject) => {
+      const position = visualState.npcs?.[o.id];
+      return Math.hypot(
+        (position?.x ?? o.x + 0.5) - x,
+        (position?.y ?? o.y + 0.5) - y,
+      );
+    };
     const nearby = objects
-      .filter((o) => Math.hypot(o.x + 0.5 - x, o.y + 0.5 - y) < 1.8)
-      .sort(
-        (a, b) =>
-          Math.hypot(a.x + 0.5 - x, a.y + 0.5 - y) -
-          Math.hypot(b.x + 0.5 - x, b.y + 0.5 - y),
-      )[0];
+      .filter(
+        (o) =>
+          !(o.kind === "legendary" && o.setsFlag && done.has(o.setsFlag)) &&
+          distance(o) < 1.8,
+      )
+      .sort((a, b) => distance(a) - distance(b))[0];
     const exit = map.exits.find(
       (e) => Math.hypot(e.x + 0.5 - x, e.y + 0.5 - y) < 2,
     );

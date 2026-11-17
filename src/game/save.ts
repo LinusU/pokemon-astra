@@ -25,8 +25,8 @@ export type Save = {
 export const freshSave = (): Save => ({
   version: 1,
   map: "dewdrop",
-  x: 12.5,
-  y: 8.5,
+  x: 6.5,
+  y: 24.5,
   facing: "down",
   party: [],
   storage: [],
@@ -39,7 +39,7 @@ export const freshSave = (): Save => ({
   money: 3000,
   visited: ["dewdrop"],
   steps: 0,
-  settings: { battleSpeed: 1 },
+  settings: { battleSpeed: 1, music: true },
 });
 const integer = (x: unknown, min: number, max: number): x is number =>
   typeof x === "number" && Number.isInteger(x) && x >= min && x <= max;
@@ -136,6 +136,14 @@ export function isValidSave(x: any): x is Save {
 export function normalizeSavePosition(save: Save): Save {
   const map = WORLD[save.map];
   const safe = (x: number, y: number) =>
+    !map.objects.some(
+      (o) =>
+        ["person", "trainer", "leader", "healer", "shop", "starter"].includes(
+          o.kind,
+        ) &&
+        Math.abs(o.x + 0.5 - x) < 0.6 &&
+        Math.abs(o.y + 0.5 - y) < 0.6,
+    ) &&
     [
       [-0.22, -0.22],
       [0.22, -0.22],
