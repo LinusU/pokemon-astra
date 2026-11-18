@@ -1,0 +1,62 @@
+import { WORLD, type WorldMap } from "../world";
+import type { Save } from "./save";
+
+export const dexFilters = ["All", "Seen", "Caught", "Missing", "Local"] as const;
+export type DexFilter = typeof dexFilters[number];
+export const allSpecies = Array.from({ length: 251 }, (_, index) => index + 1);
+
+export function fishingPool(map: WorldMap, isWaterType: (id: number) => boolean) {
+  const pool = map.encounters.filter(entry => isWaterType(entry.species));
+  return pool.length ? pool : [{ species: 129, minLevel: 10 }];
+}
+
+export type HabitatRecord = {
+  map: WorldMap;
+  method: string;
+  level: string;
+  note: string;
+};
+
+export function buildDex(save: Pick<Save, "map" | "visited" | "flags" | "seen" | "caught">,
+  isWaterType: (id: number) => boolean) {
+  const seen = new Set(save.seen);
+  const caught = new Set(save.caught);
+  const habitats = new Map<number, HabitatRecord[]>();
+  const priority = (map: WorldMap) => map.id === save.map ? 0 : save.visited.includes(map.id) ? 1 : 2;
+  const maps = Object.values(WORLD).sort((a, b) => priority(a) - priority(b));
+  for (const map of maps) {
+    function add(id: number, method: string, level: string, note: string) {
+      const records = habitats.get(id) ?? [];
+      records.push({ map, method, level, note });
+      habitats.set(id, records);
+    }
+    const total = map.encounters.reduce((sum, entry) => sum + entry.weight, 0);
+    for (const entry of map.encounters) {
+      const range = entry.minLevel === entry.maxLevel ? String(entry.minLevel) : `${entry.minLevel}–${entry.maxLevel}`;
+      add(entry.species, "Tall grass", range, `${Math.round(entry.weight / total * 100)}% of encounters`);
+    }
+    if (map.tiles.some(row => row.includes("~"))) {
+      const pool = fishingPool(map, isWaterType);
+      for (const fish of pool) {
+        add(fish.species, "Fishing", String(fish.minLevel), save.flags.includes("quest_angler_complete")
+          ? `${Math.round(100 / pool.length)}% of bites` : "Complete the angler’s request");
+      }
+    }
+    for (const object of map.objects) {
+      const guardian = object.kind === "legendary" && object.trainer?.team[0];
+      if (guardian) add(guardian.species, "Guardian", String(guardian.level), "Fixed encounter");
+      if (object.reward?.species) {
+        add(object.reward.species, "Gift", String(object.reward.level ?? 5), `From ${object.name}`);
+      }
+    }
+  }
+  const local = allSpecies.filter(id => habitats.get(id)?.some(record => record.map.id === save.map));
+  const lists: Record<DexFilter, number[]> = {
+    All: allSpecies,
+    Seen: allSpecies.filter(id => seen.has(id)),
+    Caught: allSpecies.filter(id => caught.has(id)),
+    Missing: allSpecies.filter(id => !caught.has(id)),
+    Local: local,
+  };
+  return { lists, habitats, caught, seen };
+}

@@ -1,3 +1,4 @@
+import { fishingPool } from "./game/pokedex";
 import { Input } from "./game/input";
 import { Renderer } from "./game/render";
 import { WorldActors, interactionTarget } from "./game/actors";
@@ -538,12 +539,12 @@ function interact() {
       map.tiles[Math.floor(ty)]?.[Math.floor(tx)] === "~" &&
       save.party.length
     ) {
-      const fish = map.encounters.filter((e) =>
-        engine.species(e.species).types.includes(21),
+      const fish = fishingPool(map, (id) =>
+        engine.species(id).types.includes(21),
       );
       const pick = fish[Math.floor(Math.random() * fish.length)];
       message("A Pokémon took the bait!", () =>
-        startBattle(pick?.species || 129, pick?.minLevel || 10),
+        startBattle(pick.species, pick.minLevel),
       );
       return;
     }
