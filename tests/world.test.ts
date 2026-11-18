@@ -7,14 +7,15 @@ import {
   type WorldMap,
 } from "../src/world";
 import { interactionTarget } from "../src/game/actors";
-import { barrierAt, exitOpen } from "../src/game/navigation";
+import { routes, localTrail, traceTrail, settlements } from "../src/world/atlas";
+import { barrierAt, connectionOffset, exitOpen } from "../src/game/navigation";
 
 const maps = Object.values(WORLD);
 const needsSurf = (map: WorldMap) =>
   map.id === "route22" ||
   map.exits.some((exit) => map.tiles[exit.y][exit.x] === "~");
 const solidTerrain = (map: WorldMap, tile: string) =>
-  "#rwBCPTS".includes(tile) || (!needsSurf(map) && tile === "~");
+  "#orwBCPTS".includes(tile) || (!needsSurf(map) && tile === "~");
 function can(
   req: Requirement | undefined,
   flags: Set<string>,
@@ -329,30 +330,20 @@ describe("regional geography", () => {
           e.y +
           (e.direction === "north" ? 1 : e.direction === "south" ? -1 : 0);
         expect(
-          "#rw~BCPTS".includes(m.tiles[iy][ix]),
+          "#orw~BCPTS".includes(m.tiles[iy][ix]),
           `${m.id} road approach`,
         ).toBe(false);
       }
-    for (const n of [
-      "01",
-      "02",
-      "04",
-      "06",
-      "08",
-      "10",
-      "12",
-      "14",
-      "16",
-      "18",
-      "20",
-      "21",
-      "22",
-      "23",
-      "24",
-    ]) {
-      const roads = WORLD[`route${n}`].exits.filter((e) => e.direction);
-      expect(roads).toHaveLength(2);
-      expect(roads[1].direction).toBe(opposite[roads[0].direction!]);
+    for (const [n, spec] of Object.entries(routes)) {
+      const map = WORLD["route" + n];
+      for (const e of map.exits.filter(e => e.direction)) {
+        const dest = settlements[e.to as keyof typeof settlements];
+        expect(connectionOffset(map, e)).toEqual({ x: dest.x - spec.x, y: dest.y - spec.y });
+      }
+      const tiles = traceTrail(localTrail(spec));
+      for (const [x, y] of tiles)
+        expect(".=~t".includes(map.tiles[y]?.[x]), map.name + " " + x + "," + y).toBe(true);
+      expect(tiles.length).toBeGreaterThan(28);
     }
   });
   it("gives the parcel through the courier and gives the opening towns distinct landmarks", () => {
@@ -526,9 +517,9 @@ it("keeps authored replacements compact and returns around the far shore", () =>
     ["copperwick", "route08", "north"],
     ["sunspire", "route10", "west"],
     ["reedhaven", "route12", "west"],
-    ["rimepeak", "route16", "north"],
-    ["bellweather", "route18", "west"],
-    ["aster", "route20", "north"],
+    ["rimepeak", "route16", "south"],
+    ["bellweather", "route18", "north"],
+    ["aster", "route20", "west"],
   ])
     expect(WORLD[town].exits.find((e) => e.to === road)?.direction).toBe(
       direction,
@@ -557,7 +548,7 @@ it("keeps the full three-cell width of every road mouth open", () => {
 it("places both dry and Surf access around flooded route landings", () => {
   const crossing = WORLD.route22;
   const [south, north] = crossing.exits;
-  const walkable = (tile: string) => !"#rw~BCPTS".includes(tile);
+  const walkable = (tile: string) => !"#orw~BCPTS".includes(tile);
   expect(
     connectedFloor(crossing, { x: south.x, y: south.y - 1 }, walkable),
   ).not.toContain(`${north.x},${north.y + 1}`);

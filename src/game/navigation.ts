@@ -180,6 +180,6 @@ export function connectedBlocked(
     [0.22, 0.22],
   ].some(([dx, dy]) => {
     const tile = connectedTile(map, x + dx, y + dy, permitted);
-    return !tile || "#rwBCPTS".includes(tile) || (tile === "~" && !surf);
+    return !tile || "#orwBCPTS".includes(tile) || (tile === "~" && !surf);
   });
 }

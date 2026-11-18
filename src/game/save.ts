@@ -211,7 +211,7 @@ export function normalizeSavePosition(save: Save): Save {
       const tile = map.tiles[Math.floor(y + dy)]?.[Math.floor(x + dx)];
       return (
         !!tile &&
-        !"#rwBCPTS".includes(tile) &&
+        !"#orwBCPTS".includes(tile) &&
         (tile !== "~" || save.abilities.includes("surf"))
       );
     });

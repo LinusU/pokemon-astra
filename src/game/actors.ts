@@ -39,7 +39,7 @@ export function terrainBlocked(
     [radius, radius],
   ].some(([dx, dy]) => {
     const tile = map.tiles[Math.floor(y + dy)]?.[Math.floor(x + dx)];
-    return !tile || "#rwBCPTS".includes(tile) || (tile === "~" && !surf);
+    return !tile || "#orwBCPTS".includes(tile) || (tile === "~" && !surf);
   });
 }
 export function facingToward(dx: number, dy: number): Facing {
@@ -81,7 +81,7 @@ export function interactionDistance(
       continue;
     if (
       !tile ||
-      "#rw~BPTS".includes(tile) ||
+      "#orw~BPTS".includes(tile) ||
       (tile === "C" && !options.acrossCounter)
     )
       return Infinity;

@@ -1,6 +1,6 @@
-import type { Direction, Exit, WorldMap } from "./index";
+import type { Exit, WorldMap } from "./index";
 
-type Point = [x: number, y: number];
+import { excursions, localTrail, routes, settlements, traceTrail, type Point } from "./atlas";
 type Patch = [
   x: number,
   y: number,
@@ -10,35 +10,11 @@ type Patch = [
 ];
 type Region = Record<string, WorldMap>;
 
-export const routeDirections: Partial<Record<string, Direction>> = {
-  "03": "north",
-  "05": "south",
-  "07": "north",
-  "08": "north",
-  "10": "west",
-  "11": "north",
-  "12": "west",
-  "13": "north",
-  "14": "west",
-  "15": "north",
-  "16": "north",
-  "17": "east",
-  "18": "west",
-  "19": "west",
-  "20": "north",
-  "21": "north",
-  "22": "north",
-  "23": "north",
-  "24": "north",
-  "25": "south",
-};
-
 export const dimensions = (id: string, kind: WorldMap["kind"]): Point => {
-  if (id === "route01") return [28, 18];
-  if (id === "route02") return [24, 19];
-  if (id === "dewdrop" || id === "mossford") return [25, 20];
-  if (kind === "town") return [24, 18];
-  if (kind === "route") return [23, 16];
+  if (kind === "route" || kind === "town") {
+    const site = kind === "route" ? routes[id.slice(5)] : settlements[id as keyof typeof settlements];
+    return [site.width, site.height];
+  }
   if (kind === "dungeon") return [20, 16];
   if (kind === "gym") return [22, 18];
   if (id.startsWith("league")) return [24, 16];
@@ -48,7 +24,7 @@ export const dimensions = (id: string, kind: WorldMap["kind"]): Point => {
 };
 
 const walkableWithoutSurf = (ch: string | undefined) =>
-  ch !== undefined && !"#rw~BCPTS".includes(ch);
+  ch !== undefined && !"#orw~BCPTS".includes(ch);
 
 function resizeLayout(map: WorldMap, width: number, height: number) {
   const point = ([x, y]: Point): Point => [
@@ -667,654 +643,110 @@ function townLayout(world: Region, map: WorldMap, spec: TownPlan) {
   finish(map, plan);
 }
 
-interface RoutePlan {
-  road: Point[];
-  ground: Patch[];
-  training: Point;
-  cache: Point;
-  clue: string;
-  anchors?: Record<string, Point>;
-}
-
-const routes: Record<string, RoutePlan> = {
-  "01": {
-    road: [
-      [4, 9],
-      [4, 11],
-      [13, 11],
-      [13, 8],
-      [23, 8],
-      [23, 9],
-    ],
-    ground: [
-      [1, 1, 7, 5, "#"],
-      [8, 3, 5, 2, "g"],
-      [14, 2, 7, 3, "f"],
-      [19, 4, 6, 2, "~"],
-      [20, 3, 3, 4, "~"],
-      [3, 13, 7, 3, "g"],
-      [16, 11, 6, 4, "g"],
-      [1, 15, 2, 2, "#"],
-      [24, 12, 3, 5, "#"],
-    ],
-    training: [8, 10],
-    cache: [19, 13],
-    anchors: { route01_optional_0: [16, 7], route01_optional_1: [8, 14] },
-    clue: "Dewdrop lies west and Mossford east. Wild Pokémon hide in the grass south of the pond.",
-  },
-  "02": {
-    road: [
-      [4, 9],
-      [4, 7],
-      [10, 7],
-      [10, 12],
-      [18, 12],
-      [18, 9],
-    ],
-    ground: [
-      [1, 1, 4, 5, "#"],
-      [6, 2, 2, 2, "#"],
-      [10, 2, 2, 2, "#"],
-      [14, 2, 2, 2, "#"],
-      [19, 2, 4, 4, "#"],
-      [11, 1, 2, 16, "~"],
-      [2, 12, 7, 3, "g"],
-      [13, 14, 5, 3, "g"],
-      [16, 5, 4, 3, "g"],
-      [2, 16, 6, 2, "#"],
-      [20, 14, 3, 4, "#"],
-      [5, 5, 4, 1, "f"],
-    ],
-    training: [6, 6],
-    cache: [17, 15],
-    anchors: {
-      rival_1: [14, 11],
-      evolution_supply_0: [7, 13],
-      route02_optional_0: [8, 11],
-      route02_optional_1: [18, 7],
-    },
-    clue: "The bridge over the orchard stream leads east to Bramble. Look south of the road for wild Pokémon.",
-  },
-  "03": {
-    road: [
-      [15, 14],
-      [15, 9],
-      [9, 9],
-      [9, 3],
-    ],
-    ground: [
-      [1, 1, 6, 16, "#"],
-      [17, 1, 8, 5, "#"],
-      [14, 6, 7, 2, "#"],
-      [15, 3, 4, 3, "g"],
-      [18, 11, 6, 5, "g"],
-      [8, 13, 3, 3, "f"],
-    ],
-    training: [16, 12],
-    cache: [22, 12],
-    clue: "Leaves drift toward the glade at the north end. The survey rope starts at the Lantern Wood trailhead.",
-  },
-  "04": {
-    road: [
-      [5, 9],
-      [5, 5],
-      [15, 5],
-      [15, 11],
-      [22, 11],
-    ],
-    ground: [
-      [9, 6, 3, 11, "~"],
-      [8, 10, 3, 7, "~"],
-      [12, 1, 2, 8, "~"],
-      [2, 11, 5, 5, "g"],
-      [18, 4, 6, 4, "g"],
-      [17, 13, 6, 4, "#"],
-    ],
-    training: [6, 8],
-    cache: [21, 5],
-    anchors: { evolution_supply_1: [4, 14] },
-    clue: "The old ford has washed out. The north bridge is the dry way to Tideglass.",
-  },
-  "05": {
-    road: [
-      [12, 4],
-      [18, 4],
-      [18, 11],
-      [22, 11],
-      [22, 14],
-    ],
-    ground: [
-      [1, 7, 12, 10, "~"],
-      [10, 10, 5, 7, "~"],
-      [10, 1, 3, 6, "~"],
-      [14, 8, 3, 4, "g"],
-      [20, 5, 4, 4, "g"],
-      [1, 1, 9, 6, "#"],
-    ],
-    training: [17, 6],
-    cache: [22, 7],
-    clue: "Follow the causeway to the cliffs. Undertow’s high sluice is nearest the sea.",
-  },
-  "06": {
-    road: [
-      [5, 9],
-      [5, 13],
-      [13, 13],
-      [13, 5],
-      [20, 5],
-      [20, 9],
-    ],
-    ground: [
-      [9, 4, 3, 12, "~"],
-      [13, 8, 5, 3, "~"],
-      [17, 8, 3, 9, "~"],
-      [2, 3, 5, 3, "g"],
-      [20, 12, 5, 4, "g"],
-      [15, 2, 6, 1, "w"],
-    ],
-    training: [7, 12],
-    cache: [4, 4],
-    anchors: { pickup_part_a: [22, 14], rival_2: [14, 5] },
-    clue: "Cross two canals to Copperwick. If you collect scrap, check the weeds on the far bank.",
-  },
-  "07": {
-    road: [
-      [13, 13],
-      [6, 13],
-      [6, 5],
-      [18, 5],
-      [18, 3],
-    ],
-    ground: [
-      [10, 7, 13, 4, "w"],
-      [12, 6, 11, 1, "r"],
-      [20, 1, 5, 4, "#"],
-      [2, 2, 4, 3, "g"],
-      [19, 12, 5, 4, "g"],
-      [8, 14, 5, 3, "#"],
-    ],
-    training: [5, 10],
-    cache: [4, 3],
-    anchors: { pickup_part_b: [22, 13], evolution_supply_2: [20, 12] },
-    clue: "Keep the warehouse on your right to reach Copperworks. Only the old stockyard still grows grass.",
-  },
-  "08": {
-    road: [
-      [13, 14],
-      [19, 14],
-      [19, 10],
-      [7, 10],
-      [7, 4],
-      [13, 4],
-    ],
-    ground: [
-      [2, 2, 4, 6, "#"],
-      [9, 6, 14, 3, "#"],
-      [2, 13, 10, 4, "#"],
-      [19, 2, 5, 3, "g"],
-      [8, 12, 5, 2, "g"],
-      [21, 14, 3, 3, "f"],
-    ],
-    training: [18, 12],
-    cache: [22, 3],
-    clue: "Follow the lee side of the dunes. The wind-carved pass turns north toward Sunspire.",
-  },
-  "09": {
-    road: [
-      [6, 9],
-      [6, 13],
-      [14, 13],
-      [14, 7],
-      [22, 7],
-    ],
-    ground: [
-      [1, 1, 6, 5, "#"],
-      [9, 2, 8, 7, "#"],
-      [18, 11, 7, 6, "#"],
-      [10, 11, 3, 2, "f"],
-      [3, 14, 5, 3, "g"],
-      [18, 3, 5, 3, "g"],
-    ],
-    training: [13, 11],
-    cache: [20, 4],
-    clue: "The broken glass posts mark the way to the ruins. The path bends around the sunken wall.",
-  },
-  "10": {
-    road: [
-      [21, 9],
-      [21, 13],
-      [12, 13],
-      [12, 6],
-      [4, 6],
-      [4, 9],
-    ],
-    ground: [
-      [1, 10, 9, 7, "~"],
-      [8, 7, 7, 7, "~"],
-      [14, 1, 5, 10, "~"],
-      [20, 2, 5, 5, "g"],
-      [5, 2, 5, 3, "g"],
-      [16, 15, 4, 2, "f"],
-    ],
-    training: [21, 12],
-    cache: [22, 5],
-    anchors: { evolution_supply_3: [7, 3] },
-    clue: "Stay on the boardwalks until you reach the western reed banks. The deep pools hide the stepping stones.",
-  },
-  "11": {
-    road: [
-      [13, 13],
-      [9, 13],
-      [9, 6],
-      [17, 6],
-      [17, 3],
-    ],
-    ground: [
-      [1, 1, 6, 16, "#"],
-      [11, 8, 9, 3, "~"],
-      [20, 5, 5, 9, "#"],
-      [11, 2, 4, 4, "g"],
-      [17, 13, 6, 3, "g"],
-      [8, 4, 2, 3, "f"],
-    ],
-    training: [11, 12],
-    cache: [20, 14],
-    clue: "Bamboo posts mark the ranger trail. The sanctuary lies past the northern grove.",
-  },
-  "12": {
-    road: [
-      [20, 9],
-      [20, 5],
-      [13, 5],
-      [13, 12],
-      [5, 12],
-      [5, 9],
-    ],
-    ground: [
-      [1, 1, 9, 5, "#"],
-      [7, 7, 4, 4, "#"],
-      [15, 7, 4, 9, "#"],
-      [20, 12, 5, 5, "g"],
-      [2, 13, 7, 4, "g"],
-      [21, 2, 4, 2, "#"],
-    ],
-    training: [15, 5],
-    cache: [6, 15],
-    anchors: { rival_3: [12, 10] },
-    clue: "The old lava tongue splits the trail. The western slope leads to Cinderfall.",
-  },
-  "13": {
-    road: [
-      [13, 14],
-      [7, 14],
-      [7, 8],
-      [12, 8],
-      [12, 4],
-      [20, 4],
-    ],
-    ground: [
-      [1, 1, 5, 16, "#"],
-      [8, 1, 3, 6, "#"],
-      [13, 7, 8, 4, "#"],
-      [18, 2, 6, 2, "g"],
-      [16, 12, 7, 4, "g"],
-      [22, 7, 3, 5, "#"],
-    ],
-    training: [10, 8],
-    cache: [20, 14],
-    clue: "A cut in the lava shelf leads into Ember Mine. The mine crews use the switchback.",
-  },
-  "14": {
-    road: [
-      [21, 9],
-      [21, 4],
-      [14, 4],
-      [14, 13],
-      [5, 13],
-      [5, 9],
-    ],
-    ground: [
-      [1, 1, 10, 6, "#"],
-      [7, 8, 5, 4, "#"],
-      [17, 7, 3, 8, "#"],
-      [15, 15, 6, 2, "#"],
-      [21, 12, 4, 4, "g"],
-      [4, 14, 6, 3, "g"],
-    ],
-    training: [18, 5],
-    cache: [23, 13],
-    anchors: { evolution_supply_5: [7, 15] },
-    clue: "Cairns mark the ridge between Cinderfall and Rimepeak. Follow the switchback west.",
-  },
-  "15": {
-    road: [
-      [13, 14],
-      [17, 14],
-      [17, 10],
-      [9, 10],
-      [9, 4],
-      [5, 4],
-    ],
-    ground: [
-      [1, 6, 7, 11, "#"],
-      [12, 3, 6, 6, "~"],
-      [19, 2, 6, 7, "#"],
-      [19, 11, 5, 5, "g"],
-      [8, 2, 4, 2, "g"],
-      [10, 13, 3, 3, "f"],
-    ],
-    training: [16, 11],
-    cache: [21, 13],
-    clue: "Skirt the frozen tarn and head northwest. Frostvault shelters herbs from the mountain wind.",
-  },
-  "16": {
-    road: [
-      [13, 13],
-      [7, 13],
-      [7, 6],
-      [17, 6],
-      [17, 3],
-      [13, 3],
-    ],
-    ground: [
-      [1, 2, 4, 15, "#"],
-      [10, 8, 8, 3, "f"],
-      [20, 1, 5, 7, "#"],
-      [19, 11, 5, 5, "g"],
-      [7, 2, 4, 3, "g"],
-      [10, 15, 4, 2, "f"],
-    ],
-    training: [8, 11],
-    cache: [21, 13],
-    anchors: { evolution_supply_10: [8, 3] },
-    clue: "The flowers grow around the stones with bells carved into them. Follow those stones north to Bellweather.",
-  },
-  "17": {
-    road: [
-      [5, 9],
-      [5, 4],
-      [13, 4],
-      [13, 12],
-      [21, 12],
-    ],
-    ground: [
-      [2, 12, 8, 5, "f"],
-      [7, 6, 3, 4, "#"],
-      [16, 3, 6, 3, "w"],
-      [20, 14, 5, 3, "#"],
-      [15, 7, 5, 3, "g"],
-      [4, 13, 4, 3, "g"],
-    ],
-    training: [12, 8],
-    cache: [6, 14],
-    clue: "At the empty belfry, turn down to the pilgrim court. Echo Bell Tower is at the far end.",
-  },
-  "18": {
-    road: [
-      [21, 9],
-      [21, 5],
-      [12, 5],
-      [12, 12],
-      [5, 12],
-      [5, 9],
-    ],
-    ground: [
-      [2, 2, 7, 5, "g"],
-      [14, 8, 4, 6, "~"],
-      [18, 10, 5, 3, "f"],
-      [3, 14, 7, 3, "g"],
-      [21, 14, 4, 3, "#"],
-      [11, 7, 1, 3, "f"],
-    ],
-    training: [18, 6],
-    cache: [6, 15],
-    anchors: { rival_4: [13, 7], evolution_supply_8: [5, 5] },
-    clue: "Follow the reflecting pools west. Aster’s observatory rises on the other side of town.",
-  },
-  "19": {
-    road: [
-      [20, 9],
-      [20, 13],
-      [13, 13],
-      [13, 7],
-      [5, 7],
-      [5, 4],
-    ],
-    ground: [
-      [1, 8, 8, 9, "#"],
-      [11, 3, 7, 2, "w"],
-      [17, 4, 8, 3, "#"],
-      [16, 14, 6, 3, "g"],
-      [7, 2, 4, 3, "g"],
-      [15, 8, 3, 3, "f"],
-    ],
-    training: [15, 12],
-    cache: [19, 15],
-    clue: "The road climbs past two retaining walls. The observatory staff entrance is on the upper terrace.",
-  },
-  "20": {
-    road: [
-      [13, 13],
-      [19, 13],
-      [19, 8],
-      [8, 8],
-      [8, 4],
-      [13, 4],
-    ],
-    ground: [
-      [1, 1, 5, 16, "#"],
-      [10, 10, 6, 6, "#"],
-      [21, 2, 4, 8, "#"],
-      [20, 13, 5, 4, "g"],
-      [15, 2, 4, 3, "g"],
-      [7, 11, 3, 4, "f"],
-    ],
-    training: [17, 8],
-    cache: [22, 15],
-    anchors: { evolution_supply_11: [16, 3] },
-    clue: "Follow the ledge north to Crown Summit. The League is in town, but the gate at Victory Ascent opens first.",
-  },
-  "21": {
-    road: [
-      [13, 13],
-      [7, 13],
-      [7, 8],
-      [17, 8],
-      [17, 4],
-      [13, 4],
-    ],
-    ground: [
-      [1, 1, 4, 16, "#"],
-      [9, 9, 5, 7, "#"],
-      [19, 1, 6, 5, "#"],
-      [7, 2, 4, 4, "g"],
-      [19, 11, 5, 4, "g"],
-      [21, 7, 3, 3, "f"],
-    ],
-    training: [8, 10],
-    cache: [9, 4],
-    anchors: { legendary_151: [22, 8] },
-    clue: "The north trail rejoins Bramble. Dewdrop’s oldest grove lies east of the trail, past the flowers.",
-  },
-  "22": {
-    road: [
-      [13, 13],
-      [9, 13],
-      [9, 6],
-      [17, 6],
-      [17, 3],
-      [13, 3],
-    ],
-    ground: [
-      [1, 1, 24, 16, "~"],
-      [2, 3, 6, 4, ","],
-      [2, 4, 5, 3, "g"],
-      [12, 8, 6, 8, ","],
-      [15, 9, 3, 3, "g"],
-      [20, 3, 5, 4, ","],
-      [22, 4, 3, 2, "f"],
-    ],
-    training: [13, 10],
-    cache: [5, 5],
-    anchors: { legendary_243: [22, 4] },
-    clue: "The planks lead to the landing. Surf north across the channel to Reedhaven or explore the islands by the beacon.",
-  },
-  "23": {
-    road: [
-      [13, 13],
-      [19, 13],
-      [19, 5],
-      [13, 5],
-    ],
-    ground: [
-      [8, 3, 7, 9, "#"],
-      [9, 4, 5, 7, ","],
-      [3, 10, 4, 6, "g"],
-      [16, 9, 2, 4, "g"],
-      [21, 1, 4, 9, "#"],
-      [2, 1, 5, 6, "#"],
-    ],
-    training: [18, 8],
-    cache: [6, 13],
-    anchors: {
-      pickup_fossil: [11, 6],
-      quest_fossil: [8, 13],
-      legendary_244: [11, 9],
-    },
-    clue: "The old quarry road climbs to Cinderfall. Take the southwest ramp down to the fossil beds.",
-  },
-  "24": {
-    road: [
-      [13, 14],
-      [18, 14],
-      [18, 10],
-      [8, 10],
-      [8, 5],
-      [13, 5],
-    ],
-    ground: [
-      [1, 1, 24, 16, "~"],
-      [3, 12, 7, 5, ","],
-      [4, 13, 4, 3, "g"],
-      [17, 2, 7, 5, ","],
-      [19, 3, 4, 3, "g"],
-      [13, 9, 4, 5, ","],
-      [13, 11, 3, 2, "f"],
-    ],
-    training: [15, 11],
-    cache: [20, 4],
-    anchors: { legendary_245: [6, 14] },
-    clue: "The outer boardwalk turns north to Bellweather. The inner pool holds a beacon shrine.",
-  },
-  "25": {
-    road: [
-      [13, 4],
-      [19, 4],
-      [19, 9],
-      [11, 9],
-      [11, 14],
-      [6, 14],
-    ],
-    ground: [
-      [1, 1, 7, 7, "#"],
-      [8, 2, 9, 4, "g"],
-      [20, 2, 5, 5, "g"],
-      [14, 11, 10, 5, "g"],
-      [3, 10, 5, 2, "f"],
-      [1, 12, 3, 5, "#"],
-    ],
-    training: [17, 8],
-    cache: [21, 13],
-    clue: "Begin your survey in the meadows. The seedlings, pool dwellers and fire families have separate habitats inside the sanctuary.",
-  },
-};
-
-function routeLayout(world: Region, map: WorldMap, spec: RoutePlan) {
-  if (map.id !== "route01" && map.id !== "route02") {
-    const { point, patch, anchors } = resizeLayout(map, 26, 18);
-    spec = {
-      ...spec,
-      road: spec.road.map(point),
-      training: point(spec.training),
-      cache: point(spec.cache),
-      ground: spec.ground.map(patch),
-      anchors: anchors(spec.anchors ?? {}),
-    };
-  }
-  const plan = floorPlan(map, ",");
-  spec.ground.forEach(plan.patch);
-  const [arrival, onward] = map.exits;
-  const end = spec.road[spec.road.length - 1];
-  const path: Point[] = [
-    [arrival.x, arrival.y],
-    roadApproach(map, arrival),
-    ...spec.road,
+function routeLayout(world: Region, map: WorldMap) {
+  const spec = routes[map.id.slice(5)];
+  const trail = traceTrail(localTrail(spec));
+  const at = (fraction: number) => trail[Math.round(fraction * (trail.length - 1))];
+  const coast = map.palette === "coast", marsh = map.palette === "wetland";
+  const crossing = map.id === "route22";
+  const plan = floorPlan(map, coast || marsh ? "o" : "#");
+  const { grid } = plan;
+  const interior = (x: number, y: number) => x > 0 && x < map.width - 1 && y > 0 && y < map.height - 1;
+  const constrain = ([x, y]: Point): Point => [
+    Math.max(3, Math.min(map.width - 4, Math.round(x))),
+    Math.max(3, Math.min(map.height - 4, Math.round(y))),
   ];
-  if (onward.direction)
-    path.push(roadApproach(map, onward), [onward.x, onward.y]);
-  else relocateExit(world, map, onward, end);
-  plan.trail(path, 1);
-
-  // Short side trails lead to pockets without replacing the encounter grass.
-  // Water routes preserve the islands and supply dry bridges to their trainers.
-  if (map.id === "route22") {
-    plan.trail([
-      [9, 5],
-      [7, 5],
-    ]);
-    plan.trail([
-      [9, 10],
-      [13, 10],
-    ]);
-    plan.trail([
-      [17, 5],
-      [20, 5],
-    ]);
+  function oval([x, y]: Point, rx: number, ry: number, tile: string) {
+    for (let j = -ry; j <= ry; j++)
+      for (let i = -rx; i <= rx; i++)
+        if (interior(x + i, y + j) && i * i / rx ** 2 + j * j / ry ** 2 <= 1)
+          grid[y + j][x + i] = tile;
   }
-  if (map.id === "route23")
-    plan.trail([
-      [13, 13],
-      [11, 13],
-      [11, 10],
-    ]);
-  if (map.id === "route24") {
-    plan.trail([
-      [8, 10],
-      [8, 13],
-    ]);
-    plan.trail([
-      [13, 5],
-      [18, 5],
-    ]);
+  function beside(fraction: number, distance: number): Point {
+    const [x, y] = at(fraction);
+    const before = at(fraction - 0.025), after = at(fraction + 0.025);
+    const dx = after[0] - before[0], dy = after[1] - before[1];
+    const length = Math.hypot(dx, dy) || 1;
+    return constrain([x - dy * distance / length, y + dx * distance / length]);
   }
 
-  // The crossing has a surveyed launch point at each end, with an open
-  // stretch of water between the two plank landings.
-  if (map.id === "route22")
-    plan.patch([1, Math.floor(map.height / 2), map.width - 2, 2, "~"]);
+  // Leave the outside of each bend wild. Vary the valley width at clearings,
+  // then take a second trail away from the road and back by the survey stop.
+  const excursion = excursions[map.id.slice(5)];
+  const bends: Point[] = excursion
+    ? excursion[1].map(([x, y]) => constrain([x - spec.x, y - spec.y]))
+    : [beside(0.38, spec.turnout), beside(0.48, spec.turnout), beside(0.57, spec.turnout)];
+  const turnout = bends[Math.floor(bends.length / 2)];
+  const bypass = traceTrail([at(excursion?.[0] ?? 0.29), ...bends, at(excursion?.[2] ?? 0.67)]);
+  for (let i = 0; i < trail.length; i++) {
+    const radius = 4 + Math.round(1.5 + 1.5 * Math.sin(i / 8));
+    if (coast || marsh) oval(trail[i], radius + 2, radius + 1, "~");
+    oval(trail[i], radius, radius - 1, ",");
+  }
+  for (const p of bypass) oval(p, 3, 3, ",");
+  if (map.id === "route06") {
+    for (const [x, y] of trail.slice(10, -9)) oval([x, y + 4], 3, 3, "~");
+  }
+  if (map.id === "route08" || map.id === "route14") {
+    const pool = beside(0.52, spec.turnout / 2);
+    oval(pool, 5, 4, "~");
+  }
+  const glade = beside(0.75, -Math.sign(spec.turnout) * 5);
+  oval(glade, 6, 4, ",");
+  oval(glade, 5, 3, "g");
+  oval(beside(0.18, 4), 4, 3, "g");
+  oval(turnout, 5, 4, "g");
+  const pond = beside(0.40, -Math.sign(spec.turnout) * 4);
+  if (coast || marsh || ["meadow", "snow", "night", "orchard"].includes(spec.palette))
+    oval(pond, 6, 3, "~");
+  if (map.id === "route02" || marsh) oval(at(0.69), 5, 4, "~");
 
-  const middle = spec.road[Math.floor(spec.road.length / 2)];
-  map.objects.push({
-    id: `sign_${map.id}`,
-    name: "Trail marker",
-    kind: "sign",
-    dialogue: spec.clue,
-    x: middle[0],
-    y: middle[1],
+  // Orchard rows, tilted dune ridges, basalt shelves and flowering meadows
+  // interrupt the shoulders without cutting through either surveyed path.
+  for (let y = 1; y < map.height - 1; y++)
+    for (let x = 1; x < map.width - 1; x++) {
+      if (grid[y][x] !== ",") continue;
+      const gx = x + spec.x, gy = y + spec.y;
+      if (spec.palette === "orchard" && gx % 4 === 0 && gy % 3 === 0) grid[y][x] = "#";
+      else if (["mountain", "volcanic", "desert"].includes(spec.palette) &&
+        (gx + 2 * gy) % 17 < 2 && Math.cos(gx / 3) > 0.45) grid[y][x] = "#";
+      else if (Math.sin(gx / 3) + Math.cos(gy / 2) > 0.65)
+        grid[y][x] = ["volcanic", "industrial", "mountain", "desert"].includes(spec.palette) ? "," : "f";
+    }
+  for (const p of bypass) oval(p, 1, 1, ",");
+  for (const [x, y] of trail)
+    for (let j = -1; j <= 1; j++)
+      for (let i = -1; i <= 1; i++) {
+        if (!interior(x + i, y + j)) continue;
+        grid[y + j][x + i] = ["~", "="].includes(grid[y + j][x + i]) ? "=" : ".";
+      }
+  if (map.id === "route07" || map.id === "route23")
+    for (const [x, y] of trail.slice(5, -5)) grid[y][x] = "t";
+  if (crossing) {
+    // Two stretches of the Aurora Current separate the ferry's grass islands.
+    for (let y = 1; y < map.height - 1; y++) {
+      const fraction = y / map.height;
+      if ((fraction > 0.23 && fraction < 0.38) || (fraction > 0.64 && fraction < 0.82))
+        for (let x = 1; x < map.width - 1; x++)
+          if (grid[y][x] !== "o") grid[y][x] = "~";
+    }
+  }
+  const onward = map.exits[1];
+  if (!onward.direction) relocateExit(world, map, onward, trail.at(-1)!);
+  const sign = "sign_" + map.id;
+  map.objects.push({ kind: "sign", id: sign, x: 0, y: 0, name: spec.landmark, dialogue: spec.note });
+  const anchors: Record<string, Point> = {
+    [sign]: turnout,
+    ["trainer_" + map.id]: beside(0.22, -2),
+    ["item_" + map.id]: bypass[Math.floor(bypass.length * 0.69)],
+    [map.id + "_optional_0"]: beside(0.70, 3),
+    [map.id + "_optional_1"]: bypass[Math.floor(bypass.length * 0.29)],
+  };
+  const others = map.objects.filter(o => !anchors[o.id]);
+  others.forEach((o, i) => {
+    anchors[o.id] = beside(0.60 + 0.30 * (i + 1) / (others.length + 1), i % 2 ? -3 : 3);
   });
-  placeObjects(
-    map,
-    plan,
-    {
-      [`trainer_${map.id}`]: spec.training,
-      [`item_${map.id}`]: spec.cache,
-      [`sign_${map.id}`]: middle,
-      [`${map.id}_optional_0`]: [spec.training[0] + 2, spec.training[1] + 2],
-      [`${map.id}_optional_1`]: [spec.cache[0] - 2, spec.cache[1] - 2],
-      ...spec.anchors,
-    },
-    spec.cache,
-  );
+  placeObjects(map, plan, anchors, turnout);
   finish(map, plan);
 }
 
@@ -2244,7 +1676,7 @@ export function composeGeography(world: Region) {
   for (const map of Object.values(world)) {
     if (map.kind === "town") townDirections(map);
     if (map.kind === "town") townLayout(world, map, towns[map.id]);
-    if (map.kind === "route") routeLayout(world, map, routes[map.id.slice(5)]);
+    if (map.kind === "route") routeLayout(world, map);
     if (map.kind === "gym") gymLayout(world, map);
     if (map.kind === "interior") {
       if (map.id.startsWith("league")) leagueLayout(world, map);

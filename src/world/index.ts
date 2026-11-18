@@ -1,4 +1,5 @@
-import { composeGeography, dimensions, routeDirections } from "./geography";
+import { composeGeography, dimensions } from "./geography";
+import { localTrail, opposite, routes, settlements } from "./atlas";
 import { populateHabitats } from "./habitats";
 
 /** Pokémon Astra's authored campaign. Species numbers use the National Pokédex. */
@@ -259,48 +260,12 @@ function obj(
     y: value.y ?? pos[1] + dy,
   });
 }
-const townData: [string, string, string][] = [
-  ["dewdrop", "Dewdrop Village", "meadow"],
-  ["mossford", "Mossford", "orchard"],
-  ["bramble", "Bramble Town", "autumn"],
-  ["tideglass", "Tideglass Port", "coast"],
-  ["copperwick", "Copperwick City", "industrial"],
-  ["sunspire", "Sunspire Town", "desert"],
-  ["reedhaven", "Reedhaven", "wetland"],
-  ["cinderfall", "Cinderfall City", "volcanic"],
-  ["rimepeak", "Rimepeak Village", "snow"],
-  ["bellweather", "Bellweather City", "violet"],
-  ["aster", "Aster City", "night"],
-  ["crown", "Crown Summit", "mountain"],
-];
+const townData = Object.entries(settlements).map(([id, t]) => [id, t.name, t.palette]);
 townData.forEach(([id, name, palette]) => map(id, name, "town", palette));
-const routeData: [string, string, string, string, string][] = [
-  ["01", "Dewpath", "dewdrop", "mossford", "meadow"],
-  ["02", "Orchard Lane", "mossford", "bramble", "orchard"],
-  ["03", "Lantern Approach", "bramble", "lantern_1", "autumn"],
-  ["04", "Amberbank", "bramble", "tideglass", "autumn"],
-  ["05", "Saltwind Coast", "tideglass", "undertow_1", "coast"],
-  ["06", "Canal Road", "tideglass", "copperwick", "coast"],
-  ["07", "Switchyard", "copperwick", "copperworks_1", "industrial"],
-  ["08", "Saffron Dunes", "copperwick", "sunspire", "desert"],
-  ["09", "Glassway", "sunspire", "hourglass_1", "desert"],
-  ["10", "Reedwalk", "sunspire", "reedhaven", "wetland"],
-  ["11", "Bamboo Reach", "reedhaven", "bamboo_1", "wetland"],
-  ["12", "Ashen Trail", "reedhaven", "cinderfall", "volcanic"],
-  ["13", "Ember Slope", "cinderfall", "ember_1", "volcanic"],
-  ["14", "High Pass", "cinderfall", "rimepeak", "mountain"],
-  ["15", "Snowmelt Road", "rimepeak", "frostvault_1", "snow"],
-  ["16", "Bellflower Way", "rimepeak", "bellweather", "violet"],
-  ["17", "Pilgrim Walk", "bellweather", "echo_1", "violet"],
-  ["18", "Starlit Avenue", "bellweather", "aster", "night"],
-  ["19", "Observatory Approach", "aster", "starfall_1", "night"],
-  ["20", "Crown Road", "aster", "crown", "mountain"],
-  ["21", "Dewdrop Grove", "dewdrop", "bramble", "meadow"],
-  ["22", "Tidal Crossing", "tideglass", "reedhaven", "coast"],
-  ["23", "Old Quarry", "mossford", "cinderfall", "mountain"],
-  ["24", "Moonwater Reach", "tideglass", "bellweather", "coast"],
-  ["25", "Aurora Trail", "dewdrop", "aurora_1", "night"],
-];
+const routeData = Object.keys(routes).sort().map(n => {
+  const { name, from, to, palette } = routes[n];
+  return [n, name, from, to, palette];
+});
 routeData.forEach(([n, name, , , palette]) =>
   map(`route${n}`, `Route ${n} · ${name}`, "route", palette),
 );
@@ -601,11 +566,11 @@ const serviceVisitors: Record<string, [[string, string], [string, string]]> = {
   aster: [
     [
       "Sky watcher",
-      "The final beacon is in the observatory west of town. Astra’s sky should start moving again once it’s back.",
+      "The final beacon is in the observatory east of town. Astra’s sky should start moving again once it’s back.",
     ],
     [
       "Observatory aide",
-      "Follow Crown Road north to Victory Ascent. Take restoration supplies before you head up, especially if you plan to challenge the League.",
+      "Follow Crown Road west to Victory Ascent. Take restoration supplies before you head up, especially if you plan to challenge the League.",
     ],
   ],
   crown: [
@@ -1950,7 +1915,7 @@ const champion = WORLD.league_mira.objects.find((o) => o.id === "league_4")!;
 champion.dialogue =
   "I am Mira, Champion of the Astral League. You brought the beacons together without asking Astra to stand still. Let us see the strength of the bond that carried you here.";
 champion.victoryDialogue =
-  "Champion Mira welcomes you to the Hall of Fame. Across Astra, the beacons glow with the changing sky. Robin and Alder await your next discovery: the living atlas of all 251 species. Take Aurora Trail south from Dewdrop to reach the restored sanctuary.";
+  "Champion Mira welcomes you to the Hall of Fame. Across Astra, the beacons glow with the changing sky. Robin and Alder await your next discovery: the living atlas of all 251 species. Take Aurora Trail west from Dewdrop to reach the restored sanctuary.";
 const townVoices: Record<string, [string, string][]> = {
   dewdrop: [
     [
@@ -2137,55 +2102,25 @@ for (const [, id] of rivals) {
           : "We can protect Astra together. Let’s stop the Engine and meet again after the League.";
 }
 
-// Orient each through-route across facing edges. The far shore turns west.
-const opposite: Record<Direction, Direction> = {
-  north: "south",
-  south: "north",
-  east: "west",
-  west: "east",
-};
-const edgeUse = new Map<string, number>();
-function roadEndpoint(m: WorldMap, direction: Direction): [number, number] {
-  const key = `${m.id}:${direction}`;
-  const used = edgeUse.get(key) ?? 0;
-  edgeUse.set(key, used + 1);
-  // Space junctions apart so separate roads cannot trigger one another.
-  const offset = used === 0 ? 0 : Math.ceil(used / 2) * 5 * (used % 2 ? -1 : 1);
-  return direction === "west"
-    ? [0, Math.floor(m.height / 2) + offset]
-    : direction === "east"
-      ? [m.width - 1, Math.floor(m.height / 2) + offset]
-      : direction === "north"
-        ? [Math.floor(m.width / 2) + offset, 0]
-        : [Math.floor(m.width / 2) + offset, m.height - 1];
-}
-function moveRoad(m: WorldMap, exit: Exit, direction: Direction) {
-  [exit.x, exit.y] = roadEndpoint(m, direction);
-  exit.direction = direction;
-  exit.span = 1;
-}
-
-for (const [n, , a, b] of routeData) {
-  const route = WORLD[`route${n}`],
-    outward = routeDirections[n] ?? "east";
-  const start = WORLD[a].exits.find((e) => e.to === route.id)!;
-  const back = route.exits.find((e) => e.to === a)!;
-  moveRoad(WORLD[a], start, outward);
-  moveRoad(route, back, opposite[outward]);
-  start.toX = back.x;
-  start.toY = back.y;
-  back.toX = start.x;
-  back.toY = start.y;
-  if (WORLD[b].kind === "town") {
-    const forward = route.exits.find((e) => e.to === b)!;
-    const arrival = WORLD[b].exits.find((e) => e.to === route.id)!;
-    moveRoad(route, forward, outward);
-    moveRoad(WORLD[b], arrival, opposite[outward]);
-    forward.toX = arrival.x;
-    forward.toY = arrival.y;
-    arrival.toX = forward.x;
-    arrival.toY = forward.y;
+// Both sides of a seam use the very same tile survey as the regional chart.
+for (const [n, , from, to] of routeData) {
+  const spec = routes[n];
+  const route = WORLD["route" + n];
+  const points = localTrail(spec);
+  function seam(townId: string, side: Direction, [x, y]: [number, number]) {
+    const town = settlements[townId as keyof typeof settlements];
+    const a = WORLD[townId].exits.find(e => e.to === route.id)!;
+    const b = route.exits.find(e => e.to === townId)!;
+    a.x = b.toX = x + spec.x - town.x + (side === "east" ? -1 : side === "west" ? 1 : 0);
+    a.y = b.toY = y + spec.y - town.y + (side === "south" ? -1 : side === "north" ? 1 : 0);
+    b.x = a.toX = x;
+    b.y = a.toY = y;
+    a.direction = side;
+    b.direction = opposite[side];
+    a.span = b.span = 1;
   }
+  seam(from, spec.departure, points[0]);
+  if (spec.arrival) seam(to, spec.arrival, points.at(-1)!);
 }
 
 for (const m of Object.values(WORLD))

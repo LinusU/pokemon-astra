@@ -1,3 +1,4 @@
+import { trailLandmark } from "./trail-landmarks";
 import { WORLD, type Exit, type WorldMap, type WorldObject } from "../world";
 import type { Engine } from "../engine";
 import { interactionTarget, objectVisible } from "./actors";
@@ -558,6 +559,31 @@ export class Renderer {
       else this.roomWall(c, m, x, y);
       return;
     }
+    if (ch === "t") {
+      c.fillStyle = p.path;
+      c.fillRect(px, py, 16, 16);
+      const horizontal = m.tiles[y][x - 1] === "t" || m.tiles[y][x + 1] === "t";
+      for (const pos of [2, 9]) {
+        c.fillStyle = "#9a795e";
+        if (horizontal) c.fillRect(px + pos, py + 2, 3, 12);
+        else c.fillRect(px + 2, py + pos, 12, 3);
+      }
+      for (const pos of [4, 11]) {
+        c.fillStyle = "#646669";
+        if (horizontal) c.fillRect(px, py + pos, 16, 2);
+        else c.fillRect(px + pos, py, 2, 16);
+      }
+      return;
+    }
+    if (ch === "o") {
+      c.fillStyle = "#426d82";
+      c.fillRect(px, py, 16, 16);
+      c.fillStyle = "#63929e";
+      const phase = noise(x, y) % 7;
+      c.fillRect(px + phase, py + 6, 4, 1);
+      c.fillRect(px + phase + 4, py + 5, 2, 1);
+      return;
+    }
     if (ch === "~") {
       c.fillStyle = p.water;
       c.fillRect(px, py, 16, 16);
@@ -979,20 +1005,21 @@ export class Renderer {
       paintGlyph(c, SWITCH_SYMBOLS[map.palette], x - 2, y - 15);
     }
   }
-  private rebuild(m: WorldMap): HTMLCanvasElement {
+  private rebuild(m: WorldMap, left: number, top: number, width: number, height: number): HTMLCanvasElement {
     const c = document.createElement("canvas");
-    c.width = m.width * 16;
-    c.height = m.height * 16;
+    c.width = width * 16;
+    c.height = height * 16;
     const ctx = c.getContext("2d")!;
     ctx.imageSmoothingEnabled = false;
     const p = PALETTES[m.palette] || PALETTES.meadow;
-    for (let y = 0; y < m.height; y++)
-      for (let x = 0; x < m.width; x++) this.tile(ctx, m, x, y, p);
+    ctx.translate(-left * 16, -top * 16);
+    for (let y = top; y < top + height; y++)
+      for (let x = left; x < left + width; x++) this.tile(ctx, m, x, y, p);
     // Original atlas landmarks replace occasional 2×2 obstacle clusters.
     const slot = GROVE_ART[m.palette];
     if (slot !== undefined && this.outdoor(m))
-      for (let y = 2; y < m.height - 3; y += 4)
-        for (let x = 2; x < m.width - 3; x += 4) {
+      for (let y = top + 2; y < Math.min(m.height - 3, top + height); y += 4)
+        for (let x = left + 2; x < Math.min(m.width - 3, left + width); x += 4) {
           if (
             (x + y * 3) % 5 === 0 &&
             [0, 1].every((dy) =>
@@ -1119,15 +1146,25 @@ export class Renderer {
     }
     return c;
   }
-  private terrainFor(map: WorldMap): HTMLCanvasElement {
-    let terrain = this.terrains.get(map.id);
-    if (!terrain) {
-      terrain = this.rebuild(map);
-      if (this.terrains.size >= 16)
-        this.terrains.delete(this.terrains.keys().next().value!);
-      this.terrains.set(map.id, terrain);
-    }
-    return terrain;
+  private drawTerrain(c: CanvasRenderingContext2D, map: WorldMap, ox = 0, oy = 0) {
+    // A long crossing can encompass several screens of ocean. Rasterize only
+    // visible 16-tile sections, including the neighboring shore before a seam.
+    const size = map.kind === "route" ? 16 : Math.max(map.width, map.height);
+    const left = Math.max(0, Math.floor((this.cameraX - ox) / (16 * size)) * size);
+    const top = Math.max(0, Math.floor((this.cameraY - oy) / (16 * size)) * size);
+    const right = Math.min(map.width, (this.cameraX - ox + WIDTH) / 16);
+    const bottom = Math.min(map.height, (this.cameraY - oy + HEIGHT) / 16);
+    for (let y = top; y < bottom; y += size)
+      for (let x = left; x < right; x += size) {
+        const key = map.id + ":" + x + "," + y;
+        let image = this.terrains.get(key);
+        if (!image) {
+          image = this.rebuild(map, x, y, Math.min(size, map.width - x), Math.min(size, map.height - y));
+          if (this.terrains.size >= 32) this.terrains.delete(this.terrains.keys().next().value!);
+          this.terrains.set(key, image);
+        }
+        c.drawImage(image, x * 16, y * 16);
+      }
   }
   private person(o: WorldObject): string {
     if (o.kind === "starter") return "professor";
@@ -1417,6 +1454,10 @@ export class Renderer {
       this.switch(c, o, map, x, y, time, done);
       return;
     }
+    if (map.kind === "route" && o.id === "sign_" + map.id) {
+      trailLandmark(c, map, x, y, time);
+      return;
+    }
     if (o.kind === "gate") {
       c.fillStyle = "#403c47";
       c.fillRect(x - 7, y - 5, 14, 10);
@@ -1596,7 +1637,7 @@ export class Renderer {
             1,
           );
           if (
-            (map.id === "cinderfall" || map.id === "rimepeak") &&
+            (["cinderfall", "rimepeak", "route13", "route15"].includes(map.id)) &&
             seed % 5 === 0
           ) {
             const rise = Math.floor(time / 145 + (seed % 13)) % 10;
@@ -1624,7 +1665,6 @@ export class Renderer {
   ) {
     const c = this.ctx;
     const { changed, distance, dx, dy } = this.follow(map, x, y, time);
-    const terrain = this.terrainFor(map);
     if (changed) {
       this.enteredAt = time;
       this.grassTile = `${Math.floor(x)},${Math.floor(y)}`;
@@ -1686,7 +1726,7 @@ export class Renderer {
           continue;
         c.save();
         c.translate(ox, oy);
-        c.drawImage(this.terrainFor(neighbor), 0, 0);
+        this.drawTerrain(c, neighbor, ox, oy);
         this.roadBarriers(c, neighbor, isOpen);
         if (this.landmarkFoot(neighbor) !== undefined)
           this.freestandingLandmark(c, neighbor);
@@ -1702,7 +1742,7 @@ export class Renderer {
         c.restore();
       }
     }
-    c.drawImage(terrain, 0, 0);
+    this.drawTerrain(c, map);
     this.animateGround(c, map, time);
     this.roadBarriers(c, map, isOpen);
     const objects = map.objects.filter((o) => objectVisible(o, done));

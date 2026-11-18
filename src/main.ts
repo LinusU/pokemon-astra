@@ -1571,7 +1571,7 @@ function hallOfFame(done: () => void) {
   const p = panel(
     layer,
     "Hall of Fame",
-    `<p>The team that brought the dawn back to Astra.</p><div class="hall-party">${(save.hallOfFame || save.party).map((m) => `<div><img alt="" src="${sprite(m.species)}"><span>${escapeHtml(engine.species(m.species).name)}<br>Lv ${m.level}</span></div>`).join("")}</div><p class="small">The Aurora Trail is open south of Dewdrop Village.</p><button id="continue">Continue exploring</button>`,
+    `<p>The team that brought the dawn back to Astra.</p><div class="hall-party">${(save.hallOfFame || save.party).map((m) => `<div><img alt="" src="${sprite(m.species)}"><span>${escapeHtml(engine.species(m.species).name)}<br>Lv ${m.level}</span></div>`).join("")}</div><p class="small">The Aurora Trail is open west of Dewdrop Village.</p><button id="continue">Continue exploring</button>`,
     "champion-record",
   );
   p.querySelector("#continue")!.addEventListener("click", done);
