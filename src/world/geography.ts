@@ -1,6 +1,6 @@
 import type { Exit, WorldMap } from "./index";
 
-import { excursions, localTrail, routes, settlements, traceTrail, type Point } from "./atlas";
+import { routes, settlements, surveyTrail, type Point } from "./atlas";
 type Patch = [
   x: number,
   y: number,
@@ -643,41 +643,34 @@ function townLayout(world: Region, map: WorldMap, spec: TownPlan) {
   finish(map, plan);
 }
 
+const walkers: Record<string, [string, string, number]> = {
+  route08: ["Glass carrier", "My wagon has to keep to the long bend. On foot you can cut behind the saddle and pass the blue pool.", 0.12],
+  route12: ["Charcoal burner", "I ship the charcoal down to the reed beds. My daughter takes the kiln path while I take the cart road. She always beats me home.", 0.84],
+  route14: ["Mountain guide", "See the white line on the ridge? That’s Rimepeak. Neve takes challengers as soon as they’ve reopened Frostvault, even if they haven’t met Flint yet.", 0.33],
+  route17: ["Bell keeper", "Hear that rustle? Murkrow and Umbreon feed along Pilgrim Walk. Lyra’s Psychic attacks can’t touch a Dark Pokémon.", 0.18],
+  route21: ["Orchard forager", "Mossford is just beyond those trees. This old drovers’ path skirts the orchards all the way from Dewdrop to Bramble.", 0.24],
+  route22: ["Ferry pilot", "The middle bank is dry at both tides. From the far landing you can go east to the dunes or ask the rangers about the ash road west.", 0.48],
+  route23: ["Rail inspector", "The old freight line carried cinders down and apples back up. Follow it north to the furnace town or south to Mossford.", 0.17],
+  route24: ["Bell diver", "I can hear the first bell through the hull on a still day. Bellweather is across the western sound.", 0.72],
+};
+
 function routeLayout(world: Region, map: WorldMap) {
   const spec = routes[map.id.slice(5)];
-  const trail = traceTrail(localTrail(spec));
-  const at = (fraction: number) => trail[Math.round(fraction * (trail.length - 1))];
+  const { trail, at, beside, bypass, turnout } = surveyTrail(map.id.slice(5));
   const coast = map.palette === "coast", marsh = map.palette === "wetland";
   const crossing = map.id === "route22";
   const plan = floorPlan(map, coast || marsh ? "o" : "#");
   const { grid } = plan;
+  if (coast || marsh) {
+    for (const row of grid) row.fill("o");
+  }
   const interior = (x: number, y: number) => x > 0 && x < map.width - 1 && y > 0 && y < map.height - 1;
-  const constrain = ([x, y]: Point): Point => [
-    Math.max(3, Math.min(map.width - 4, Math.round(x))),
-    Math.max(3, Math.min(map.height - 4, Math.round(y))),
-  ];
   function oval([x, y]: Point, rx: number, ry: number, tile: string) {
     for (let j = -ry; j <= ry; j++)
       for (let i = -rx; i <= rx; i++)
         if (interior(x + i, y + j) && i * i / rx ** 2 + j * j / ry ** 2 <= 1)
           grid[y + j][x + i] = tile;
   }
-  function beside(fraction: number, distance: number): Point {
-    const [x, y] = at(fraction);
-    const before = at(fraction - 0.025), after = at(fraction + 0.025);
-    const dx = after[0] - before[0], dy = after[1] - before[1];
-    const length = Math.hypot(dx, dy) || 1;
-    return constrain([x - dy * distance / length, y + dx * distance / length]);
-  }
-
-  // Leave the outside of each bend wild. Vary the valley width at clearings,
-  // then take a second trail away from the road and back by the survey stop.
-  const excursion = excursions[map.id.slice(5)];
-  const bends: Point[] = excursion
-    ? excursion[1].map(([x, y]) => constrain([x - spec.x, y - spec.y]))
-    : [beside(0.38, spec.turnout), beside(0.48, spec.turnout), beside(0.57, spec.turnout)];
-  const turnout = bends[Math.floor(bends.length / 2)];
-  const bypass = traceTrail([at(excursion?.[0] ?? 0.29), ...bends, at(excursion?.[2] ?? 0.67)]);
   for (let i = 0; i < trail.length; i++) {
     const radius = 4 + Math.round(1.5 + 1.5 * Math.sin(i / 8));
     if (coast || marsh) oval(trail[i], radius + 2, radius + 1, "~");
@@ -714,6 +707,7 @@ function routeLayout(world: Region, map: WorldMap) {
         grid[y][x] = ["volcanic", "industrial", "mountain", "desert"].includes(spec.palette) ? "," : "f";
     }
   for (const p of bypass) oval(p, 1, 1, ",");
+  for (const [x, y] of bypass) grid[y][x] = ":";
   for (const [x, y] of trail)
     for (let j = -1; j <= 1; j++)
       for (let i = -1; i <= 1; i++) {
@@ -722,26 +716,32 @@ function routeLayout(world: Region, map: WorldMap) {
       }
   if (map.id === "route07" || map.id === "route23")
     for (const [x, y] of trail.slice(5, -5)) grid[y][x] = "t";
-  if (crossing) {
+  if (crossing || map.id === "route24") {
     // Two stretches of the Aurora Current separate the ferry's grass islands.
     for (let y = 1; y < map.height - 1; y++) {
-      const fraction = y / map.height;
-      if ((fraction > 0.23 && fraction < 0.38) || (fraction > 0.64 && fraction < 0.82))
-        for (let x = 1; x < map.width - 1; x++)
-          if (grid[y][x] !== "o") grid[y][x] = "~";
+      for (let x = 1; x < map.width - 1; x++) {
+        const fraction = crossing ? (y + 1.5 * Math.sin(x/4)) / map.height : x / map.width;
+        if (grid[y][x] !== "o" && ((fraction > 0.23 && fraction < 0.38) ||
+          (crossing && fraction > 0.64 && fraction < 0.82))) grid[y][x] = "~";
+      }
     }
   }
   const onward = map.exits[1];
   if (!onward.direction) relocateExit(world, map, onward, trail.at(-1)!);
+  const walker = walkers[map.id];
+  if (walker) map.objects.push({ kind: "person", id: "walker_" + map.id, name: walker[0],
+    dialogue: walker[1], roam: 1, x: 0, y: 0 });
   const sign = "sign_" + map.id;
   map.objects.push({ kind: "sign", id: sign, x: 0, y: 0, name: spec.landmark, dialogue: spec.note });
   const anchors: Record<string, Point> = {
     [sign]: turnout,
+    ["resident_" + map.id]: glade,
     ["trainer_" + map.id]: beside(0.22, -2),
     ["item_" + map.id]: bypass[Math.floor(bypass.length * 0.69)],
     [map.id + "_optional_0"]: beside(0.70, 3),
     [map.id + "_optional_1"]: bypass[Math.floor(bypass.length * 0.29)],
   };
+  if (walker) anchors["walker_" + map.id] = beside(walker[2], -3);
   const others = map.objects.filter(o => !anchors[o.id]);
   others.forEach((o, i) => {
     anchors[o.id] = beside(0.60 + 0.30 * (i + 1) / (others.length + 1), i % 2 ? -3 : 3);

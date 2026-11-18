@@ -11,6 +11,8 @@ const colors: Record<string, string> = {
   r: "#987959",
   w: "#b69a73",
   d: "#ebdda9",
+  ":": "#c5bd94",
+  t: "#997c67",
   "=": "#c89c68",
 };
 /** Draw the same tile grid used for exploration and collision, with north at the top. */
@@ -35,19 +37,20 @@ export function drawFieldMap(
     c.fillStyle = "#354e42";
     c.fillRect(e.x * scale, e.y * scale, scale, scale);
   }
+  const radius = Math.max(4, Math.round(Math.max(map.width, map.height) / 11));
   if (marker) {
     const mx = (marker.x + 0.5) * scale,
       my = (marker.y + 0.5) * scale;
     c.fillStyle = "#722e25";
-    c.fillRect(mx - 5, my - 5, 10, 10);
+    c.fillRect(mx - radius, my - radius, radius * 2, radius * 2);
     c.fillStyle = "#ffd069";
-    c.fillRect(mx - 3, my - 3, 6, 6);
+    c.fillRect(mx - radius * 0.6, my - radius * 0.6, radius * 1.2, radius * 1.2);
   }
   c.beginPath();
-  c.arc(x * scale, y * scale, 4, 0, Math.PI * 2);
+  c.arc(x * scale, y * scale, radius, 0, Math.PI * 2);
   c.fillStyle = "#f9f1d4";
   c.fill();
-  c.lineWidth = 2;
+  c.lineWidth = Math.max(2, radius / 3);
   c.strokeStyle = "#263e36";
   c.stroke();
 }

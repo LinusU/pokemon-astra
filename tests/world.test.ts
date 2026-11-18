@@ -6,13 +6,14 @@ import {
   type Requirement,
   type WorldMap,
 } from "../src/world";
+import { regionPosition } from "../src/game/region";
 import { interactionTarget } from "../src/game/actors";
 import { routes, localTrail, traceTrail, settlements } from "../src/world/atlas";
 import { barrierAt, connectionOffset, exitOpen } from "../src/game/navigation";
 
 const maps = Object.values(WORLD);
 const needsSurf = (map: WorldMap) =>
-  map.id === "route22" ||
+  ["route22", "route24"].includes(map.id) ||
   map.exits.some((exit) => map.tiles[exit.y][exit.x] === "~");
 const solidTerrain = (map: WorldMap, tile: string) =>
   "#orwBCPTS".includes(tile) || (!needsSurf(map) && tile === "~");
@@ -200,6 +201,7 @@ describe("authored region", () => {
     expect(exit("dewdrop", "route21").requires?.ability).toBe("cut");
     expect(exit("tideglass", "route22").requires?.ability).toBe("surf");
     expect(exit("mossford", "route23").requires?.ability).toBe("strength");
+    expect(exit("cinderfall", "route23").requires?.ability).toBe("rockSmash");
     expect(exit("tideglass", "route24").requires?.ability).toBe("whirlpool");
     expect(exit("dewdrop", "route25").requires?.flags).toContain("champion");
     expect(
@@ -593,4 +595,25 @@ it("authors a physical barrier for every gated campaign junction", () => {
       ).toBe(exit);
     }
   }
+});
+
+
+it("places every room at its exterior entrance and every road on its own uninterrupted track", () => {
+  const roadCells = new Map<string, string>();
+  for (const [number, r] of Object.entries(routes)) {
+    for (const [x, y] of traceTrail(r.line)) {
+      const key = x + "," + y;
+      expect(roadCells.get(key), "Route " + number + " crosses another road").toBeUndefined();
+      roadCells.set(key, number);
+      for (const t of Object.values(settlements))
+        expect(x >= t.x && x < t.x+t.width && y >= t.y && y < t.y+t.height, t.name).toBe(false);
+    }
+  }
+  for (const m of maps.filter(m => m.kind !== "route" && m.kind !== "town")) {
+    const { area, point } = regionPosition(m.id, 0, 0);
+    const site = WORLD[area];
+    expect(site.exits.some(e => !e.direction && regionPosition(area, e.x+0.5, e.y+0.5).point.join() === point.join()), m.id).toBe(true);
+  }
+  for (const m of maps) for (const o of m.objects.filter(o => o.wildlife))
+    expect(m.encounters.some(e => e.species === o.wildlife), o.name).toBe(true);
 });

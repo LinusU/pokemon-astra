@@ -1,4 +1,4 @@
-import { awardBadge, badgeMask, fieldTeam } from "./game/badges";
+import { awardBadge, badgeMask, fieldHabitats, fieldTeam } from "./game/badges";
 import { fishingPool } from "./game/pokedex";
 import { Input } from "./game/input";
 import { Renderer } from "./game/render";
@@ -10,7 +10,9 @@ import {
   connectedBlocked,
   crossConnection,
 } from "./game/navigation";
-import { directions, bearings } from "./game/journal";
+import { regionPosition } from "./game/region";
+import { mountRegionChart } from "./ui/region-map";
+import { campaignObjective, directions, bearings } from "./game/journal";
 import { drawFieldMap } from "./ui/field-map";
 import { mountBag, itemInfo, type BagState } from "./ui/bag";
 import { battleStatus, mountParty } from "./ui/party";
@@ -42,6 +44,7 @@ import {
 } from "./world";
 import { initEngine, type Engine } from "./engine";
 import "./styles.css";
+import "./ui/region-map.css";
 
 const input = new Input(),
   { canvas, layer } = createShell(input),
@@ -545,7 +548,7 @@ function interact() {
       save.party.length
     ) {
       const fish = fishingPool(map, (id) =>
-        engine.species(id).types.includes(21),
+        engine.species(id).types.includes(21), save,
       );
       const pick = fish[Math.floor(Math.random() * fish.length)];
       message("A Pokémon took the bait!", () =>
@@ -558,6 +561,15 @@ function interact() {
   }
   sound.overworld("interact");
   actors.face(o, save.x, save.y);
+  if (o.wildlife) {
+    if (!save.seen.includes(o.wildlife)) {
+      save.seen.push(o.wildlife);
+      persist();
+    }
+    cry(o.wildlife);
+    message(o.dialogue, undefined, o.name);
+    return;
+  }
   if (o.quest) {
     flag("met_" + o.id);
     persist();
@@ -700,7 +712,7 @@ function offerRematch(o: WorldObject, practice: boolean) {
     ? Math.floor((trainer.reward || 0) / 2)
     : trainer.reward || 0;
   const team = practice
-    ? fieldTeam(o, save.badges)
+    ? fieldTeam(o, save)
     : trainer.team.map((m) => ({
         ...m,
         level: Math.min(
@@ -998,6 +1010,13 @@ function view(v: string, pageIndex = 0) {
       ? `<h3>Choose your next beacon</h3><div class="buttons">${["Sunspire · Sable", "Cinderfall · Flint", "Rimepeak · Neve"].map((label, i) => save.flags.includes("badge" + (i + 4)) ? "" : `<button data-survey="${i + 4}" aria-pressed="${save.survey === i + 4}">${label}</button>`).join("")}</div>` : "";
     body = `${shores}<div class="objective"><strong>${escapeHtml(goal.title)}</strong><br>${escapeHtml(goal.hint)}</div><h3>Beacon badges</h3><p>${save.badges ? BADGES.filter((_, i) => badgeMask(save) & (1 << i)).join(" · ") : "Your first keeper is Fern in Bramble."}</p>${save.hallOfFame ? '<button id="hall">Hall of Fame</button>' : ""}${gates ? `<h3>Paths to revisit</h3><div class="journal-entries">${gates}</div>` : ""}<h3>Field requests</h3><div class="journal-entries">${entries.map((e) => e.html).join("") || "<p>No requests yet. Talk to people along the way.</p>"}</div>`;
   } else if (v === "map") {
+    title = "Astra region";
+    body = `<header class="atlas-header"><h2>Astra region</h2><div><button data-zoom aria-pressed="false">Zoom +</button><button id="local-map">Local map</button><button id="back">Back</button></div></header>
+      <div class="atlas-paper"><canvas class="region-chart" role="img"></canvas></div>
+      <div class="atlas-key"><span><i class="pin-player"></i>You</span><span><i class="pin-goal">✦</i>Journal</span><span><i class="pin-town"></i>Town</span><span><i class="pin-site"></i>Site</span></div>
+      <div class="atlas-readout"><button data-turn="-1" aria-label="Previous place">◀</button><div aria-live="polite"><strong data-place></strong><small data-links></small></div><button data-turn="1" aria-label="Next place">▶</button></div>
+      <button class="atlas-fly" data-travel="" hidden>Fly here</button>`;
+  } else if (v === "local-map") {
     const map = WORLD[save.map],
       goal = directions(save, has);
     title = map.name;
@@ -1030,8 +1049,8 @@ function view(v: string, pageIndex = 0) {
   const p = panel(
     layer,
     title,
-    `${body}<div class="buttons"><button class="secondary" id="back">Back</button></div>`,
-    "", fieldCursors[v] ??= {},
+    v === "map" ? body : `${body}<div class="buttons"><button class="secondary" id="back">Back</button></div>`,
+    v === "map" ? "atlas-screen" : "", fieldCursors[v] ??= {},
   );
   p
     .querySelector("#hall")
@@ -1043,6 +1062,12 @@ function view(v: string, pageIndex = 0) {
       view("journal");
     };
   });
+  if (v === "map") {
+    const objective = campaignObjective(save);
+    const marker = objective && regionPosition(objective.map.id, objective.object.x + 0.5, objective.object.y + 0.5);
+    mountRegionChart(p, save, marker?.point);
+    p.querySelector("#local-map")!.addEventListener("click", () => view("local-map"));
+  }
   const chart = p.querySelector<HTMLCanvasElement>(".field-map");
   if (chart)
     drawFieldMap(
@@ -1052,7 +1077,7 @@ function view(v: string, pageIndex = 0) {
       save.y,
       directions(save, has).marker,
     );
-  p.querySelector("#back")!.addEventListener("click", menu);
+  p.querySelector("#back")!.addEventListener("click", v === "local-map" ? () => view("map") : menu);
   p.querySelectorAll<HTMLButtonElement>("[data-deposit]").forEach(
     (b) =>
       (b.onclick = () => {
@@ -1392,7 +1417,7 @@ function startBattle(species: number, level: number, o?: WorldObject) {
     const opponent =
       o?.trainer && o.kind !== "legendary"
         ? {
-            party: (o.id.startsWith("rematch_") ? o.trainer.team : fieldTeam(o, save.badges)).map((m, i) =>
+            party: (o.id.startsWith("rematch_") ? o.trainer.team : fieldTeam(o, save)).map((m, i) =>
               engine.makePokemon(rivalSpecies(o, i, m.species), m.level),
             ),
           }
@@ -1797,10 +1822,11 @@ function update(dt: number) {
       encounterDistance = 0;
       encounterTarget = 8 + Math.random() * 14;
       const lured = save.flags.includes("lure_ready");
-      const minWeight = Math.min(...map.encounters.map((e) => e.weight));
+      const residents = fieldHabitats(map, save);
+      const minWeight = Math.min(...residents.map((e) => e.weight));
       const pool = lured
-        ? map.encounters.filter((e) => e.weight === minWeight)
-        : map.encounters;
+        ? residents.filter((e) => e.weight === minWeight)
+        : residents;
       if (lured) save.flags = save.flags.filter((f) => f !== "lure_ready");
       const total = pool.reduce((n, e) => n + e.weight, 0);
       let roll = Math.random() * total;

@@ -1,7 +1,8 @@
 import { expect, it } from "vitest";
 import { WORLD, type Requirement } from "../src/world";
 import { campaignObjective, directions, routeTo } from "../src/game/journal";
-import { freshSave } from "../src/game/save";
+import { awardBadge, badgeMask, fieldTeam } from "../src/game/badges";
+import { freshSave, meetsRequirement } from "../src/game/save";
 
 it("guides a fresh survey along open exits to every prerequisite in campaign order", () => {
   const s = freshSave();
@@ -40,9 +41,6 @@ it("guides a fresh survey along open exits to every prerequisite in campaign ord
 });
 
 
-import { awardBadge, badgeMask, fieldTeam } from "../src/game/badges";
-import { meetsRequirement } from "../src/game/save";
-
 it.each(["456", "465", "546", "564", "645", "654"])("can survey the three shores in order %s", order => {
   const save = freshSave();
   const has = (req?: Requirement) => meetsRequirement(save, req);
@@ -57,7 +55,7 @@ it.each(["456", "465", "546", "564", "645", "654"])("can survey the three shores
     const badge = goal.object.reward?.badge;
     if (badge) {
       if (save.badges >= 3 && save.badges < 6)
-        expect(fieldTeam(goal.object, save.badges).at(-1)?.level).toBe([29, 36, 42][save.badges - 3]);
+        expect(fieldTeam(goal.object, save).at(-1)?.level).toBe([29, 36, 42][save.badges - 3]);
       awardBadge(save, badge);
       awardBadge(save, badge);
       earned.push(badge);

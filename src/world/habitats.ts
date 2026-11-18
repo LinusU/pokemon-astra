@@ -47,6 +47,27 @@ const sanctuaryHabitats: Record<string, Habitat> = {
   aurora_3: [48, [4, 155, 5, 156, 6, 157]],
 };
 
+// Resident Pokémon are visible at particular survey spots. Seeing one supplies
+// a field record; catching it still uses the habitat's ordinary encounters.
+const residents: Record<string, [number, string, string]> = {
+  "01": [10, "Caterpie", "A Caterpie is chewing a neat crescent out of a leaf. Only the stem is left on the one beside it."],
+  "02": [187, "Hoppip", "The Hoppip catches a gust, touches down, then catches the very next gust back to its apple tree."],
+  "03": [164, "Noctowl", "Noctowl has picked the only branch above both paths. Its head turns long before its feet do."],
+  "05": [98, "Krabby", "Krabby sifts the damp sand into tiny pellets. A perfect little fan of them surrounds its burrow."],
+  "07": [81, "Magnemite", "Magnemite hovers over a discarded rail spike. When it turns, the spike turns with it."],
+  "08": [231, "Phanpy", "Phanpy has dug a hollow on the shady side of the dune. Only the tip of its trunk shows."],
+  "10": [195, "Quagsire", "Quagsire hardly moves. Then a single bubble breaks the surface and it snaps up a mouthful of reeds."],
+  "12": [218, "Slugma", "A Slugma is inching across the cinders. A dark trail behind it is still warm enough to shimmer."],
+  "14": [220, "Swinub", "Swinub noses beneath the scree. It comes up with a root and trots back to the sheltered side of the pass."],
+  "16": [188, "Skiploom", "Skiploom drifts above the bellflowers. Each time the little bell rings it turns toward the sound."],
+  "17": [198, "Murkrow", "A Murkrow has woven a purple ribbon through its nest. The loose end flutters all the way to the path."],
+  "19": [164, "Noctowl", "Noctowl balances on a survey stone. From the telescope platform its eyes could pass for a pair of stars."],
+  "21": [12, "Butterfree", "Butterfree leaves a dusting of pollen on the old bark, then circles back for another visit."],
+  "22": [79, "Slowpoke", "Slowpoke has been fishing here so long that the tide has gone out from under its tail."],
+  "23": [213, "Shuckle", "The little red stone has legs. Shuckle draws them back inside its shell when a pebble rattles downhill."],
+  "25": [152, "Chikorita", "The Chikorita points its leaf into the morning wind. A second set of tracks follows the first into the grass."],
+};
+
 export function populateHabitats(world: Record<string, WorldMap>) {
   const habitats = {
     ...Object.fromEntries(
@@ -55,6 +76,11 @@ export function populateHabitats(world: Record<string, WorldMap>) {
     ...sanctuaryHabitats,
   };
   for (const [id, [level, species]] of Object.entries(habitats)) {
+    const resident = residents[id.slice(5)];
+    if (resident) {
+      const [wildlife, name, dialogue] = resident;
+      world[id].objects.push({ id: "resident_" + id, wildlife, name, dialogue, kind: "sign", x: 0, y: 0 });
+    }
     world[id].encounters = species.map((species, index) => ({
       species,
       minLevel: level,

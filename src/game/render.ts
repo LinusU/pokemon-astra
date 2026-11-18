@@ -1,3 +1,4 @@
+import { trailPalette } from "../world/atlas";
 import { trailLandmark } from "./trail-landmarks";
 import { WORLD, type Exit, type WorldMap, type WorldObject } from "../world";
 import type { Engine } from "../engine";
@@ -403,6 +404,59 @@ export class Renderer {
     this.ground(c, x, y, p, m.palette);
     this.rock(c, px, py, p, m.palette);
   }
+  private ridge(c: CanvasRenderingContext2D, m: WorldMap, x: number, y: number, p: Palette) {
+    const px = x * 16, py = y * 16;
+    const joins = (dx: number, dy: number) => (m.tiles[y + dy]?.[x + dx] ?? "#") === "#";
+    const sandy = m.palette === "desert", snowy = m.palette === "snow", lava = m.palette === "volcanic";
+    const top = snowy ? "#dbe4da" : sandy ? "#ddc28e" : lava ? "#98776d" : "#99a394";
+    const light = snowy ? "#f5f3de" : sandy ? "#efdaa2" : lava ? "#b5957e" : "#c1c6ac";
+    const face = snowy ? "#91acbd" : sandy ? "#bb945e" : lava ? "#81615f" : "#7d8986";
+    const shadow = snowy ? "#71899a" : sandy ? "#987a58" : lava ? "#634d52" : "#596d6b";
+    c.fillStyle = top;
+    c.fillRect(px, py, 16, 16);
+    const seed = noise(x,y);
+    // Broken strata run across neighboring cells. Grit, snowdrifts and hot
+    // cracks distinguish the ridge tops even when their faces are out of view.
+    for (let i = 0; i < 16; i++) {
+      const u = px + i;
+      const offset = Math.round(5*Math.sin(u/27) + 3*Math.cos(u/16) + u/11);
+      const contour = ((offset - py) % 29 + 29) % 29;
+      if (contour < 14 && Math.sin(u/17 + (py+contour)/23) > -0.18) {
+        c.fillStyle = light;
+        c.fillRect(u, py+contour, 1, 1);
+        c.fillStyle = face;
+        c.fillRect(u, py+contour+1, 1, sandy ? 1 : 2);
+      }
+    }
+    if (seed % 4 < 2) {
+      const u = px+2+seed%6, v = py+3+(seed >>> 5)%8;
+      c.fillStyle = face;
+      c.fillRect(u,v,3,1);
+      if (!sandy) c.fillRect(u+2,v+1,4,1);
+      c.fillStyle = light;
+      c.fillRect(u+1,v-1,2,1);
+    }
+    if (!sandy && !snowy && seed % 11 === 0) {
+      c.fillStyle = shadow;
+      c.fillRect(px+3,py+4,4,1); c.fillRect(px+6,py+5,3,1); c.fillRect(px+8,py+6,1,3);
+      if (lava) { c.fillStyle = "#d89163"; c.fillRect(px+6,py+6,2,1); }
+    }
+    if (!joins(0,-1)) {
+      c.fillStyle = p.shade; c.fillRect(px,py,16,2);
+      c.fillStyle = light; c.fillRect(px,py+2,16,2);
+    }
+    if (!joins(-1,0)) { c.fillStyle = light; c.fillRect(px,py,2,16); }
+    if (!joins(1,0)) { c.fillStyle = face; c.fillRect(px+14,py,2,16); }
+    if (!joins(0,1)) {
+      c.fillStyle = light; c.fillRect(px,py+3,16,2);
+      c.fillStyle = shadow; c.fillRect(px,py+6,16,10);
+      c.fillStyle = face; c.fillRect(px,py+6,16,6);
+      const split = noise(x,y)%8+2;
+      c.fillStyle = shadow;
+      c.fillRect(px+split,py+7,2,3); c.fillRect(px+split-1,py+10,2,3);
+      c.fillStyle = light; c.fillRect(px+1,py+6,7,1);
+    }
+  }
   private room(m: WorldMap) {
     const type = buildingType(m.id);
     return (
@@ -554,24 +608,43 @@ export class Renderer {
       return;
     }
     if (ch === "#") {
-      if (out) this.barrier(c, m, x, y, p);
+      if (m.kind === "route" && BARREN.has(m.palette) &&
+          [[-1,0],[1,0],[0,-1],[0,1]].some(([dx,dy]) => m.tiles[y+dy]?.[x+dx] === "#"))
+        this.ridge(c,m,x,y,p);
+      else if (out) this.barrier(c, m, x, y, p);
       else if (dungeon) this.solidStone(c, m, x, y, dungeon);
       else this.roomWall(c, m, x, y);
+      return;
+    }
+    if (ch === ":") {
+      this.ground(c, x, y, p, m.palette);
+      c.fillStyle = p.path + "90";
+      c.fillRect(px, py, 16, 16);
+      const grit = noise(x, y) % 8;
+      c.fillStyle = p.shade;
+      c.fillRect(px + grit + 1, py + 5, 2, 1);
+      c.fillRect(px + 10, py + 10 + grit % 3, 1, 1);
       return;
     }
     if (ch === "t") {
       c.fillStyle = p.path;
       c.fillRect(px, py, 16, 16);
-      const horizontal = m.tiles[y][x - 1] === "t" || m.tiles[y][x + 1] === "t";
-      for (const pos of [2, 9]) {
-        c.fillStyle = "#9a795e";
-        if (horizontal) c.fillRect(px + pos, py + 2, 3, 12);
-        else c.fillRect(px + 2, py + pos, 12, 3);
-      }
-      for (const pos of [4, 11]) {
-        c.fillStyle = "#646669";
-        if (horizontal) c.fillRect(px, py + pos, 16, 2);
-        else c.fillRect(px + pos, py, 2, 16);
+      const track = (dx: number, dy: number) => m.tiles[y + dy]?.[x + dx] === "t";
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        if ((!dx && !dy) || !track(dx, dy)) continue;
+        if (dx && dy && (track(dx, 0) || track(0, dy))) continue;
+        const ties = (distance: number, across: number) =>
+          [px + 8 + dx * distance - dy * across, py + 8 + dy * distance + dx * across];
+        for (let k = -4; k <= 4; k++) {
+          c.fillStyle = "#9a795e";
+          const [u, v] = ties(4, k);
+          c.fillRect(u, v, 2, 2);
+        }
+        for (const side of [-3, 3]) for (let i = 0; i <= 8; i++) {
+          const [u, v] = ties(i, side);
+          c.fillStyle = "#61666a"; c.fillRect(u, v, 2, 2);
+          c.fillStyle = "#a9ae9d"; c.fillRect(u, v, 1, 1);
+        }
       }
       return;
     }
@@ -590,7 +663,7 @@ export class Renderer {
       c.fillStyle = "#c2e1d29c";
       c.fillRect(px + ((y * 3) % 8), py + 4, 5, 1);
       c.fillRect(px + 8, py + 11, 4, 1);
-      const n = (xx: number, yy: number) => m.tiles[yy]?.[xx] !== "~";
+      const n = (xx: number, yy: number) => !"o~".includes(m.tiles[yy]?.[xx] ?? "o");
       c.fillStyle = p.shade;
       if (n(x, y - 1)) c.fillRect(px, py, 16, 2);
       if (n(x, y + 1)) c.fillRect(px, py + 14, 16, 2);
@@ -660,13 +733,22 @@ export class Renderer {
       return;
     }
     if (ch === "=") {
-      c.fillStyle = "#85634d";
+      c.fillStyle = "#a7815e";
       c.fillRect(px, py, 16, 16);
-      for (let sy = 1; sy < 16; sy += 4) {
-        c.fillStyle = "#cfb37c";
-        c.fillRect(px + 1, py + sy, 14, 2);
-        c.fillStyle = "#584d40";
-        c.fillRect(px, py + sy + 2, 16, 1);
+      for (let sy = 0; sy < 16; sy += 4) {
+        c.fillStyle = (y + sy + x) % 3 ? "#c5a579" : "#bb996e";
+        c.fillRect(px, py + sy, 16, 3);
+        c.fillStyle = "#d7bb8a";
+        c.fillRect(px + (x + sy) % 6, py + sy, 7, 1);
+      }
+      for (const [dx, edge] of [[-1, 0], [1, 14]]) {
+        if (!"~o".includes(m.tiles[y]?.[x + dx] ?? ".")) continue;
+        c.fillStyle = "#765d4b";
+        c.fillRect(px + edge, py, 2, 16);
+        if (y % 2 === 0) {
+          c.fillStyle = "#5d5142"; c.fillRect(px + edge - 1, py + 1, 4, 6);
+          c.fillStyle = "#ead1a0"; c.fillRect(px + edge - 1, py + 1, 4, 2);
+        }
       }
       return;
     }
@@ -1013,11 +1095,16 @@ export class Renderer {
     ctx.imageSmoothingEnabled = false;
     const p = PALETTES[m.palette] || PALETTES.meadow;
     ctx.translate(-left * 16, -top * 16);
+    const themes: Record<string, WorldMap> = { [m.palette]: m };
     for (let y = top; y < top + height; y++)
-      for (let x = left; x < left + width; x++) this.tile(ctx, m, x, y, p);
+      for (let x = left; x < left + width; x++) {
+        const palette = m.kind === "route" ? trailPalette(m.id, x, y, m.palette) : m.palette;
+        const theme = themes[palette] ??= { ...m, palette };
+        this.tile(ctx, theme, x, y, PALETTES[palette] ?? p);
+      }
     // Original atlas landmarks replace occasional 2×2 obstacle clusters.
     const slot = GROVE_ART[m.palette];
-    if (slot !== undefined && this.outdoor(m))
+    if (slot !== undefined && this.outdoor(m) && m.kind !== "route")
       for (let y = top + 2; y < Math.min(m.height - 3, top + height); y += 4)
         for (let x = left + 2; x < Math.min(m.width - 3, left + width); x += 4) {
           if (
@@ -1438,6 +1525,18 @@ export class Renderer {
     if (o.kind === "item") {
       if (!done) this.npc(c, "item", x, y);
       return;
+    }
+    if (o.wildlife && this.engine) {
+      const species = o.wildlife;
+      const creature = this.sprite("mon:" + species, () => this.engine!.sprite(species));
+      if (creature) {
+        const phase = Math.floor(time / 160 + species) % 26;
+        const lift = phase < 5 ? [0,2,3,2,0][phase] : 0;
+        c.fillStyle = "#34483d47";
+        c.fillRect(x-5,y+3,10,2);
+        c.drawImage(creature,x-11,y-17-lift,22,22);
+        return;
+      }
     }
     if (o.kind === "legendary") {
       if (done) return;

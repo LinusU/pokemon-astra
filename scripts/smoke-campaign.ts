@@ -8,16 +8,19 @@ import { parseArgs } from "node:util";
 import { Engine, type BattleMon, type BattleOptions, type BattleSnapshot } from "../src/engine";
 import { MEDICINE, useMedicine } from "../src/game/medicine";
 import { freshSave, isValidSave, normalizeSavePosition, type Save } from "../src/game/save";
-import { awardBadge, badgeMask, fieldTeam } from "../src/game/badges";
+import { awardBadge, badgeMask, fieldHabitats, fieldTeam } from "../src/game/badges";
 import { WORLD, type WorldObject } from "../src/world";
 
 const { values: options } = parseArgs({
   options: {
     rom: { type: "string", default: "pokecrystal11.gbc" },
     starter: { type: "string" },
+    shores: { type: "string", default: "456" },
     "pre-mira": { type: "string" },
   },
 });
+const shoreOrder = [...options.shores!].map(Number);
+assert.equal([...shoreOrder].sort().join(""), "456", "Use each of 4, 5 and 6 once for --shores");
 const starterChoices = [58, 60, 69];
 const starters = options.starter ? [Number(options.starter)] : starterChoices;
 assert(starters.every((starter) => starterChoices.includes(starter)), "Choose starter 58, 60, or 69");
@@ -360,7 +363,7 @@ function runCampaign(starter: number) {
   }
 
   function makeRoster(object: WorldObject) {
-    return fieldTeam(object, save.badges).map(({ species, level }, index) => {
+    return fieldTeam(object, save).map(({ species, level }, index) => {
       const rival = /^rival_([1-4])$/.exec(object.id);
       const partner = rival && index === object.trainer!.team.length - 1
         ? rivalPartners[starter][Number(rival[1]) - 1] : species;
@@ -416,9 +419,12 @@ function runCampaign(starter: number) {
       makeLead(lead);
     }
     let outcome = fight({ party: roster });
-    if (requireVictory && save.badges < 8 && outcome !== "win") {
+    for (let retry = 0; requireVictory && save.badges < 8 && outcome !== "win" && retry < 3; retry++) {
       const lead = save.party[0];
       for (const previous of routePractice.slice(-2)) practice(previous);
+      for (const key of ["super_potion", "hyper_potion", "revive"] as const)
+        if (save.badges >= MEDICINE[key].badges && (save.items[key] ?? 0) < 3)
+          buy(key, 3, MEDICINE[key].price);
       save.party = save.party.map((mon) => engine.healPokemon(mon));
       makeLead(save.party.findIndex((mon) => mon.species === lead.species));
       outcome = fight({ party: roster });
@@ -444,16 +450,38 @@ function runCampaign(starter: number) {
   }
 
   console.log(`\nStarter: ${engine.species(starter).name}`);
-  for (let route = 1; route <= 20; route++) {
+  const shoreRoads: Record<number, number[]> = { 4: [8, 9], 5: [12, 13], 6: [14, 15] };
+  const order = [1,2,3,4,5,6,7];
+  // Going to the western keepers first takes the ferry and the ranger trail.
+  if (shoreOrder[0] !== 4) order.push(22, 11, 12);
+  for (const badge of shoreOrder) {
+    if (badge !== 4 && !order.includes(11)) order.push(10, 11);
+    for (const road of shoreRoads[badge])
+      if (!order.includes(road)) order.push(road);
+  }
+  if (!order.includes(10)) order.push(10);
+  order.push(16,17,18,19,20);
+  for (const route of order) {
     const map = WORLD[`route${String(route).padStart(2, "0")}`];
     const additions = route === 2 && starter !== 69 ? [69] : route === 3 && starter !== 58 ? [37] : [];
+    // Parties that came through the mines first can recruit a Dark partner
+    // on Pilgrim Walk before attempting Bellweather's Psychic gym.
+    if (route === 17 && !save.party.some(mon => mon.species === 229))
+      additions.push(197, 198);
     for (const species of [...(targetSpecies[route] ?? []), ...additions]) {
       if (save.party.some((mon) => mon.species === species)) continue;
+      if (route === 17 && species === 198 && save.party.some(mon => mon.species === 197)) continue;
       if (species === 105 && save.party.some((mon) => mon.species === 51)) continue;
-      const encounter = map.encounters.find((entry) => entry.species === species);
+      const encounter = fieldHabitats(map, save).find((entry) => entry.species === species);
       if (!encounter) continue;
       for (let attempt = 0; attempt < 2; attempt++) {
-        const [ballId, key, price] = ballStock.filter(([, , , badges]) => save.badges >= badges).at(-1)!;
+        const shop = ballStock.filter(([, , , badges]) => save.badges >= badges);
+        if (route === 17 && additions.includes(species) && save.money < 1600 &&
+            !shop.some(([, key]) => save.items[key] > 0)) {
+          for (const trainer of routePractice.slice(-2)) practice(trainer);
+        }
+        const [ballId, key, price] = shop.filter(([, key, price]) =>
+          (save.items[key] ?? 0) > 0 || save.money >= 3 * price).at(-1) ?? shop[0];
         if ((save.items[key] ?? 0) < 4) buy(key, Math.min(5, Math.floor(save.money / price)), price);
         bestBall = save.items[key] ? ballId : pokeballId;
         save.party = save.party.map((mon) => engine.healPokemon(mon));
@@ -481,7 +509,7 @@ function runCampaign(starter: number) {
     }
     for (const location of [map.id, ...(detours[route] ?? [])]) {
       for (const object of WORLD[location].objects) {
-        if (!object.trainer || object.kind === "legendary")
+        if (!object.trainer || object.kind === "legendary" || (object.requires?.badges ?? 0) > save.badges)
           continue;
         // The road teams may backtrack to town between training fights.
         save.party = save.party.map((mon) => engine.healPokemon(mon));
@@ -514,8 +542,20 @@ function runCampaign(starter: number) {
     const species = trainees[index % lastTrainers.length + 1]?.species;
     practice(trainer, save.party.findIndex((mon) => mon.species === species));
   }
+  const kit = Object.entries(leagueSupplies) as [keyof typeof leagueSupplies, number][];
+  const kitCost = kit.reduce((sum, [key, quantity]) =>
+    sum + Math.max(0, quantity - (save.items[key] ?? 0)) * MEDICINE[key].price, 0);
+  // Trainers on the return routes provide a last expedition if the team's
+  // captures and supplies have used most of its prize money.
+  for (const n of [21, 22, 23, 24]) {
+    if (save.money >= kitCost) break;
+    const scout = WORLD["route" + n].objects.find(o => o.id === "trainer_route" + n)!;
+    if (save.flags.includes(scout.setsFlag!)) continue;
+    save.party = save.party.map(mon => engine.healPokemon(mon));
+    challenge(scout, false);
+  }
   console.log(`League preparation: ${save.money} funds after ${trainerWins} trainer wins, ${practiceWins} rematches and ${captures} captures`);
-  for (const [key, quantity] of Object.entries(leagueSupplies) as [keyof typeof leagueSupplies, number][])
+  for (const [key, quantity] of kit)
     assert(buy(key, Math.max(0, quantity - (save.items[key] ?? 0)), MEDICINE[key].price), `Cannot afford League supplies: ${key}`);
 
   // One full heal before Rowan. Use only purchased supplies between chambers.

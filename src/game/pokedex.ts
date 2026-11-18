@@ -1,12 +1,13 @@
 import { WORLD, type Requirement, type WorldMap } from "../world";
+import { fieldHabitats } from "./badges";
 import type { Save } from "./save";
 
 export const dexFilters = ["All", "Seen", "Caught", "Missing", "Local"] as const;
 export type DexFilter = typeof dexFilters[number];
 const allSpecies = Array.from({ length: 251 }, (_, index) => index + 1);
 
-export function fishingPool(map: WorldMap, isWaterType: (id: number) => boolean) {
-  const pool = map.encounters.filter(entry => isWaterType(entry.species));
+export function fishingPool(map: WorldMap, isWaterType: (id: number) => boolean, save: Pick<Save, "badges" | "abilities">) {
+  const pool = fieldHabitats(map, save).filter(entry => isWaterType(entry.species));
   return pool.length ? pool : [{ species: 129, minLevel: 10 }];
 }
 
@@ -28,7 +29,7 @@ function guardianHint(requirement?: Requirement) {
   return "Fixed encounter";
 }
 
-export function buildDex(save: Pick<Save, "map" | "visited" | "flags" | "seen" | "caught">,
+export function buildDex(save: Pick<Save, "map" | "visited" | "flags" | "seen" | "caught" | "badges" | "abilities">,
   isWaterType: (id: number) => boolean) {
   const seen = new Set(save.seen);
   const caught = new Set(save.caught);
@@ -42,12 +43,12 @@ export function buildDex(save: Pick<Save, "map" | "visited" | "flags" | "seen" |
       habitats.set(id, records);
     }
     const total = map.encounters.reduce((sum, entry) => sum + entry.weight, 0);
-    for (const entry of map.encounters) {
+    for (const entry of fieldHabitats(map, save)) {
       const range = entry.minLevel === entry.maxLevel ? String(entry.minLevel) : `${entry.minLevel}–${entry.maxLevel}`;
       add(entry.species, "Tall grass", range, `${Math.round(entry.weight / total * 100)}% of encounters`);
     }
     if (map.tiles.some(row => row.includes("~"))) {
-      const pool = fishingPool(map, isWaterType);
+      const pool = fishingPool(map, isWaterType, save);
       for (const fish of pool) {
         add(fish.species, "Fishing", String(fish.minLevel), save.flags.includes("quest_angler_complete")
           ? `${Math.round(100 / pool.length)}% of bites` : "Complete the angler’s request");

@@ -73,6 +73,8 @@ export interface WorldObject {
   facing?: "up" | "down" | "left" | "right";
   roam?: number;
   sightRange?: number;
+  /** A wild resident that can be observed for the Pokédex. */
+  wildlife?: number;
 }
 export type BarrierKind = Exclude<Ability, "fly"> | "warden" | "shutter";
 export interface ExitBarrier {
@@ -738,6 +740,12 @@ for (const [n, name, a, b] of routeData) {
     if (arrival.requires) arrival.lockedDialogue = roadAdvice[n];
   }
 }
+// The two ends of the old freight road have different obstructions. Either
+// western keeper can open a way back to the orchards from their own side.
+const quarryCut = WORLD.cinderfall.exits.find(e => e.to === "route23")!;
+quarryCut.requires = { ability: "rockSmash" };
+quarryCut.lockedDialogue = "A rockslide covers the freight cutting. Flint’s Rock Smash can reopen it from the mine side.";
+
 connect("bellweather", "meridian_1", "Meridian HQ", "Bellweather", {
   flags: ["revelation"],
 });
@@ -2163,7 +2171,7 @@ for (const m of Object.values(WORLD)) {
       kind,
       flag:
         kind !== "warden" && kind !== "surf" && kind !== "shutter"
-          ? `field_${e.to.startsWith("route") ? e.to : m.id}`
+          ? e === quarryCut ? "field_quarry_cut" : `field_${e.to.startsWith("route") ? e.to : m.id}`
           : undefined,
     };
   }

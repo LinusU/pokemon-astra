@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildDex } from "../src/game/pokedex";
 
-const save = { map: "route02", visited: ["route02"], flags: [], seen: [69, 43], caught: [69] };
+const save = { badges: 0, abilities: [], map: "route02", visited: ["route02"], flags: [], seen: [69, 43], caught: [69] };
 const dex = buildDex(save, id => id === 60);
 
 describe("Pokédex field records", () => {
