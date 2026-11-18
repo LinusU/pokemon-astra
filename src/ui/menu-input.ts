@@ -1,4 +1,5 @@
 import type { Input } from "../game/input";
+import { dexController } from "./pokedex";
 import { bagController } from "./bag";
 
 const directions = ["up", "down", "left", "right"] as const;
@@ -44,7 +45,7 @@ function destination(
 }
 
 export class MenuInput {
-  private start?: Element | ReturnType<typeof bagController> | null;
+  private start?: Element | ReturnType<typeof dexController> | null;
   private repeating?: Direction;
   private repeatAt = 0;
 
@@ -54,7 +55,7 @@ export class MenuInput {
     now: number,
     battle: boolean,
   ) {
-    const bag = bagController(layer);
+    const controller = bagController(layer) ?? dexController(layer);
     const party = layer.querySelector<HTMLElement>(".party-screen");
     const scroller =
       layer.querySelector<HTMLElement>(
@@ -62,7 +63,7 @@ export class MenuInput {
       ) ?? layer;
     // Battle submenus replace their buttons without replacing the scene.
     const start =
-      bag ?? party ??
+      controller ?? party ??
       (battle
         ? scroller.querySelector("button:not(:disabled)")
         : layer.firstElementChild);
@@ -74,7 +75,7 @@ export class MenuInput {
     if (!pressed && !held) this.repeating = undefined;
     const direction =
       pressed ??
-      ((!battle || bag || party) && held && now >= this.repeatAt
+      ((!battle || controller || party) && held && now >= this.repeatAt
         ? this.repeating
         : undefined);
     if (pressed) {
@@ -83,9 +84,9 @@ export class MenuInput {
     } else if (direction) this.repeatAt = now + 95;
     const confirm = input.hit("a");
     if (!opened && !direction && !confirm) return;
-    if (bag) {
-      if (confirm) bag.input("a");
-      else if (direction) bag.input(direction);
+    if (controller) {
+      if (confirm) controller.input("a");
+      else if (direction) controller.input(direction);
       return;
     }
     if (party) {

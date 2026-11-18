@@ -13,6 +13,7 @@ import { directions, bearings } from "./game/journal";
 import { drawFieldMap } from "./ui/field-map";
 import { mountBag, itemInfo, type BagState } from "./ui/bag";
 import { battleStatus, mountParty } from "./ui/party";
+import { mountPokedex, type DexState } from "./ui/pokedex";
 import { MenuInput } from "./ui/menu-input";
 import { MEDICINE, isMedicine, useMedicine } from "./game/medicine";
 import { GameAudio } from "./game/audio";
@@ -179,6 +180,7 @@ function persist() {
 function restoreSession(data: Save) {
   save = normalizeSavePosition(restoreQuestItems(data));
   fieldBagState = {};
+  fieldDexState = {};
   fieldCursors = {};
   journeySelection = "party";
   actors.reset();
@@ -863,6 +865,7 @@ function depart(destination: string, move: () => void) {
 }
 let journeySelection = "party";
 let fieldBagState: BagState = {};
+let fieldDexState: DexState = {};
 let fieldCursors: Record<string, PanelCursor> = {};
 function menu() {
   mode = "menu";
@@ -904,7 +907,7 @@ function menu() {
     };
   }
 }
-function view(v: string, pageIndex = 0, missingOnly = false) {
+function view(v: string, pageIndex = 0) {
   mode = "menu";
   if (v === "storage" && duringLeagueChallenge()) {
     message(
@@ -937,38 +940,10 @@ function view(v: string, pageIndex = 0, missingOnly = false) {
     });
     return;
   } else if (v === "dex") {
-    title = `Pokédex · ${save.caught.length} / 251`;
-    const ids = Array.from({ length: 251 }, (_, i) => i + 1).filter(
-      (id) => !missingOnly || !save.caught.includes(id),
-    );
-    const perPage = 12;
-    const pages = Math.max(1, Math.ceil(ids.length / perPage));
-    body = `<div class="buttons"><button id="filter">${missingOnly ? "Show all" : "Show missing"}</button><button id="prev" ${pageIndex === 0 ? "disabled" : ""}>◂</button><span class="page-count">${pageIndex + 1} / ${pages}</span><button id="next" ${pageIndex + 1 >= pages ? "disabled" : ""}>▸</button></div><div class="journal-entries">${
-      ids
-        .slice(perPage * pageIndex, perPage * (pageIndex + 1))
-        .map((id) => {
-          const maps = Object.values(WORLD).filter(
-            (m) =>
-              m.encounters.some((e) => e.species === id) ||
-              m.objects.some(
-                (o) =>
-                  (o.kind === "legendary" &&
-                    o.trainer?.team[0].species === id) ||
-                  o.reward?.species === id,
-              ),
-          );
-          const name = save.seen.includes(id)
-            ? escapeHtml(engine.species(id).name)
-            : "Unknown";
-          return `<article><strong>${String(id).padStart(3, "0")} · ${name}${save.caught.includes(id) ? " ✓" : ""}</strong><br><span class="small muted">${escapeHtml(
-            maps
-              .slice(0, 3)
-              .map((m) => m.name)
-              .join(", ") || "Alder’s lab",
-          )}</span></article>`;
-        })
-        .join("") || "<p>You’ve caught every species!</p>"
-    }</div>`;
+    mountPokedex(layer, {
+      save, state: fieldDexState, species: id => engine.species(id), sprite, cry, onCancel: menu,
+    });
+    return;
   } else if (v === "journal") {
     title = "Beacon journal";
     const goal = directions(save, has);
@@ -1053,15 +1028,6 @@ function view(v: string, pageIndex = 0, missingOnly = false) {
     `${body}<div class="buttons"><button class="secondary" id="back">Back</button></div>`,
     "", fieldCursors[v] ??= {},
   );
-  p
-    .querySelector("#filter")
-    ?.addEventListener("click", () => view(v, 0, !missingOnly));
-  p
-    .querySelector("#prev")
-    ?.addEventListener("click", () => view(v, pageIndex - 1, missingOnly));
-  p
-    .querySelector("#next")
-    ?.addEventListener("click", () => view(v, pageIndex + 1, missingOnly));
   p
     .querySelector("#hall")
     ?.addEventListener("click", () => hallOfFame(() => view("journal")));

@@ -1,0 +1,222 @@
+.pokedex {
+  position: absolute;
+  inset: 0;
+  container-type: inline-size;
+  --dex-ink: #193d37;
+  --dex-muted: #48675d;
+  --dex-paper: #f5f1d9;
+  --dex-line: #bdc9ae;
+  --dex-red: #a63935;
+  background: var(--dex-paper);
+  color: var(--dex-ink);
+  font-family: "VT323", monospace;
+}
+
+.dex-frame {
+  height: 100%;
+  display: grid;
+  grid-template-rows: 14% 13% minmax(0, 1fr) 11%;
+  font-size: 5.2cqw;
+  line-height: 1;
+}
+
+.pokedex :is(h2, h3, p) { margin: 0; }
+.pokedex button {
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  line-height: 1;
+}
+.pokedex button:focus { outline: none; }
+.pokedex button:focus-visible { outline: 0.48cqw solid currentColor; outline-offset: -0.48cqw; }
+
+.dex-head, .dex-foot, .dex-filters, .dex-entry-nav, .dex-subhead, .dex-pager,
+.dex-head h2, .dex-totals, .dex-status, .dex-types, .dex-foot button {
+  display: flex;
+  align-items: center;
+}
+.dex-head {
+  justify-content: space-between;
+  padding: 0 2.6cqw;
+  background: var(--dex-red);
+  color: #fff5dc;
+  border-bottom: 0.8cqw solid #772f30;
+}
+.dex-head h2 { gap: 1.6cqw; font-size: 7.7cqw; font-weight: 400; }
+.dex-head h2 i {
+  width: 4.2cqw;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 0.48cqw solid #fff9dc;
+  background: radial-gradient(circle at 35% 30%, white 0 13%, #98e2d7 15% 38%, #538f8d 40% 63%, #254f57 66%);
+  box-shadow: 0 0 0 0.42cqw #782e2a;
+}
+.dex-totals { gap: 2.8cqw; font-size: 4.8cqw; }
+.dex-totals b { font-weight: 400; color: white; }
+
+.dex-filters, .dex-entry-nav {
+  padding: 0 2cqw;
+  border-bottom: 0.4cqw solid var(--dex-line);
+  background: #e4e8ce;
+}
+.dex-filters { gap: 0.8cqw; }
+.dex-filters button {
+  flex: 1;
+  height: 78%;
+  border-radius: 0.7cqw;
+  color: var(--dex-muted);
+}
+.dex-filters [aria-pressed="true"] { color: var(--dex-ink); background: #c5d7bb; }
+.pokedex[data-mode="filters"] .dex-filters [aria-pressed="true"] {
+  color: white;
+  background: var(--dex-ink);
+  outline: 0.4cqw solid #e4e8ce;
+  outline-offset: -0.9cqw;
+}
+.dex-entry-nav, .dex-subhead { justify-content: space-between; }
+.dex-entry-nav > span, .dex-subhead > span, .dex-location small {
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+.dex-body {
+  display: grid;
+  grid-template-columns: 36% minmax(0, 1fr);
+  min-height: 0;
+  gap: 2.2cqw;
+  padding: 2.1cqw;
+}
+.dex-specimen {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto 4.8cqw;
+  gap: 0.7cqw;
+  text-align: center;
+}
+.dex-plate {
+  position: relative;
+  display: grid;
+  place-items: center;
+  border: 0.45cqw solid #98ad98;
+  border-radius: 0.8cqw;
+  background-color: #dce5c9;
+  background-image: linear-gradient(#aec6ac55 1px, transparent 1px), linear-gradient(90deg, #aec6ac55 1px, transparent 1px);
+  background-size: 3.4cqw 3.4cqw;
+}
+.dex-number, .dex-status {
+  position: absolute;
+  left: 1cqw;
+  padding: 0 0.8cqw;
+  background: #dce5c9;
+  font-size: 4.4cqw;
+}
+.dex-number { top: 0.8cqw; color: var(--dex-muted); }
+.dex-status { bottom: 0.8cqw; gap: 1cqw; }
+.dex-plate img {
+  width: 78%;
+  height: 70%;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+.dex-unknown { font-size: 15cqw; color: #78967e; }
+.dex-name { font-size: 5.8cqw; font-weight: 400; white-space: nowrap; }
+.dex-types { justify-content: center; gap: 0.7cqw; }
+.dex-types span {
+  padding: 0 1cqw;
+  border-radius: 0.5cqw;
+  background: #d9dfc3;
+  color: #385346;
+  font-size: 4.3cqw;
+}
+.dex-register {
+  display: grid;
+  grid-template-rows: 6.2cqw minmax(0, 1fr);
+  min-height: 0;
+  border: 0.4cqw solid var(--dex-line);
+  border-radius: 0.8cqw;
+  background: #fffae7;
+  overflow: hidden;
+}
+.dex-subhead {
+  padding-left: 1.6cqw;
+  background: #e4e8ce;
+  color: var(--dex-muted);
+  font-size: 4.4cqw;
+}
+.dex-pager { gap: 0.65cqw; white-space: nowrap; }
+.dex-pager button { align-self: stretch; width: 5.4cqw; font-size: 5.5cqw; }
+.dex-pager button:disabled { opacity: 0.28; }
+.dex-rows { display: grid; grid-template-rows: repeat(6, minmax(0, 1fr)); }
+.dex-rows button {
+  display: grid;
+  grid-template-columns: 7.2cqw minmax(0,1fr) auto;
+  align-items: center;
+  gap: 1.4cqw;
+  padding: 0 2cqw;
+  text-align: left;
+  border-bottom: 0.3cqw solid #dce1ca;
+}
+.dex-rows button > span { font-size: 4.5cqw; color: var(--dex-muted); }
+.dex-rows b { font-weight: 400; white-space: nowrap; }
+.dex-rows [aria-current="true"] { background: #e5ecd6; }
+.pokedex[data-mode="list"] .dex-rows [aria-current="true"] {
+  background: var(--dex-ink);
+  box-shadow: inset 1cqw 0 #cfaa63;
+  color: #fff8dd;
+  outline: none;
+}
+.pokedex[data-mode="list"] .dex-rows [aria-current="true"] > span { color: #bed7c7; }
+.dex-mark {
+  position: relative;
+  display: inline-block;
+  width: 2.7cqw;
+  height: 2.7cqw;
+  border-radius: 50%;
+  border: 0.4cqw solid currentColor;
+}
+.dex-mark[data-mark="Caught"] { background: linear-gradient(currentColor 47%, transparent 47%); }
+.dex-mark[data-mark="Caught"]::after {
+  content: "";
+  position: absolute;
+  inset: 27%;
+  border-radius: 50%;
+  background: var(--dex-paper);
+  box-shadow: 0 0 0 0.25cqw var(--dex-ink);
+}
+.dex-mark[data-mark="Unseen"] { height: 0.4cqw; border: 0; background: currentColor; opacity: 0.5; }
+.dex-empty {
+  grid-row: 1 / -1;
+  align-self: center;
+  padding: 2cqw;
+  text-align: center;
+}
+.dex-empty small { display: block; margin-top: 1cqw; color: var(--dex-muted); }
+.dex-record { grid-template-rows: 6.2cqw minmax(0, 1fr) auto; }
+.dex-record:focus { outline: none; }
+.dex-location { align-self: center; padding: 1.6cqw 2.4cqw; }
+.dex-location small { display: block; color: var(--dex-muted); font-size: 4.1cqw; }
+.dex-location h3 { margin-top: 1cqw; font-size: 6.4cqw; font-weight: 400; }
+.dex-method { display: grid; gap: 0.7cqw; margin: 0 2.4cqw; padding: 1.6cqw 0; border-top: 0.4cqw solid var(--dex-line); }
+.dex-method strong { font-weight: 400; }
+.dex-method span { font-size: 4.5cqw; color: var(--dex-muted); }
+.dex-foot {
+  justify-content: space-between;
+  gap: 1cqw;
+  padding: 0 2.1cqw;
+  background: var(--dex-ink);
+  color: #f8f1d9;
+  font-size: 4.6cqw;
+  white-space: nowrap;
+}
+.dex-foot button { gap: 0.8cqw; height: 100%; }
+.dex-foot #back { margin-left: auto; }
+.dex-foot kbd {
+  min-width: 3.8cqw;
+  padding: 0 0.4cqw;
+  border-radius: 0.65cqw;
+  background: #dedabc;
+  color: var(--dex-ink);
+  font: inherit;
+  text-align: center;
+}
