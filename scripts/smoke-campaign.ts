@@ -8,7 +8,8 @@ import { parseArgs } from "node:util";
 import { Engine, type BattleMon, type BattleOptions, type BattleSnapshot } from "../src/engine";
 import { MEDICINE, useMedicine } from "../src/game/medicine";
 import { freshSave, isValidSave, normalizeSavePosition, type Save } from "../src/game/save";
-import { ABILITIES, WORLD, type WorldObject } from "../src/world";
+import { awardBadge, badgeMask, fieldTeam } from "../src/game/badges";
+import { WORLD, type WorldObject } from "../src/world";
 
 const { values: options } = parseArgs({
   options: {
@@ -322,7 +323,7 @@ function runCampaign(starter: number) {
       seen: save.seen,
       caught: save.caught,
       seed: seed++,
-      badges: (1 << save.badges) - 1,
+      badges: badgeMask(save),
       money: save.money,
       balls: ballStock.map(([id, key]) => [id, save.items[key] ?? 0]),
       items: Object.entries(MEDICINE).map(([key, item]) => [item.id, save.items[key] ?? 0]),
@@ -359,7 +360,7 @@ function runCampaign(starter: number) {
   }
 
   function makeRoster(object: WorldObject) {
-    return object.trainer!.team.map(({ species, level }, index) => {
+    return fieldTeam(object, save.badges).map(({ species, level }, index) => {
       const rival = /^rival_([1-4])$/.exec(object.id);
       const partner = rival && index === object.trainer!.team.length - 1
         ? rivalPartners[starter][Number(rival[1]) - 1] : species;
@@ -430,7 +431,7 @@ function runCampaign(starter: number) {
     console.log(trainer.name, outcome, save.party.map(({ nickname, level }) => `${nickname} ${level}`).join(", "));
     if (requireVictory) assert.equal(outcome, "win", `Lost a required battle against ${trainer.name}`);
     if (object.kind === "leader") {
-      save.abilities.push(ABILITIES[save.badges++]);
+      awardBadge(save, object.reward!.badge!);
     }
   }
 

@@ -1,3 +1,4 @@
+import { awardBadge, badgeMask, fieldTeam } from "./game/badges";
 import { fishingPool } from "./game/pokedex";
 import { Input } from "./game/input";
 import { Renderer } from "./game/render";
@@ -439,7 +440,7 @@ function rewardReceipt(r?: Reward) {
 function applyReward(r?: Reward) {
   if (!r) return;
   if (r.takeItem) delete save.items[r.takeItem];
-  if (r.badge) save.badges = Math.max(save.badges, r.badge);
+  if (r.badge) awardBadge(save, r.badge);
   if (r.ability && !save.abilities.includes(r.ability))
     save.abilities.push(r.ability);
   if (r.money) save.money = Math.min(999999, save.money + r.money);
@@ -699,7 +700,7 @@ function offerRematch(o: WorldObject, practice: boolean) {
     ? Math.floor((trainer.reward || 0) / 2)
     : trainer.reward || 0;
   const team = practice
-    ? trainer.team
+    ? fieldTeam(o, save.badges)
     : trainer.team.map((m) => ({
         ...m,
         level: Math.min(
@@ -993,7 +994,9 @@ function view(v: string, pageIndex = 0) {
         Number(b.ready) - Number(a.ready) ||
         Number(b.local) - Number(a.local),
     );
-    body = `<div class="objective"><strong>${escapeHtml(goal.title)}</strong><br>${escapeHtml(goal.hint)}</div><h3>Beacon badges</h3><p>${save.badges ? BADGES.slice(0, save.badges).join(" · ") : "Your first keeper is Fern in Bramble."}</p>${save.hallOfFame ? '<button id="hall">Hall of Fame</button>' : ""}${gates ? `<h3>Paths to revisit</h3><div class="journal-entries">${gates}</div>` : ""}<h3>Field requests</h3><div class="journal-entries">${entries.map((e) => e.html).join("") || "<p>No requests yet. Talk to people along the way.</p>"}</div>`;
+    const shores = save.badges >= 3 && save.badges < 6
+      ? `<h3>Choose your next beacon</h3><div class="buttons">${["Sunspire · Sable", "Cinderfall · Flint", "Rimepeak · Neve"].map((label, i) => save.flags.includes("badge" + (i + 4)) ? "" : `<button data-survey="${i + 4}" aria-pressed="${save.survey === i + 4}">${label}</button>`).join("")}</div>` : "";
+    body = `${shores}<div class="objective"><strong>${escapeHtml(goal.title)}</strong><br>${escapeHtml(goal.hint)}</div><h3>Beacon badges</h3><p>${save.badges ? BADGES.filter((_, i) => badgeMask(save) & (1 << i)).join(" · ") : "Your first keeper is Fern in Bramble."}</p>${save.hallOfFame ? '<button id="hall">Hall of Fame</button>' : ""}${gates ? `<h3>Paths to revisit</h3><div class="journal-entries">${gates}</div>` : ""}<h3>Field requests</h3><div class="journal-entries">${entries.map((e) => e.html).join("") || "<p>No requests yet. Talk to people along the way.</p>"}</div>`;
   } else if (v === "map") {
     const map = WORLD[save.map],
       goal = directions(save, has);
@@ -1033,6 +1036,13 @@ function view(v: string, pageIndex = 0) {
   p
     .querySelector("#hall")
     ?.addEventListener("click", () => hallOfFame(() => view("journal")));
+  p.querySelectorAll<HTMLButtonElement>("[data-survey]").forEach(button => {
+    button.onclick = () => {
+      save.survey = Number(button.dataset.survey);
+      persist();
+      view("journal");
+    };
+  });
   const chart = p.querySelector<HTMLCanvasElement>(".field-map");
   if (chart)
     drawFieldMap(
@@ -1382,7 +1392,7 @@ function startBattle(species: number, level: number, o?: WorldObject) {
     const opponent =
       o?.trainer && o.kind !== "legendary"
         ? {
-            party: o.trainer.team.map((m, i) =>
+            party: (o.id.startsWith("rematch_") ? o.trainer.team : fieldTeam(o, save.badges)).map((m, i) =>
               engine.makePokemon(rivalSpecies(o, i, m.species), m.level),
             ),
           }
@@ -1398,7 +1408,7 @@ function startBattle(species: number, level: number, o?: WorldObject) {
         save.items[key] || 0,
       ]),
       money: save.money,
-      badges: (1 << save.badges) - 1,
+      badges: badgeMask(save),
       seen: save.seen,
       caught: save.caught,
     });
@@ -1434,7 +1444,7 @@ function showBattle() {
     if (caughtSpecies && !save.caught.includes(caughtSpecies))
       save.caught.push(caughtSpecies);
     const won = ["win", "won", "victory"].includes(s.outcome.toLowerCase());
-    const earnedBadge = won && (battleObject?.reward?.badge ?? 0) > save.badges;
+    const earnedBadge = won && !!battleObject?.reward?.badge && !(badgeMask(save) & (1 << (battleObject.reward.badge - 1)));
     let receipt = "";
     if (
       battleObject &&

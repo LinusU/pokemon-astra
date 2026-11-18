@@ -65,10 +65,17 @@ const chapters: Chapter[] = [
   { title: "Record 251 species for the Living Atlas", steps: ["quest_atlas"] },
 ];
 
-export function campaignObjective(save: Pick<Save, "flags">) {
+export function campaignObjective(save: Pick<Save, "flags" | "survey">) {
   const done = (id: string) =>
     save.flags.includes(landmarks.get(id)!.object.setsFlag!);
-  for (const chapter of chapters) {
+  // A chosen shore takes priority until its keeper awards the badge.
+  const shore = save.survey;
+  const ids = shore === 4 ? ["hourglass", "gym4"] :
+    shore === 5 ? ["bamboo", "ember", "gym5"] : ["bamboo", "frostvault", "gym6"];
+  const selected = shore && save.flags.includes("badge3") && !save.flags.includes("badge" + shore)
+    ? ids.map(id => chapters.find(chapter => chapter.steps[0].startsWith(id + "_"))!)
+    : [];
+  for (const chapter of [...selected, ...chapters]) {
     // A completed chapter stays complete when maps gain new mechanisms.
     if (done(chapter.steps[chapter.steps.length - 1])) continue;
     const step = chapter.steps.find((id) => !done(id))!;

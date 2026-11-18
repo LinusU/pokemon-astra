@@ -19,6 +19,7 @@ export type Save = {
   money: number;
   visited: string[];
   steps: number;
+  survey?: number;
   center?: string;
   hallOfFame?: { species: number; level: number }[];
   repel?: number;
@@ -134,6 +135,7 @@ export function isValidSave(x: any): x is Save {
     ) &&
     integer(x.money, 0, 999999) &&
     integer(x.badges, 0, 8) &&
+    (x.survey === undefined || integer(x.survey, 4, 6)) &&
     typeof x.steps === "number" &&
     Number.isFinite(x.steps) &&
     x.steps >= 0 &&

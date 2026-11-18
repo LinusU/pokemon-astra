@@ -38,3 +38,34 @@ it("guides a fresh survey along open exits to every prerequisite in campaign ord
   expect(campaignObjective(s)).toBeUndefined();
   expect(WORLD[s.map].kind).toBe("dungeon");
 });
+
+
+import { awardBadge, badgeMask, fieldTeam } from "../src/game/badges";
+import { meetsRequirement } from "../src/game/save";
+
+it.each(["456", "465", "546", "564", "645", "654"])("can survey the three shores in order %s", order => {
+  const save = freshSave();
+  const has = (req?: Requirement) => meetsRequirement(save, req);
+  const earned: number[] = [];
+  for (let i = 0; i < 110 && !save.flags.includes("champion"); i++) {
+    if (save.badges >= 3 && save.badges < 6) save.survey = Number(order[save.badges - 3]);
+    const goal = campaignObjective(save)!;
+    if (save.map !== goal.map.id)
+      expect(routeTo(save.map, goal.map.id, has).at(-1)?.to, goal.title).toBe(goal.map.id);
+    expect(has(goal.object.requires), goal.title).toBe(true);
+    save.map = goal.map.id;
+    const badge = goal.object.reward?.badge;
+    if (badge) {
+      if (save.badges >= 3 && save.badges < 6)
+        expect(fieldTeam(goal.object, save.badges).at(-1)?.level).toBe([29, 36, 42][save.badges - 3]);
+      awardBadge(save, badge);
+      awardBadge(save, badge);
+      earned.push(badge);
+      expect(save.badges).toBe(earned.length);
+      expect(badgeMask(save)).toBe(earned.reduce((bits, id) => bits | (1 << (id - 1)), 0));
+    }
+    save.flags.push(goal.object.setsFlag!);
+  }
+  expect(earned.join("")).toBe("123" + order + "78");
+  expect(save.flags).toContain("champion");
+});

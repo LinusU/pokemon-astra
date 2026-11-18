@@ -25,7 +25,7 @@ function can(
     !req ||
     ((req.flags ?? []).every((f) => flags.has(f)) &&
       badges >= (req.badges ?? 0) &&
-      (!req.ability || ABILITIES.indexOf(req.ability) < badges) &&
+      (!req.ability || flags.has("badge" + (ABILITIES.indexOf(req.ability) + 1))) &&
       caught >= (req.caught ?? 0))
   );
 }
@@ -217,8 +217,7 @@ describe("authored region", () => {
       [0, "tideglass"],
       [1, "copperwick"],
       [2, "sunspire"],
-      [3, "reedhaven"],
-      [4, "rimepeak"],
+      [2, "reedhaven"],
       [5, "bellweather"],
       [6, "aster"],
       [7, "crown"],
@@ -233,13 +232,10 @@ describe("authored region", () => {
           const m = WORLD[id];
           for (const o of m.objects)
             if (can(o.requires, flags, badges)) {
-              if (o.reward?.badge && o.reward.badge > cap) continue;
+              if (o.reward?.badge && badges >= cap) continue;
               if (o.setsFlag && !flags.has(o.setsFlag)) {
                 flags.add(o.setsFlag);
-                changed = true;
-              }
-              if (o.reward?.badge && o.reward.badge > badges) {
-                badges = o.reward.badge;
+                if (o.reward?.badge) badges++;
                 changed = true;
               }
             }
@@ -266,10 +262,7 @@ describe("authored region", () => {
           if (can(o.requires, flags, badges, 0)) {
             if (o.setsFlag && !flags.has(o.setsFlag)) {
               flags.add(o.setsFlag);
-              changed = true;
-            }
-            if (o.reward?.badge && o.reward.badge > badges) {
-              badges = o.reward.badge;
+              if (o.reward?.badge) badges++;
               changed = true;
             }
           }
