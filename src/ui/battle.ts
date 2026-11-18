@@ -545,7 +545,7 @@ export class BattlePresenter {
     this.queue = [...snapshot.events] as Event[];
     this.clearCapture();
     this.choosing = false;
-    this.root.classList.remove("battle-choosing");
+    this.root.classList.remove("battle-choosing", "battle-moves");
     this.root.querySelector(".battle-controls")!.innerHTML = "";
     this.next();
   }
@@ -905,8 +905,9 @@ export class BattlePresenter {
       return;
     }
     if (this.category) {
+      const previous = this.category;
       this.category = "";
-      this.menu();
+      this.menu(previous);
       return;
     }
     const actions = this.snapshot.legal as any[];
@@ -974,12 +975,11 @@ export class BattlePresenter {
       onCancel: () => {
         this.closeBag();
         this.category = "";
-        this.menu();
-        this.root.querySelector<HTMLButtonElement>('[data-group="BAG"]')?.focus({ preventScroll: true });
+        this.menu("BAG");
       },
     });
   }
-  private menu() {
+  private menu(previousGroup = "") {
     this.choosing = true;
     const s = this.snapshot,
       actions = s.legal as any[],
@@ -1065,11 +1065,25 @@ export class BattlePresenter {
         : "Choose a move.";
     }
     const controls = this.root.querySelector<HTMLElement>(".battle-controls")!;
+    const moveMenu = this.category === "FIGHT" || s.site === "MoveSelection" || this.bagTarget !== undefined;
+    this.root.classList.toggle("battle-moves", moveMenu);
     let entries: string[];
     if (standard && !this.category) {
       entries = ["FIGHT", "BAG", "PARTY", "RUN"].map((g) =>
         `<button data-group="${g}" aria-label="${g === "PARTY" ? "Pokémon" : g}"${g === "BAG" || actions.some((a) => group(a) === g) ? "" : " disabled"}>${g === "PARTY" ? "POKÉMON" : g}</button>`,
       );
+    } else if (moveMenu) {
+      const target = this.bagTarget;
+      const mon = target === undefined ? active : s.state.player.party![target];
+      entries = Array.from({ length: 4 }, (_, slot) => {
+        const id = mon.moves[slot];
+        if (!id) return '<span class="battle-empty-move" aria-hidden="true">—</span>';
+        const index = actions.findIndex((a) => target === undefined
+          ? a.Move?.slot === slot
+          : a.Item?.id === this.bagItem && a.Item.target === target && a.Item.move_slot === slot);
+        const detail = describeMove(id, mon.pp[slot]);
+        return `<button data-index="${index}" data-move-detail="${escapeHtml(detail)}"${index < 0 ? " disabled" : ""}>${escapeHtml(this.o.move(id).name)}</button>`;
+      });
     } else if (standard && this.bagItem !== undefined && this.bagTarget === undefined) {
       const targets = new Set<number>(actions.flatMap((a) => a.Item?.id === this.bagItem && a.Item.target != null ? [a.Item.target] : []));
       entries = Array.from(targets, (slot) => `<button data-target="${slot}">${escapeHtml(member(slot))}</button>`);
@@ -1082,13 +1096,13 @@ export class BattlePresenter {
           return `<button data-index="${i}"${detail ? ` data-move-detail="${escapeHtml(detail)}"` : ""}>${escapeHtml(label(a))}</button>`;
         });
     }
-    if (standard && this.category)
+    if (standard && this.category && !moveMenu)
       entries.push('<button data-back aria-label="Back">Back</button>');
     controls.innerHTML = entries.join("");
     if (controls.querySelector("[data-move-detail]")) {
       controls.querySelectorAll<HTMLButtonElement>("button").forEach((button) => {
         button.onfocus = () => {
-          copy.textContent = button.dataset.moveDetail?.split(" · ").join("\n") || "Choose a move.";
+          copy.textContent = button.dataset.moveDetail || "Choose a move.";
         };
       });
     }
@@ -1097,11 +1111,9 @@ export class BattlePresenter {
       ? actions.findIndex((a) => a.Move?.slot === last.slot)
       : -1;
     controls.scrollTop = 0;
-    const selected = controls.querySelector<HTMLButtonElement>(`[data-index="${preferred}"]`)
+    const selected = controls.querySelector<HTMLButtonElement>(`[data-group="${previousGroup}"], [data-index="${preferred}"]:not(:disabled)`)
       ?? controls.querySelector<HTMLButtonElement>("button:not(:disabled)");
     selected?.focus({ preventScroll: true });
-    if (selected && preferred >= 0)
-      selected.scrollIntoView({ block: "nearest" });
     controls.querySelectorAll<HTMLButtonElement>("[data-target]").forEach((button) => {
       button.onclick = () => {
         const target = Number(button.dataset.target);

@@ -533,11 +533,40 @@
 .battle-controls {
   grid-auto-rows: max-content;
 }
-.battle-controls:has([data-move-detail]) {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
 .battle-controls button {
   min-height: max(23px, 1.2em);
   height: auto;
   line-height: 1;
+}
+
+/* The four move positions stay put as PP and move availability change. */
+.battle-moves .battle-box {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0.7cqw;
+  padding: 0.8cqw 1.4cqw;
+}
+.battle-moves .battle-copy {
+  color: #46634c;
+  font-size: min(4.7cqw, 24px);
+  line-height: 1;
+  overflow: hidden;
+}
+.battle-moves .battle-controls,
+.battle-controls:has([data-group]) {
+  align-content: stretch;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  overflow: hidden;
+}
+.battle-moves .battle-controls > *,
+.battle-controls [data-group] {
+  align-content: center;
+  min-height: 0;
+  border: 1px solid #b5c5a3;
+  background: #ebeed5;
+  font-size: min(5.5cqw, 28px);
+  padding: 0 0.6cqw 0 3.6cqw;
+}
+.battle-empty-move {
+  color: #899781;
 }
