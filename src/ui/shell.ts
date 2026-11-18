@@ -1,3 +1,4 @@
+import { trackMenuCursor } from "./menu-cursor";
 import { Input, type Action } from "../game/input";
 export function createShell(input: Input) {
   document.querySelector<HTMLDivElement>("#app")!.innerHTML =
@@ -10,14 +11,36 @@ export function createShell(input: Input) {
     layer: document.querySelector<HTMLElement>("#layer")!,
   };
 }
+export type PanelCursor = { key?: string; scrollTop?: number };
+
 export function panel(
   layer: HTMLElement,
   title: string,
   body: string,
   klass = "",
+  cursor?: PanelCursor,
 ) {
   layer.innerHTML = `<div class="overlay"><section class="panel ${klass}" role="dialog" aria-labelledby="panel-title"><div class="eyebrow">✦ &nbsp; Pokémon Astra</div><h2 id="panel-title">${escapeHtml(title)}</h2>${body}</section></div>`;
-  return layer.querySelector<HTMLElement>(".panel")!;
+  const menu = layer.querySelector<HTMLElement>(".panel")!;
+  const key = (button: HTMLButtonElement) => button.id || button.textContent;
+  trackMenuCursor(menu, button => {
+    if (cursor) {
+      cursor.key = key(button) ?? undefined;
+      cursor.scrollTop = menu.scrollTop;
+    }
+  });
+  if (cursor?.key) {
+    const previous = Array.from(menu.querySelectorAll<HTMLButtonElement>("button:enabled"))
+      .find(button => key(button) === cursor.key);
+    if (previous) {
+      menu.scrollTop = cursor.scrollTop ?? 0;
+      previous.focus({ preventScroll: true });
+      const row = previous.getBoundingClientRect(), viewport = menu.getBoundingClientRect();
+      if (row.bottom > viewport.bottom) menu.scrollTop += row.bottom - viewport.bottom;
+      else if (row.top < viewport.top) menu.scrollTop -= viewport.top - row.top;
+    }
+  }
+  return menu;
 }
 export function escapeHtml(s: string) {
   return s.replace(

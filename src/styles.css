@@ -391,7 +391,7 @@ canvas {
 .screen[data-scene="title"] canvas {
   opacity: 0.28;
 }
-.panel button:focus {
+.panel button[aria-current="true"] {
   outline: 2px solid #d8a94b;
   outline-offset: 2px;
 }
@@ -771,7 +771,7 @@ canvas {
   min-height: clamp(24px, 3.3vw, 36px);
   font-size: clamp(20px, 3.2vw, 28px);
 }
-.panel .journey-list button:focus {
+.panel .journey-list button[aria-current="true"] {
   background: #dfdfb7;
   color: #18392b;
 }
@@ -810,7 +810,7 @@ canvas {
 .panel .eyebrow {
   display: none;
 }
-.panel button:focus {
+.panel button[aria-current="true"] {
   outline: 3px solid #bc8734;
   outline-offset: -2px;
   box-shadow: inset 4px 0 #bc8734;
@@ -818,11 +818,11 @@ canvas {
 .panel .journey-list button {
   position: relative;
 }
-.panel .journey-list button:focus {
+.panel .journey-list button[aria-current="true"] {
   outline: none;
   box-shadow: none;
 }
-.journey-list button:focus::before {
+.journey-list button[aria-current="true"]::before {
   content: "";
   position: absolute;
   left: 8px;

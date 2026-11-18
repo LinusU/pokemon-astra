@@ -26,7 +26,7 @@ import {
   meetsRequirement,
   type Save,
 } from "./game/save";
-import { createShell, panel, escapeHtml } from "./ui/shell";
+import { createShell, panel, escapeHtml, type PanelCursor } from "./ui/shell";
 import {
   WORLD,
   QUESTS,
@@ -177,6 +177,9 @@ function persist() {
 }
 function restoreSession(data: Save) {
   save = normalizeSavePosition(restoreQuestItems(data));
+  fieldBagState = {};
+  fieldCursors = {};
+  journeySelection = "party";
   actors.reset();
   encounterDistance = 0;
   encounterTarget = 6;
@@ -313,6 +316,7 @@ function title() {
     layer,
     "Welcome back",
     `<p>Continue your journey in ${escapeHtml(WORLD[save.map].name)}.</p><div class="buttons"><button id="continue">Continue journey</button><button class="secondary" id="new">New adventure</button></div>`,
+    "", fieldCursors.title ??= {},
   );
   p.querySelector("#continue")!.addEventListener("click", () => {
     mode = "world";
@@ -338,6 +342,7 @@ function intro() {
     layer,
     "Dewdrop Village",
     `<p>Professor Alder has a Pokémon for you. Meet him at the lab in the north garden.</p><p class="small">Walk with the D-pad. Face Alder and press A to talk.</p><div class="buttons"><button id="begin">Begin adventure</button><button id="how" class="secondary">How to play</button></div>`,
+    "", fieldCursors.intro ??= {},
   );
   p.querySelector("#how")!.addEventListener("click", () => fieldBasics(intro));
   p.querySelector("#begin")!.addEventListener("click", () => {
@@ -857,6 +862,7 @@ function depart(destination: string, move: () => void) {
 }
 let journeySelection = "party";
 let fieldBagState: BagState = {};
+let fieldCursors: Record<string, PanelCursor> = {};
 function menu() {
   mode = "menu";
   const options = [
@@ -887,16 +893,15 @@ function menu() {
   p
     .querySelector<HTMLButtonElement>(`[data-view="${journeySelection}"]`)
     ?.focus({ preventScroll: true });
-  p.querySelectorAll<HTMLButtonElement>("[data-view]").forEach(
-    (b) =>
-      (b.onclick = () => {
-        const v = b.dataset.view!;
-        journeySelection = v;
-        if (v === "bag") fieldBagState = {};
-        if (v === "close") close();
-        else view(v!);
-      }),
-  );
+  for (const button of p.querySelectorAll<HTMLButtonElement>("[data-view]")) {
+    const v = button.dataset.view!;
+    button.onfocus = () => { journeySelection = v; };
+    button.onclick = () => {
+      journeySelection = v;
+      if (v === "close") close();
+      else view(v);
+    };
+  }
 }
 function view(v: string, pageIndex = 0, missingOnly = false) {
   mode = "menu";
@@ -1045,6 +1050,7 @@ function view(v: string, pageIndex = 0, missingOnly = false) {
     layer,
     title,
     `${body}<div class="buttons"><button class="secondary" id="back">Back</button></div>`,
+    "", fieldCursors[v] ??= {},
   );
   p
     .querySelector("#filter")
