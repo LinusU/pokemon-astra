@@ -1,4 +1,5 @@
 import type { Engine } from "../engine";
+import type { CaptureSoundState } from "../engine/battle-sound";
 
 export const MUSIC_TRACKS: Record<string, [number, number]> = {
   town: [0x3a, 0x72d3],
@@ -22,6 +23,8 @@ export class GameAudio {
   private musicGain?: GainNode;
   private effectsGain?: GainNode;
   private sources = new Set<AudioBufferSourceNode>();
+  private effectSources = new Set<AudioBufferSourceNode>();
+  private buffers = new Map<string, AudioBuffer>();
   private timer?: number;
   private next = 0;
   private current = "";
@@ -35,6 +38,7 @@ export class GameAudio {
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) {
         this.stopScheduled();
+        this.stopEffects();
         void this.context?.suspend();
       } else if (this.enabled && this.context) {
         void this.context.resume().then(() => this.pump());
@@ -42,6 +46,10 @@ export class GameAudio {
     });
   }
   attach(engine: Engine, enabled = true) {
+    if (this.engine !== engine) {
+      this.buffers.clear();
+    }
+    if (this.engine !== engine || !enabled) this.stopEffects();
     this.engine = engine;
     this.enabled = enabled;
     this.current = "";
@@ -76,6 +84,7 @@ export class GameAudio {
     if (enabled) void this.unlock();
     else {
       this.stopScheduled();
+      this.stopEffects();
       if (this.context) void this.context.suspend();
     }
     this.changed();
@@ -135,36 +144,92 @@ export class GameAudio {
       this.changed();
     }
   };
-  cry(species: number) {
-    const ctx = this.context;
-    if (!this.enabled || !this.engine || !ctx || ctx.state !== "running")
-      return;
+  private stopEffects() {
+    for (const source of this.effectSources) source.stop();
+    this.effectSources.clear();
+  }
+
+  private get canPlayEffects() {
+    return this.enabled && this.context?.state === "running" && !document.hidden;
+  }
+
+  private buffer(key: string, decode: () => Float32Array) {
+    const cached = this.buffers.get(key);
+    if (cached) return cached;
     try {
-      const data = this.engine.cry(species);
-      const buffer = ctx.createBuffer(1, data.length, 47662);
+      const data = decode();
+      if (!data.length) return;
+      const buffer = this.context!.createBuffer(1, data.length, 47662);
       buffer.copyToChannel(new Float32Array(data), 0);
-      const source = ctx.createBufferSource();
-      source.buffer = buffer;
-      source.connect(this.effectsGain!);
-      source.start();
+      if (this.buffers.size >= 64) this.buffers.delete(this.buffers.keys().next().value!);
+      this.buffers.set(key, buffer);
+      return buffer;
     } catch (error) {
-      console.warn("Astra cry could not play", error);
+      console.warn("Astra cartridge sound could not play", key, error);
     }
   }
+
+  private playEffect(buffer: AudioBuffer, when: number, pan = 0, duration = buffer.duration) {
+    if (duration <= 0) return;
+    const context = this.context!;
+    const source = context.createBufferSource();
+    source.buffer = buffer;
+    const panner = pan ? context.createStereoPanner() : undefined;
+    if (panner) {
+      panner.pan.value = pan;
+      source.connect(panner).connect(this.effectsGain!);
+    } else source.connect(this.effectsGain!);
+    source.onended = () => {
+      this.effectSources.delete(source);
+      source.disconnect();
+      panner?.disconnect();
+    };
+    this.effectSources.add(source);
+    source.start(when, 0, duration);
+  }
+
+  cry(species: number) {
+    if (!this.canPlayEffects || !this.engine) return;
+    const pcm = this.buffer(`cry:${species}:0`, () => this.engine!.cry(species));
+    if (pcm) this.playEffect(pcm, this.context!.currentTime);
+  }
+
   soundEffect(id: number) {
-    const ctx = this.context;
-    if (!this.enabled || !this.engine || !ctx || ctx.state !== "running")
-      return;
-    try {
-      const data = this.engine.soundEffect(id);
-      const buffer = ctx.createBuffer(1, data.length, 47662);
-      buffer.copyToChannel(new Float32Array(data), 0);
-      const source = ctx.createBufferSource();
-      source.buffer = buffer;
-      source.connect(this.effectsGain!);
-      source.start();
-    } catch (error) {
-      console.warn("Astra sound effect could not play", error);
+    if (!this.canPlayEffects || !this.engine) return;
+    const pcm = this.buffer(`sfx:${id}`, () => this.engine!.soundEffect(id));
+    if (pcm) this.playEffect(pcm, this.context!.currentTime);
+  }
+
+  battleAnimation(
+    id: number,
+    param: number,
+    species: number,
+    enemy: boolean,
+    duration: number,
+    capture?: CaptureSoundState,
+  ) {
+    const engine = this.engine;
+    if (!this.canPlayEffects || !engine) return;
+    const timeline = engine.battleSound(id, param, capture);
+    if (!timeline?.cues.length) return;
+    const side = enemy ? 1 : -1;
+    const cues = timeline.cues.map((cue) => ({
+      frame: cue.frame,
+      pan: side * (cue.kind === "effect" && (cue.track & 1) ? -0.55 : 0.55),
+      buffer: cue.kind === "effect"
+        ? this.buffer(`sfx:${cue.id}`, () => engine.soundEffect(cue.id))
+        : this.buffer(`cry:${species}:${cue.lengthOffset}`, () => engine.cry(species, cue.lengthOffset)),
+    }));
+    const start = this.context!.currentTime + 0.008;
+    const secondsPerFrame = duration / (1000 * timeline.frames);
+    for (const [index, cue] of cues.entries()) {
+      if (!cue.buffer) continue;
+      const next = cues[index + 1];
+      // Replaying the same effect retriggers its cartridge channels.
+      const duration = next?.buffer === cue.buffer
+        ? Math.min(cue.buffer.duration, (next.frame - cue.frame) * secondsPerFrame)
+        : cue.buffer.duration;
+      this.playEffect(cue.buffer, start + cue.frame * secondsPerFrame, cue.pan, duration);
     }
   }
   fanfare(kind: keyof typeof FANFARES) {

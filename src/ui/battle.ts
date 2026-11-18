@@ -1,4 +1,5 @@
 import type { BattleMon, BattleSnapshot } from "../engine";
+import type { CaptureSoundState } from "../engine/battle-sound";
 import { escapeHtml } from "./shell";
 import { battleBagKey, itemInfo, mountBag, type BagItem, type BagState } from "./bag";
 import { playMove } from "./move-animation";
@@ -8,6 +9,7 @@ import "./battle.css";
 type Side = "Player" | "Enemy";
 type Event = Record<string, any>;
 type Battler = "player" | "enemy";
+type SoundAnimation = { anim: number; param: number };
 type ItemAction = { id: number; target: number | null; move_slot: number | null };
 type Options = {
   layer: HTMLElement;
@@ -22,6 +24,7 @@ type Options = {
   move: (id: number) => { name: string; type?: number; pp?: number; power?: number };
   cry: (id: number) => void;
   sound?: (id: number) => void;
+  animationSound?: (id: number, param: number, species: number, enemy: boolean, duration: number, capture?: CaptureSoundState) => void;
   itemName: (id: number) => string;
   party: () => { species: number; moves: number[]; nickname?: string }[];
   speed: number;
@@ -679,7 +682,7 @@ export class BattlePresenter {
     }
     if (event.StatsBox) {
       if (event.StatsBox.slot === this.shownSlots.player)
-        this.showMoveVisual("player", healingSparkle, false, false, 0);
+        this.showMoveVisual("player", healingSparkle);
       else this.next();
       return;
     }
@@ -700,24 +703,28 @@ export class BattlePresenter {
       const user = a.user === "Player" ? "player" : "enemy";
       if (a.anim === 257) {
         if (a.param === 1) {
-          const substitute = findMoveVisual("Substitute", 2)!;
-          this.showMoveVisual(user, substitute, false, false, 0);
+          this.showMoveVisual(user, {
+            motif: "star", palette: "gold", pattern: "orbit",
+            anchor: "user", count: 7,
+          }, { event: a });
         } else {
           this.conceal(user, false);
-          this.animate(user, "appear", 500);
+          this.animate(user, "appear", 500, a);
         }
         return;
       }
       if (a.anim === 258) {
-        this.animate(user, "withdraw", 450);
+        this.animate(user, "withdraw", 450, a);
         return;
       }
       if (a.anim === 256) {
-        if (this.trainerBattle || this.queue[0]?.BallWobbles == null) {
+        const capture = this.queue[0]?.BallWobbles;
+        if (this.trainerBattle || capture == null) {
           this.clearCapture();
           this.next();
           return;
         }
+        this.playAnimationSound(user, a, (950 + capture.wobbles * 450) / Math.max(0.25, this.o.speed), capture);
         this.root.classList.add("capture", "throwing");
         this.delay(450, () => {
           this.root.classList.remove("throwing");
@@ -727,7 +734,7 @@ export class BattlePresenter {
       }
       if (a.anim >= 259) {
         const condition = nativeConditionVisual(a.anim);
-        if (condition) this.showMoveVisual(user, condition, false, false, a.param);
+        if (condition) this.showMoveVisual(user, condition, { event: a });
         else this.next();
         return;
       }
@@ -749,8 +756,9 @@ export class BattlePresenter {
           e.Message?.DidntAffect ||
           e.Message?.DoesntAffect,
       );
-      this.showMoveVisual(user, visual, miss, !!move?.power, a.param, () => {
-        if (vanishes && a.param === 1) this.setOutOfReach(user, true);
+      this.showMoveVisual(user, visual, {
+        event: a, miss, hit: !!move?.power,
+        after: vanishes && a.param === 1 ? () => this.setOutOfReach(user, true) : undefined,
       });
       return;
     }
@@ -759,26 +767,28 @@ export class BattlePresenter {
   private setOutOfReach(side: Battler, active: boolean) {
     this.root.querySelector(`.battle-${side}`)!.classList.toggle("out-of-reach", active);
   }
+  private playAnimationSound(user: Battler, event: SoundAnimation, duration: number, capture?: CaptureSoundState) {
+    this.o.animationSound?.(event.anim, event.param, this.shown[user].species, user === "enemy", duration, capture);
+  }
   private showMoveVisual(
     user: Battler,
     visual: MoveVisual,
-    miss: boolean,
-    hit: boolean,
-    param: number,
-    after?: () => void,
+    { event, miss = false, hit = false, after }: {
+      event?: SoundAnimation; miss?: boolean; hit?: boolean; after?: () => void;
+    } = {},
   ) {
     const canvas = this.root.querySelector<HTMLCanvasElement>(".battle-move-fx")!;
     const attacker = this.root.querySelector<HTMLElement>(`.battle-${user}`)!;
     const defender = this.root.querySelector<HTMLElement>(user === "player" ? ".battle-enemy" : ".battle-player")!;
     this.stopMove = playMove(canvas, attacker, defender, visual, {
-      speed: this.o.speed, miss, hit, param,
+      speed: this.o.speed, miss, hit, param: event?.param ?? 0,
     }, () => {
       this.stopMove = undefined;
       after?.();
       this.next();
-    });
+    }, event && ((duration) => this.playAnimationSound(user, event, duration)));
   }
-  private animate(side: Battler, effect: string, duration: number) {
+  private animate(side: Battler, effect: string, duration: number, event?: SoundAnimation) {
     const el = this.root.querySelector(`.battle-${side}`)!;
     if (effect !== "appear" && (
       this.root.classList.contains(`conceal-${side}`) ||
@@ -789,6 +799,8 @@ export class BattlePresenter {
       return;
     }
     if (effect === "appear") el.classList.remove("faint", "withdraw");
+    if (event)
+      this.playAnimationSound(side, event, duration / Math.max(0.25, this.o.speed));
     el.classList.add(effect);
     this.delay(duration, () => {
       if (effect !== "faint" && effect !== "withdraw")

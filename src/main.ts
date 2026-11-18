@@ -1543,6 +1543,7 @@ function showBattle() {
     move: (id) => engine.move(id),
     cry,
     sound: (id) => sound.soundEffect(id),
+    animationSound: (...args) => sound.battleAnimation(...args),
     itemName: (id) =>
       (
         ({

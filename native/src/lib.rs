@@ -175,7 +175,7 @@ pub unsafe extern "C" fn music(
     })
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn cry(ptr: *const u8, len: usize, id: u32) -> *const u8 {
+pub unsafe extern "C" fn cry(ptr: *const u8, len: usize, id: u32, length_offset: u16) -> *const u8 {
     let rom = unsafe { std::slice::from_raw_parts(ptr, len) };
     let i = 0xf2787 + (id as usize - 1) * 6;
     let word = |p: usize| u16::from_le_bytes([rom[p], rom[p + 1]]);
@@ -184,7 +184,7 @@ pub unsafe extern "C" fn cry(ptr: *const u8, len: usize, id: u32) -> *const u8 {
     let bank = rom[p];
     let addr = word(p + 1);
     let pitch = word(i + 2) as i16;
-    let length = word(i + 4);
+    let length = word(i + 4).wrapping_add(length_offset);
     let pcm: Vec<f32> = pokemon_synthesizer::gen2::synthesis(rom, bank, addr, pitch, length)
         .iter()
         .step_by(22)
@@ -304,12 +304,13 @@ pub extern "C" fn music_next(count: u32) -> *const u8 {
 pub unsafe extern "C" fn sound_effect(ptr: *const u8, len: usize, id: u32) -> *const u8 {
     let rom = unsafe { std::slice::from_raw_parts(ptr, len) };
     let mut pcm = Vec::new();
-    if matches!(id, 4 | 5 | 42 | 43 | 47 | 94 | 182) && rom.len() >= 0x100000 {
+    if (1..0xcf).contains(&id) && rom.len() >= 0x100000 {
         let p = 0xe927c + id as usize * 3;
         let bank = rom[p];
         let addr = u16::from_le_bytes([rom[p + 1], rom[p + 2]]);
-        pcm = pokemon_synthesizer::gen2::synthesis(rom, bank, addr, 0, 0x100)
-            .iter().step_by(22).take(47662 * 8).collect();
+        if let Some(samples) = pokemon_synthesizer::gen2::sound_effect(rom, bank, addr, 47662) {
+            pcm = samples.take(47662 * 8).collect();
+        }
     }
     OUTPUT.with(|o| {
         let mut o = o.borrow_mut();

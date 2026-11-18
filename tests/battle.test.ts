@@ -116,6 +116,18 @@ describe.skipIf(!romAvailable)("real native battle events", () => {
     expect(phases).toEqual([1, 0]);
     expect(snapshot.state.player.substatus?.[2]).toBe(0);
   });
+  it("queues the effectiveness sound after the move animation and before HP loss", async () => {
+    const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});
+    const engine = new Engine(instance.exports as never, readFileSync("pokecrystal11.gbc"));
+    const lead = { ...engine.makePokemon(58, 22), moves: [52, 0, 0, 0], pp: [25, 0, 0, 0] };
+    const battle = engine.startBattle({ party: [lead], opponent: { species: 10, level: 4 }, seed: 5 });
+    const move = battle.snapshot().legal.findIndex((action: any) => action.Move?.slot === 0);
+    const events = battle.act(move).events as any[];
+    const animation = events.findIndex((event) => event.Animation?.anim === 52);
+    expect(animation).toBeGreaterThanOrEqual(0);
+    expect(events[animation + 1]).toEqual({ Sound: 173 });
+    expect(events[animation + 2]).toHaveProperty("HpBar.target", "Enemy");
+  });
 });
 
 describe.skipIf(!romAvailable)("complete native battle decisions", () => {

@@ -12,6 +12,7 @@ const FRAME_RATE: f64 = 4_194_304.0 / 70_224.0;
 
 /// The hardware steps volume envelopes 64 times per second.
 const ENVELOPE_RATE: f64 = 64.0;
+const SWEEP_RATE: f64 = 128.0;
 
 /// Samples are made at this many times the output rate and averaged, to
 /// keep high notes from aliasing.
@@ -83,6 +84,7 @@ struct NoteFlags {
     freq_override: bool,
     vibrato_override: bool,
     duty_override: bool,
+    sweep: Option<u8>,
 }
 
 /// One channel's state in the engine (`CHANNEL_*` in the disassembly).
@@ -155,6 +157,7 @@ struct Current {
 struct Engine<'a> {
     rom: &'a [u8],
     tables: Tables,
+    channel_base: usize,
     tracks: [Track; 4],
     /// `wCurNoteDuration`, the length of the next pitch slide.
     cur_note_duration: u8,
@@ -165,10 +168,11 @@ struct Engine<'a> {
 }
 
 impl<'a> Engine<'a> {
-    fn new(rom: &'a [u8], tables: Tables, bank: u8, addr: u16) -> Engine<'a> {
+    fn new(rom: &'a [u8], tables: Tables, bank: u8, addr: u16, channel_base: usize) -> Engine<'a> {
         let mut engine = Engine {
             rom,
             tables,
+            channel_base,
             tracks: [Track::default(); 4],
             cur_note_duration: 0,
             drumkit: 0,
@@ -190,9 +194,12 @@ impl<'a> Engine<'a> {
         let id = (read(self.rom, bank, header) & 0x7) as usize;
         let addr = read_word(self.rom, bank, header.wrapping_add(1));
 
-        // Channels 5-8 are for sound effects, which music has no business with.
-        if let Some(track) = self.tracks.get_mut(id) {
-            *track = Track::new(bank, addr);
+        // The music and SFX tracks drive the same four hardware channels.
+        if let Some(track) = id.checked_sub(self.channel_base).and_then(|slot| self.tracks.get_mut(slot)) {
+            *track = Track {
+                sfx_notes: self.channel_base == 4,
+                ..Track::new(bank, addr)
+            };
         }
     }
 
@@ -365,9 +372,12 @@ impl<'a> Engine<'a> {
             0xdb => self.tracks[ch].duty = self.get_music_byte(ch).rotate_right(2) & 0xc0,
             // volume_envelope
             0xdc => self.tracks[ch].envelope = self.get_music_byte(ch),
-            // pitch_sweep (not modelled)
+            // pitch_sweep writes the first pulse channel's sweep register.
             0xdd => {
-                self.get_music_byte(ch);
+                let sweep = self.get_music_byte(ch);
+                if ch == 0 {
+                    self.tracks[ch].flags.sweep = Some(sweep);
+                }
             }
             // duty_cycle_pattern
             0xde => {
@@ -761,6 +771,8 @@ struct Hardware {
     voices: [Voice; 4],
     /// `NR50`: left and right master volume.
     volume: u8,
+    sweep: u8,
+    sweep_timer: u8,
 }
 
 impl Hardware {
@@ -768,11 +780,19 @@ impl Hardware {
         Hardware {
             voices: [Voice::default(); 4],
             volume: 0x77,
+            sweep: 0,
+            sweep_timer: 0,
         }
     }
 
     /// What the engine writes to the hardware for a channel (`UpdateChannels`).
     fn update(&mut self, ch: usize, flags: NoteFlags, cur: Current, wave: [u8; 32]) {
+        if let Some(sweep) = flags.sweep {
+            self.sweep = sweep;
+        }
+        if ch == 0 && flags.trigger {
+            self.sweep_timer = (self.sweep >> 4) & 7;
+        }
         let voice = &mut self.voices[ch];
 
         if flags.rest {
@@ -844,6 +864,28 @@ impl Hardware {
     fn step_envelopes(&mut self) {
         for voice in [0, 1, 3] {
             self.voices[voice].envelope.step();
+        }
+    }
+
+    fn step_sweep(&mut self) {
+        let period = (self.sweep >> 4) & 7;
+        let shift = self.sweep & 7;
+        let voice = &mut self.voices[0];
+        if period == 0 || shift == 0 || !voice.enabled {
+            return;
+        }
+        self.sweep_timer = self.sweep_timer.saturating_sub(1);
+        if self.sweep_timer != 0 {
+            return;
+        }
+        self.sweep_timer = period;
+        let delta = voice.frequency >> shift;
+        if self.sweep & 8 != 0 {
+            voice.frequency -= delta;
+        } else if voice.frequency + delta < 2048 {
+            voice.frequency += delta;
+        } else {
+            voice.enabled = false;
         }
     }
 
@@ -922,6 +964,7 @@ pub struct MusicIterator<'a> {
     sample_rate: u32,
     until_frame: f64,
     until_envelope: f64,
+    until_sweep: f64,
     tail: f64,
 }
 
@@ -953,6 +996,12 @@ impl Iterator for MusicIterator<'_> {
         }
         self.until_envelope -= 1.0;
 
+        if self.until_sweep <= 0.0 {
+            self.until_sweep += rate / SWEEP_RATE;
+            self.hardware.step_sweep();
+        }
+        self.until_sweep -= 1.0;
+
         if !self.engine.is_playing() {
             if self.tail <= 0.0 {
                 return None;
@@ -975,14 +1024,24 @@ impl Iterator for MusicIterator<'_> {
 /// Returns `None` when `rom` doesn't have the Gold, Silver or Crystal
 /// sound engine in it.
 pub fn music(rom: &[u8], bank: u8, addr: u16, sample_rate: u32) -> Option<MusicIterator<'_>> {
+    audio(rom, bank, addr, sample_rate, 0, TAIL_SECONDS)
+}
+
+/// Plays a sound-effect header, including tracks that toggle melodic notation.
+pub fn sound_effect(rom: &[u8], bank: u8, addr: u16, sample_rate: u32) -> Option<MusicIterator<'_>> {
+    audio(rom, bank, addr, sample_rate, 4, 0.0)
+}
+
+fn audio(rom: &[u8], bank: u8, addr: u16, sample_rate: u32, channel_base: usize, tail: f64) -> Option<MusicIterator<'_>> {
     let tables = Tables::find(rom)?;
 
     Some(MusicIterator {
-        engine: Engine::new(rom, tables, bank, addr),
+        engine: Engine::new(rom, tables, bank, addr, channel_base),
         hardware: Hardware::new(),
         sample_rate,
         until_frame: 0.0,
         until_envelope: 0.0,
-        tail: TAIL_SECONDS,
+        until_sweep: 0.0,
+        tail,
     })
 }

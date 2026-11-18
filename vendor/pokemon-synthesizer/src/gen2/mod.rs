@@ -3,7 +3,7 @@ use std::time::Duration;
 use channel::SOURCE_SAMPLE_RATE;
 use sound::Sound;
 
-pub use music::{music, MusicIterator};
+pub use music::{music, sound_effect, MusicIterator};
 pub use sound::SoundIterator;
 
 mod channel;

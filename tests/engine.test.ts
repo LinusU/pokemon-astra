@@ -62,12 +62,37 @@ describe.skipIf(!available)("Crystal ROM native bridge", () => {
       instance.exports as never,
       readFileSync("pokecrystal11.gbc"),
     );
-    for (const id of [4, 5, 42, 43, 47, 94, 182]) {
-      const pcm = engine.soundEffect(id);
-      expect(pcm.length).toBeGreaterThan(1000);
-      expect(pcm.some((sample) => Math.abs(sample) > 0.01)).toBe(true);
+    const sounds = new Set([4, 5, 42, 43, 47, 94, 171, 172, 173, 182]);
+    for (let move = 1; move <= 277; move++) {
+      if (move > 251 && move < 255) continue;
+      for (const param of [0, 1, 2, 3, 4, 5, 7, 10]) {
+        const timeline = engine.battleSound(move, param, { wobbles: 3, caught: true });
+        expect(timeline, `animation ${move}, param ${param}`).toBeDefined();
+        for (const cue of timeline!.cues)
+          if (cue.kind === "effect") sounds.add(cue.id);
+      }
     }
-    expect(() => engine.soundEffect(192)).toThrow("Unsupported sound effect");
+    for (const id of sounds) {
+      const pcm = engine.soundEffect(id);
+      expect(pcm.length, `SFX ${id}`).toBeGreaterThan(0);
+      expect(pcm.some((sample) => Math.abs(sample) > 0.01), `SFX ${id}`).toBe(true);
+    }
+    expect(() => engine.soundEffect(0xcf)).toThrow("Unsupported sound effect");
+  });
+  it("follows timed repeats, parameter branches, and actor cries", async () => {
+    const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});
+    const engine = new Engine(instance.exports as never, readFileSync("pokecrystal11.gbc"));
+    expect(engine.battleSound(44, 0)?.cues).toEqual([
+      { frame: 9, kind: "effect", track: 1, id: 69 },
+      { frame: 26, kind: "effect", track: 1, id: 69 },
+    ]);
+    expect(engine.battleSound(57, 0)?.cues.map((cue) => cue.frame)).toEqual([0, 33, 66, 99]);
+    expect(engine.battleSound(76, 1)?.cues).not.toEqual(engine.battleSound(76, 0)?.cues);
+    expect(engine.battleSound(45, 0)?.cues).toEqual([{ frame: 0, kind: "cry", lengthOffset: 192 }]);
+    expect(engine.cry(25, 192).length).toBeGreaterThan(engine.cry(25).length);
+    const escaped = engine.battleSound(256, 5, { wobbles: 2, caught: false })!.cues;
+    expect(escaped.filter((cue) => cue.kind === "effect" && cue.id === 179)).toHaveLength(2);
+    expect(escaped.at(-1)).toMatchObject({ kind: "effect", id: 41 });
   });
   it("offers only balls and items that are actually in the inventory", async () => {
     const { instance } = await WebAssembly.instantiate(

@@ -338,6 +338,7 @@ export function playMove(
   visual: MoveVisual,
   options: { speed: number; miss: boolean; hit: boolean; param: number },
   finish: () => void,
+  start?: (duration: number) => void,
 ) {
   const ctx = canvas.getContext("2d");
   if (!ctx) {
@@ -346,6 +347,7 @@ export function playMove(
   }
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const duration = (reduced ? 180 : visual.duration ?? 540) / Math.max(0.25, options.speed);
+  start?.(duration);
   const animations: Animation[] = [];
   const source = attacker.getBoundingClientRect();
   const destination = defender.getBoundingClientRect();

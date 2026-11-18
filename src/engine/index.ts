@@ -1,4 +1,6 @@
 /** Browser bridge to the actual Crystal battle engine and ROM decoders. */
+import { CRYSTAL_SFX_COUNT, decodeBattleSound, type CaptureSoundState } from "./battle-sound";
+
 export interface Pokemon {
   species: number;
   item: number;
@@ -89,7 +91,7 @@ type Exports = {
   ): number;
   music_start(p: number, n: number, bank: number, addr: number): number;
   music_next(count: number): number;
-  cry(p: number, n: number, id: number): number;
+  cry(p: number, n: number, id: number, lengthOffset: number): number;
   sound_effect(p: number, n: number, id: number): number;
 };
 
@@ -530,16 +532,19 @@ export class Engine {
   }
   /** Synthesize a cartridge sound-effect ID using the imported ROM. Sample rate: 47662 Hz. */
   soundEffect(id: number): Float32Array {
-    if (![4, 5, 42, 43, 47, 94, 182].includes(id))
+    if (!Number.isInteger(id) || id <= 0 || id >= CRYSTAL_SFX_COUNT)
       throw Error("Unsupported sound effect");
     const bytes = this.bytes(this.rom, (p, n) =>
       this.wasm.sound_effect(p, n, id),
     );
     return new Float32Array(bytes.buffer, bytes.byteOffset, bytes.length / 4);
   }
-  cry(id: number): Float32Array {
+  battleSound(id: number, param: number, capture?: CaptureSoundState) {
+    return decodeBattleSound(this.rom, id, param, capture);
+  }
+  cry(id: number, lengthOffset = 0): Float32Array {
     if (id < 1 || id > 251) throw Error("Invalid species");
-    const bytes = this.bytes(this.rom, (p, n) => this.wasm.cry(p, n, id));
+    const bytes = this.bytes(this.rom, (p, n) => this.wasm.cry(p, n, id, lengthOffset));
     return new Float32Array(bytes.buffer, bytes.byteOffset, bytes.length / 4);
   }
   startMusic(bank: number, addr: number): void {

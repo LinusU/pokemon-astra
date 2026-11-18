@@ -266,6 +266,21 @@ impl Engine {
             self.show(crate::battle::Event::SendOut { side: user, slot, mon });
         }
         self.show(crate::battle::Event::Animation { anim, user, param });
+        // The cartridge plays a second sound after an attack's animation,
+        // using the same effectiveness value as the damage calculation.
+        let after = self.mem.rb(W_BATTLE_AFTER_ANIM);
+        if u16::from(after) == defs::ANIM_ENEMY_DAMAGE - defs::BATTLE_AFTERANIMS
+            || u16::from(after) == defs::ANIM_PLAYER_DAMAGE - defs::BATTLE_AFTERANIMS
+        {
+            let modifier = self.mem.rb(W_TYPE_MODIFIER) & defs::EFFECTIVENESS_MASK;
+            let sound = match modifier {
+                0 => return,
+                defs::EFFECTIVE => defs::SFX_DAMAGE,
+                value if value > defs::EFFECTIVE => defs::SFX_SUPER_EFFECTIVE,
+                _ => defs::SFX_NOT_VERY_EFFECTIVE,
+            };
+            self.show(crate::battle::Event::Sound(sound.into()));
+        }
     }
 
     /// `text`, for a text whose `text_asm` choices the battle code computed

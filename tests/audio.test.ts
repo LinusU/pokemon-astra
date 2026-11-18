@@ -11,6 +11,7 @@ class FakeNode {
     cancelScheduledValues: vi.fn(),
   };
   frequency = { value: 0 };
+  pan = { value: 0 };
   buffer: any;
   connect() {
     return this;
@@ -24,6 +25,7 @@ class FakeContext {
   destination = new FakeNode();
   sources: FakeNode[] = [];
   oscillators: FakeNode[] = [];
+  panners: FakeNode[] = [];
   constructor() {
     context = this;
   }
@@ -45,6 +47,11 @@ class FakeContext {
     const oscillator = new FakeNode();
     this.oscillators.push(oscillator);
     return oscillator;
+  }
+  createStereoPanner() {
+    const node = new FakeNode();
+    this.panners.push(node);
+    return node;
   }
   createBuffer(_channels: number, count: number, rate: number) {
     return { duration: count / rate, copyToChannel() {} };
@@ -113,6 +120,38 @@ it("stops queued town audio when a battle track begins", async () => {
   await vi.advanceTimersByTimeAsync(120);
   expect(engine.startMusic).toHaveBeenCalledTimes(2);
   expect(old.every((source) => source.stop.mock.calls.length === 1)).toBe(true);
+});
+it("schedules cartridge sounds on the animation clock and retriggers repeated sounds", async () => {
+  const soundEffect = vi.fn(() => new Float32Array(24000));
+  const cry = vi.fn(() => new Float32Array(24000));
+  const audio = new GameAudio(() => "wild");
+  audio.attach({
+    startMusic() {},
+    nextMusicChunk: () => new Float32Array(12000),
+    soundEffect, cry,
+    battleSound: () => ({
+      frames: 40,
+      cues: [
+        { kind: "effect", id: 69, frame: 5, track: 0 },
+        { kind: "effect", id: 69, frame: 15, track: 1 },
+        { kind: "cry", frame: 20, lengthOffset: 192 },
+      ],
+    }),
+  } as unknown as Engine);
+  await audio.unlock();
+  const before = context.sources.length;
+  audio.battleAnimation(44, 0, 25, false, 400);
+  const effects = context.sources.slice(before);
+  expect(soundEffect).toHaveBeenCalledTimes(1);
+  expect(cry).toHaveBeenCalledWith(25, 192);
+  expect(context.panners.map((node) => node.pan.value)).toEqual([-0.55, 0.55, -0.55]);
+  expect(effects[0].start.mock.calls[0][0]).toBeCloseTo(0.058);
+  expect(effects[0].start.mock.calls[0][2]).toBeCloseTo(0.1);
+  expect(effects[1].start.mock.calls[0][0]).toBeCloseTo(0.158);
+  audio.setEnabled(false);
+  expect(effects.every((effect) => effect.stop.mock.calls.length === 1)).toBe(true);
+  audio.battleAnimation(44, 0, 25, false, 400);
+  expect(context.sources.slice(before)).toHaveLength(3);
 });
 it("honors saved mute and resumes explicitly without creating more audio contexts", async () => {
   const engine = {
