@@ -3,6 +3,8 @@ import type { CaptureSoundState } from "../engine/battle-sound";
 import { MUSIC_TRACKS, type MusicScene } from "./music";
 const MUSIC_VOLUME = 0.28;
 const MUSIC_RATE = 48000;
+const JINGLE_LEAD_IN = 0.02;
+const JINGLE_MUSIC_GAIN = 0.2;
 // Crystal 1.1's MUSIC_HEAL, used by HealMachineAnim.
 export const HEAL_TRACK = [0x3c, 0x4697] as const;
 // Crystal's sfx_constants.asm, for the corresponding field actions and rewards.
@@ -23,10 +25,23 @@ export const OVERWORLD_SOUNDS = {
   flash: 0xa9,
 } as const;
 
+// Melodic rewards played as SFX over the current music scene.
+const JINGLE_SOUNDS = new Set<number>([
+  OVERWORLD_SOUNDS.item,
+  OVERWORLD_SOUNDS.badge,
+  OVERWORLD_SOUNDS.evolved,
+  0x02, // Caught Pokémon
+  0x2d, 0x92, // Fanfares
+  0x90, 0xb6, // Level up and EXP bar completion
+  0x91, 0x96, 0x9b, // Key item, Egg and TM
+]);
+
 /** One gesture-unlocked audio context, with continuous ROM synthesis and no overlapping tracks. */
 export class GameAudio {
   private context?: AudioContext;
   private musicGain?: GainNode;
+  private musicDuckGain?: GainNode;
+  private jingleEnd = 0;
   private effectsGain?: GainNode;
   private sources = new Set<AudioBufferSourceNode>();
   private effectSources = new Set<AudioBufferSourceNode>();
@@ -73,7 +88,9 @@ export class GameAudio {
         this.context = new AudioContext({ latencyHint: "interactive" });
         this.musicGain = this.context.createGain();
         this.musicGain.gain.value = MUSIC_VOLUME;
-        this.musicGain.connect(this.context.destination);
+        this.musicDuckGain = this.context.createGain();
+        this.musicGain.connect(this.musicDuckGain).connect(this.context.destination);
+        this.jingleEnd = 0;
         this.effectsGain = this.context.createGain();
         this.effectsGain.gain.value = 0.55;
         this.effectsGain.connect(this.context.destination);
@@ -162,10 +179,13 @@ export class GameAudio {
     for (const source of this.effectSources) source.stop();
     this.effectSources.clear();
     this.healingCue = undefined;
-    if (this.musicGain && this.context) {
+    this.jingleEnd = 0;
+    if (this.context && this.musicGain && this.musicDuckGain) {
       const { currentTime } = this.context;
       this.musicGain.gain.cancelScheduledValues(currentTime);
       this.musicGain.gain.setValueAtTime(MUSIC_VOLUME, currentTime);
+      this.musicDuckGain.gain.cancelScheduledValues(currentTime);
+      this.musicDuckGain.gain.setValueAtTime(1, currentTime);
     }
   }
 
@@ -218,7 +238,19 @@ export class GameAudio {
   soundEffect(id: number) {
     if (!this.canPlayEffects || !this.engine) return;
     const pcm = this.buffer(`sfx:${id}`, () => this.engine!.soundEffect(id));
-    if (pcm) this.playEffect(pcm, this.context!.currentTime);
+    if (!pcm) return;
+    const now = this.context!.currentTime;
+    if (!JINGLE_SOUNDS.has(id)) {
+      this.playEffect(pcm, now);
+      return;
+    }
+    const start = now + JINGLE_LEAD_IN;
+    this.playEffect(pcm, start);
+    this.jingleEnd = Math.max(this.jingleEnd, start + pcm.duration);
+    const gain = this.musicDuckGain!.gain;
+    gain.cancelScheduledValues(now);
+    gain.setTargetAtTime(JINGLE_MUSIC_GAIN, now, 0.005);
+    gain.setTargetAtTime(1, this.jingleEnd, 0.03);
   }
 
   battleAnimation(

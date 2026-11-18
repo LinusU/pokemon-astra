@@ -7,6 +7,7 @@ class FakeNode {
   gain = {
     value: 0,
     setValueAtTime: vi.fn(),
+    setTargetAtTime: vi.fn(),
     linearRampToValueAtTime: vi.fn(),
     exponentialRampToValueAtTime: vi.fn(),
     cancelScheduledValues: vi.fn(),
@@ -103,6 +104,37 @@ it("plays the cartridge heal tune and restores the map music at the end", async 
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
+});
+it("ducks music for reward jingles through a victory music change", async () => {
+  let scene: MusicScene = "gymBattle";
+  const audio = new GameAudio(() => scene);
+  audio.attach({
+    startMusicTrack() {},
+    nextMusicChunk: () => new Float32Array(12000),
+    soundEffect: (id: number) => new Float32Array(id === 0x01 ? 47662 : 23831),
+  } as unknown as Engine);
+  await audio.unlock();
+  const gain = context.gains[1].gain;
+  audio.overworld("door");
+  expect(gain.setTargetAtTime).not.toHaveBeenCalled();
+
+  audio.overworld("item");
+  expect(context.sources.at(-1)!.start).toHaveBeenCalledWith(0.02, 0, 1);
+  expect(gain.setTargetAtTime.mock.calls).toEqual([[0.2, 0, 0.005], [1, 1.02, 0.03]]);
+
+  context.currentTime = 0.25;
+  scene = "gymVictory";
+  audio.refreshMusic();
+  audio.soundEffect(0xb6);
+  expect(gain.setTargetAtTime).toHaveBeenLastCalledWith(1, 1.02, 0.03);
+
+  context.currentTime = 0.75;
+  audio.overworld("badge");
+  expect(gain.cancelScheduledValues).toHaveBeenLastCalledWith(0.75);
+  expect(gain.setTargetAtTime).toHaveBeenLastCalledWith(1, 1.27, 0.03);
+
+  audio.setEnabled(false);
+  expect(gain.setValueAtTime).toHaveBeenLastCalledWith(1, 0.75);
 });
 it("starts music after a gesture with sound enabled by default", async () => {
   const engine = {
