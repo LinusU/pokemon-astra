@@ -21,6 +21,7 @@ type Options = {
   trainerName?: string;
   prizeMoney?: number;
   arena?: "league" | "champion";
+  gymBackdrop?: string;
   wildEncounter?: "legendary";
   snapshot: BattleSnapshot;
   act: (index: number) => BattleSnapshot;
@@ -458,7 +459,7 @@ export class BattlePresenter {
       enemy: this.initialMon("enemy"),
     };
     this.expProgress = this.expAtSendOut(this.shownSlots.player, o.snapshot.events as Event[]);
-    const arena = o.arena ?? (o.trainerName === "Champion Mira" ? "champion" : o.wildEncounter ?? "field");
+    const arena = o.arena ?? (o.trainerName === "Champion Mira" ? "champion" : o.gymBackdrop ? "gym" : o.wildEncounter ?? "field");
     const trainer = o.wildEncounter ? undefined : o.trainerName;
     const teamSize = o.snapshot.state.enemy.party?.length ?? 0;
     const trainerIntro = trainer ? `<div class="battle-challenger">
@@ -481,6 +482,7 @@ export class BattlePresenter {
       </div>
     </section>`;
     this.root = o.layer.querySelector(".battle-scene")!;
+    if (o.gymBackdrop) this.root.style.setProperty("--gym-backdrop", `url("${o.gymBackdrop}")`);
     trackMenuCursor(this.root.querySelector<HTMLElement>(".battle-controls")!, button => {
       if (this.snapshot.site === "BattleMenu" && button.dataset.group)
         this.lastCommand = button.dataset.group;

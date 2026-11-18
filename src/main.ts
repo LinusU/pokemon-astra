@@ -1,3 +1,4 @@
+import { gymBattleBackdrop } from "./game/gym-art";
 import { iceLanding, advanceGlide } from "./game/skating";
 import { gymState } from "./world/gyms";
 import { awardBadge, badgeMask, fieldHabitats, fieldTeam } from "./game/badges";
@@ -1557,6 +1558,7 @@ function showBattle() {
       battleObject?.trainer && battleObject.kind !== "legendary"
         ? battleObject.trainer.name || battleObject.name
         : undefined,
+    gymBackdrop: gymBattleBackdrop(currentField()),
     arena: battleObject?.id.endsWith("league_4")
       ? "champion"
       : battleObject?.id.includes("league_")

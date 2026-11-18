@@ -1455,7 +1455,7 @@ function gymLayout(world: Region, map: WorldMap) {
         /^[1-9]$/.test(tile) ? map.id + "_" + tile : gym.landmarks?.[tile]?.id;
       if (id) {
         anchors.set(id, [x, y]);
-        return ".";
+        return gym.landmarks?.[tile]?.wildlife ? "b" : ".";
       }
       return gym.passages?.[tile]?.floor ?? tile;
     }).join("");

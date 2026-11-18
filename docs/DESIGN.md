@@ -37,16 +37,16 @@ The in-game region map shares town positions, route polylines and walking distan
 
 ## Eight gyms
 
-| # | Leader / type | Badge / field ability | Team (level) | Gym puzzle |
+| # | Leader / type | Badge / field ability | Team (level) | Gym approach |
 |---|---|---|---|---|
-| 1 | Fern / Bug | Canopy / Cut | Spinarak 11, Ledyba 11, Scyther 13 | Follow the three leaf markers |
-| 2 | Marina / Water | Tidal / Surf | Wooper 16, Staryu 17, Seadra 18 | Open sluices in tide order |
-| 3 | Volt / Electric | Dynamo / Flash | Voltorb 22, Magnemite 22, Ampharos 24 | Connect three relays |
-| 4 | Sable / Ground | Mirage / Strength | Sandshrew 26, Gligar 27, Donphan 29 | Weight three pressure plates |
-| 5 | Flint / Fire | Ember / Rock Smash | Magmar 33, Rapidash 34, Arcanine 36 | Vent the furnace safely |
-| 6 | Neve / Ice | Rime / Whirlpool | Sneasel 39, Dewgong 40, Piloswine 42 | Cross the thawed channels |
-| 7 | Lyra / Psychic | Chime / Waterfall | Xatu 44, Mr. Mime 45, Espeon 47 | Ring the memory sequence |
-| 8 | Orion / Dragon | Astral / Fly | Dragonair 49, Kingdra 50, Dragonite 52 | Align four constellations |
+| 1 | Fern / Bug | Canopy / Cut | Spinarak 11, Ledyba 11, Scyther 13 | Walk straight through the silk nursery to Fern. The two bug scouts train in the side beds. Rescue the surveyor before taking the east road. |
+| 2 | Marina / Water | Tidal / Surf | Wooper 16, Staryu 17, Seadra 18 | Restore the Undertow fog signal to lower the lightship’s boarding gangway. Skirt the net-mending crew on the pier. |
+| 3 | Volt / Electric | Dynamo / Flash | Voltorb 22, Magnemite 22, Ampharos 24 | Investigate the power theft. Beat either the twin-coil specialist on the west line or the speed specialist on the east line to release that catwalk. |
+| 4 | Sable / Ground | Mirage / Strength | Sandshrew 26, Gligar 27, Donphan 29 | Bring the Hourglass lens to the fossil cut. Read the herd tracks on the long rim or pass the excavators on the short rim. |
+| 5 | Flint / Fire | Ember / Rock Smash | Magmar 33, Rapidash 34, Arcanine 36 | Free the mine captives. Find Cyndaquil and Slugma recovering in the kiln refuge and challenge Flint across the ward. |
+| 6 | Neve / Ice | Rime / Whirlpool | Sneasel 39, Dewgong 40, Piloswine 42 | Reopen Frostvault Pass. Coast across the rink and use the gold grit patches to change direction. |
+| 7 | Lyra / Psychic | Chime / Waterfall | Xatu 44, Mr. Mime 45, Espeon 47 | Hear the Echo Bell recording and countersign Robin’s public testimony at the witness rail before facing Lyra. |
+| 8 | Orion / Dragon | Astral / Fly | Dragonair 49, Kingdra 50, Dragonite 52 | Recover the Starfall lens to project the flight chart. The transit observer guards the brass meridian to Orion. The two side observers are optional. |
 
 Field abilities are permanent badge tools; no HM move-slot tax. Cut opens groves, Surf lets the player traverse shallow-marked waterways, Flash reveals hidden cave paths, Strength clears marked boulders, Rock Smash opens cracked walls, Whirlpool unlocks marine shrines, Waterfall opens summit pools, Fly is a discovered-town travel menu. Gates should explain the required ability and mark the journal. Do not allow an optional secret to block the main story accidentally.
 

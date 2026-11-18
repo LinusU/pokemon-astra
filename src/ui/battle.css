@@ -460,6 +460,9 @@
     radial-gradient(ellipse 21% 7% at 78% 54%, var(--battle-platform, #b3d493) 0 94%, transparent 100%),
     linear-gradient(var(--battle-sky, #deeee0) 27%, var(--battle-ground, #f2f2d9) 68%);
 }
+.battle-scene[data-arena="gym"] .battle-field {
+  background: var(--gym-backdrop) center / 100% 100% no-repeat;
+}
 .battle-field:before {
   display: none;
 }
@@ -508,7 +511,7 @@
   border-color: #7a655b;
   background: #f7efda;
 }
-.battle-scene:is([data-arena="league"], [data-arena="champion"], [data-arena="legendary"]) .battle-enemy-hud {
+.battle-scene:is([data-arena="gym"], [data-arena="league"], [data-arena="champion"], [data-arena="legendary"]) .battle-enemy-hud {
   padding: 3px 6px;
   background: #f4efdc;
   border: 2px solid #28263b;

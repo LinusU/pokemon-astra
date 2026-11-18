@@ -64,3 +64,9 @@ Polish QA additionally caught incorrect overworld tree cells, opaque white sprit
 The scripted campaign measures playability with informed team choices. Uninterrupted first-time human playthroughs, time to complete the 251-species Pokédex, physical FlipPad input, and installation on a physical iPhone remain unverified. Puzzles use themed mechanisms and persistent conditions. Move effects use custom animation families; upstream battle paths such as PP Up and contest-only mechanics remain unported.
 
 The synthesizer’s Gen 2 music wave channel is implemented in the vendored 0.2.3 code. The upstream README checkbox is stale.
+
+## Gym redesign
+
+- The production build, 116 Vitest checks, three Rust tests and WASM cartridge smoke test passed. Each of the three starter campaigns defeated the eight keepers and Champion Mira in the seeded native battle simulation.
+- Gym traversal tests cover both Copperwick releases, both rims of Sunspire’s fossil bed, optional sight lines, Aster’s mandatory observer, the closed harbor with Surf, and a route back to the entrance from every reachable skating stop. Journal tests cover all six orders of the middle badges.
+- In an isolated Chrome profile with the verification cartridge, prepared saves started all eight leader battles with their own illustrated arenas. Keyboard movement crossed the rink to Neve. Robin’s testimony persisted through the dialogue UI. Dex spotted the player, fought a native battle and released the east catwalk on defeat.

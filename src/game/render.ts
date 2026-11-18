@@ -1,3 +1,4 @@
+import { paintGymTile, paintGymFixtures, paintGymActivity } from "./gym-art";
 import { trailPalette } from "../world/atlas";
 import { trailLandmark } from "./trail-landmarks";
 import { WORLD, type Exit, type WorldMap, type WorldObject } from "../world";
@@ -933,8 +934,6 @@ export class Renderer {
       } else {
         c.fillRect(px, py, 16, 1);
         c.fillRect(px + (y % 2 ? 8 : 0), py + 1, 1, 15);
-        if (m.kind === "gym" && x % 4 === 2 && y % 4 === 2)
-          c.fillRect(px + 6, py + 6, 3, 3);
       }
     } else {
       c.fillStyle = p.path;
@@ -1100,7 +1099,8 @@ export class Renderer {
       for (let x = left; x < left + width; x++) {
         const palette = m.kind === "route" ? trailPalette(m.id, x, y, m.palette) : m.palette;
         const theme = themes[palette] ??= { ...m, palette };
-        this.tile(ctx, theme, x, y, PALETTES[palette] ?? p);
+        if (m.kind === "gym") paintGymTile(ctx, m, x, y);
+        else this.tile(ctx, theme, x, y, PALETTES[palette] ?? p);
       }
     // Original atlas landmarks replace occasional 2×2 obstacle clusters.
     const slot = GROVE_ART[m.palette];
@@ -1115,6 +1115,7 @@ export class Renderer {
           )
             this.atlas(ctx, slot, x * 16, y * 16);
         }
+    if (m.kind === "gym") paintGymFixtures(ctx, m);
     if (m.kind === "town") this.roofLandmark(ctx, m);
     for (const e of m.exits) {
       const px = e.x * 16,
@@ -1206,7 +1207,7 @@ export class Renderer {
         }
       }
     }
-    if (m.kind === "gym" || m.id.startsWith("starfall")) {
+    if (m.id.startsWith("starfall")) {
       const [, outline, trim] = this.room(m);
       for (const o of m.objects) {
         if (o.kind !== "switch" && o.kind !== "leader") continue;
@@ -1844,6 +1845,7 @@ export class Renderer {
     }
     this.drawTerrain(c, map);
     this.animateGround(c, map, time);
+    if (map.kind === "gym") paintGymActivity(c, map, done, time);
     this.roadBarriers(c, map, isOpen);
     const objects = map.objects.filter((o) => objectVisible(o, done));
     const actors = objects.map((o) => ({

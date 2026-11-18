@@ -1,6 +1,8 @@
 import type { WorldMap } from "../world";
 
 const colors: Record<string, string> = {
+  i: "#98cdd8",
+  P: "#716d67", B: "#6f6571", C: "#647374", T: "#815e64",
   o: "#426d82",
   "#": "#57775c",
   ".": "#ebdaa8",
