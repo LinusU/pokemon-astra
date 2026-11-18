@@ -31,7 +31,7 @@ Twelve settlements, twenty-five numbered routes, twelve substantial dungeon loca
 
 Route numbers and endpoints: 01 Dewpath (Dewdrop–Mossford), 02 Orchard Lane (Mossford–Bramble), 03 Lantern Approach, 04 Amberbank (Bramble–Tideglass), 05 Saltwind Coast, 06 Canal Road (Tideglass–Copperwick), 07 Switchyard, 08 Saffron Dunes (Copperwick–Sunspire), 09 Glassway, 10 Reedwalk (Sunspire–Reedhaven), 11 Bamboo Reach, 12 Ashen Trail (Reedhaven–Cinderfall), 13 Ember Slope, 14 High Pass (Cinderfall–Rimepeak), 15 Snowmelt Road, 16 Bellflower Way (Rimepeak–Bellweather), 17 Pilgrim Walk, 18 Starlit Avenue (Bellweather–Aster), 19 Observatory Approach, 20 Crown Road (Aster–League), 21 Dewdrop Grove (Cut return), 22 Tidal Crossing (Surf return), 23 Old Quarry (Strength return), 24 Moonwater Reach (Whirlpool return), 25 Aurora Trail (postgame).
 
-Dungeons: Lantern Wood; Undertow Cave; Copperworks; Hourglass Ruins; Bamboo Sanctuary; Ember Mine; Frostvault Cavern; Echo Bell Tower; Meridian HQ; Starfall Observatory / Celestial Engine; Victory Ascent; Aurora Sanctuary. Dungeon interiors should differ mechanically: wood trail switch, tidal switches, power relays, rotating runestones, bridges, push boulders, slippery patches, bell sequence, keycard doors, constellation switches, mixed field moves, final research gates. The first implementation may use explicit inspectable switches and persisted flags for these puzzles, but must enforce actual ordering and unlocks rather than decorate with nonfunctional props.
+The twelve dungeons span forty rooms. Their challenges use local geography, Pokémon behavior and community work. The forest rescue follows paired blooms, the harbor sluice exposes a shell bar, the mine dispatcher holds two captive passengers and the bell tower preserves a playable watch peal. The [expedition catalogue](WORLD.md#progression) describes all twelve sites and their side passages. Each story objective opens a return shortcut.
 
 The in-game region map shares town positions, route polylines and walking distances with the overworld. The Dynamo Badge opens two ways to the far shore, through Saffron Dunes and across the Tidal Crossing. The three central keepers accept challenges in any order, each after the local rescue or restoration. Their listed teams describe the Sunspire → Cinderfall → Rimepeak itinerary. On another itinerary their ace levels follow the fourth, fifth and sixth badge milestones. All eight badges still power the Celestial Engine.
 
@@ -57,22 +57,22 @@ Elite Four: Rowan (Grass/Poison, 55–56), Petra (Rock/Steel, 56–57), Nyx (Gho
 Story: Partner & first survey → Lantern rescue → Tideglass fog signal → Copperworks power theft → Hourglass lens → Reedhaven ranger report → Ember Mine liberation → Frostvault passage → Bell Tower revelation / rival → Meridian HQ keycard and Vale → Observatory final engine → Eight badges / Victory Ascent → League → Aurora restoration.
 
 Side quests (persistent journal with discoverable prerequisites, objective, reward and completed state):
-1. Lost Parcel: Mossford courier → deliver to Bramble → Great Balls.
-2. A Warm Hearth: show Growlithe/Vulpix to Dewdrop elder → Fire Stone.
-3. Orchard Pollinators: catch three Bug species → Leaf Stone.
-4. Tideglass Angler: catch three Water species → Water Stone and fishing access.
-5. Lighthouse Lens: return with Surf → Lapras encounter.
-6. Copper Collector: three hidden machine parts → Thunder Stone.
-7. Fossil Memory: excavate Old Quarry → choose Omanyte/Kabuto; other available later.
-8. Oasis Offering: restore ruin markers → Moon/Sun Stones.
-9. Ranger's Census: 30 caught species → Exp Share / team XP boost.
-10. Bamboo Friend: rescue Farfetch'd behind Cut → rare lure.
-11. Furnace Delivery: bring mine ore to artisan → Metal Coat / Link Cable.
-12. Mountain Medicine: collect snow herb and return to Mossford → friendship charm.
-13. Echoes of the Past: bell sequence after Flash → Unown chamber.
-14. A Rival's Promise: win all rival battles → Eevee and choice evolution stones.
-15. Stargazer's Chart: visit all eight beacon sites → Master Ball.
-16. Living Atlas: 251 caught → final researcher scene and Aurora certificate.
+1. **Lost Parcel.** Collect the silkworm eggs in Mossford, wrap them in apple wool on Orchard Lane and deliver them to Bramble for five Great Balls.
+2. **A Warm Hearth.** Light Dewdrop’s bread oven with Growlithe or Vulpix and collect a Fire Stone from the elder.
+3. **Orchard Pollinators.** Dust the windward blossom, register three Bug species and show the orchard keeper for a Leaf Stone.
+4. **Tideglass Angler.** Register three Water species and land a practice bite to earn a Water Stone and fishing access.
+5. **Lighthouse Lens.** Restore the horn and ride Surf into the pilot’s sound to catch Lapras. The keeper records its return.
+6. **Copper Collector.** Salvage a cork, pawl and spring from separate parts of the canal works. The tinkerer rebuilds the tide clock and awards a Thunder Stone.
+7. **Fossil Memory.** Brush out the ribbed shell impressions in Old Quarry and revive Omanyte or Kabuto. Both also inhabit the freight road.
+8. **Oasis Offering.** Fill the cracked bowl at the spring, glaze it under the restored lens and take it home for a Moon Stone and Sun Stone.
+9. **Ranger’s Census.** Supplement thirty catches with a feeding observation of Reedwalk’s Quagsire to earn Exp Share.
+10. **Bamboo Friend.** Cut a lane in the tangled leek bed and approach Farfetch’d from the south. Follow it home for a rare lure.
+11. **Furnace Delivery.** Bring ore from the freight siding after the rescue. Heat, shape and quench a coupling to earn a Metal Coat and Link Cable.
+12. **Mountain Medicine.** Gather silverleaf, steep it at the Rimepeak spa and deliver the infusion to Mossford for a friendship charm.
+13. **Echoes of the Past.** Use Flash to read the wax after the watch peal. Enter the silent choir and show the historian the rubbing to meet Unown.
+14. **A Rival’s Promise.** Win the four rival battles, then choose an evolution stone when Robin entrusts Eevee to the player.
+15. **Stargazer’s Chart.** Plot all eight keeper beacons by visiting their inner sites. Show the chart for a Master Ball.
+16. **Living Atlas.** Restore Aurora, register 251 species and choose the opening habitat spread for the bound atlas and Aurora certificate.
 
 Legendary expeditions: Articuno in Frostvault after Waterfall, Zapdos in Copperworks after Champion, Moltres deep in Ember Mine, Mewtwo in Meridian's sealed lab, Mew in Dewdrop's hidden grove after a regional survey, Raikou/Entei/Suicune in three restored beacon shrines, Lugia beneath Undertow after Whirlpool, Ho-Oh atop Echo Bell Tower, Celebi in Aurora Sanctuary. Legendary losses must remain retryable. All nonlegendary species appear in encounter tables somewhere (rare evolved species acceptable alongside evolution). Starter families appear in late reserve habitats. No real-time exclusive windows: use an in-game clock / camp day-night switch. No trade locks: Link Cable and evolution items; friendship methods exposed. Pokédex includes seen/caught and habitat hints; PC storage supports every species.
 

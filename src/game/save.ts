@@ -61,6 +61,7 @@ export function restoreExpeditions(input: Save): Save {
   if (save.flags.includes("survey_rooms_v2")) return save;
   const credits: Record<string, string[]> = {
     found_parcel: ["parcel_wrapped"],
+    summit_open: ["west_pitch", "east_pitch"],
     bridge_lowered: ["bamboo_nesting", "bamboo_burrow"],
     pokemon_freed: ["ember_kit_safe", "ember_slug_safe", "mine_clear"],
     ranger_report: ["bamboo_nesting", "bamboo_burrow"],

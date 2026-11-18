@@ -55,7 +55,7 @@ export function trainerIntroMusic(opponent: Opponent): MusicScene {
 
 export function battleTheme(opponent: Opponent | undefined, night: boolean): MusicScene {
   if (opponent?.kind === "legendary") return "legendary";
-  if (!opponent?.trainer) return night ? "wildNight" : "wild";
+  if (!opponent?.trainer || opponent.kind === "wild") return night ? "wildNight" : "wild";
   if (trainerId(opponent) === "league_4") return "champion";
   if (boss(opponent)) return "gymBattle";
   if (rival(opponent)) return "rivalBattle";
@@ -64,6 +64,6 @@ export function battleTheme(opponent: Opponent | undefined, night: boolean): Mus
 }
 
 export function victoryTheme(opponent?: Opponent): MusicScene {
-  if (!opponent?.trainer || opponent.kind === "legendary") return "wildVictory";
+  if (!opponent?.trainer || opponent.kind === "wild" || opponent.kind === "legendary") return "wildVictory";
   return boss(opponent) ? "gymVictory" : "trainerVictory";
 }

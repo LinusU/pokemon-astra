@@ -1,7 +1,7 @@
 import { populateRequests } from "./requests";
 import { composeGeography, dimensions } from "./geography";
 import { localTrail, opposite, routes, settlements } from "./atlas";
-import { expeditions, expeditionCrew, finalNeeds, type Fieldwork } from "./expeditions";
+import { expeditions, expeditionCrew, finalNeeds, sidePassages, type Fieldwork } from "./expeditions";
 import { dungeonPlans } from "./dungeon-plans";
 import { gyms } from "./gyms";
 import { populateHabitats } from "./habitats";
@@ -53,6 +53,7 @@ export type ObjectKind =
   | "switch"
   | "trainer"
   | "leader"
+  | "wild"
   | "legendary"
   | "healer"
   | "shop"
@@ -83,6 +84,8 @@ export interface WorldObject {
   wildlife?: number;
   field?: Fieldwork;
 }
+/** Both encounters remain in the field until a successful capture. */
+export const isWildEncounter = (o: Pick<WorldObject, "kind">) => o.kind === "wild" || o.kind === "legendary";
 export type BarrierKind = Exclude<Ability, "fly"> | "warden" | "shutter";
 export interface ExitBarrier {
   kind: BarrierKind;
@@ -668,8 +671,14 @@ for (const [id, site] of Object.entries(expeditions)) {
   const finished = { flags: [site.finish] };
   connect(final, entry, site.shortcut, site.shortcut, finished, finished);
   obj(entry, { id: id + "_trail_clue", kind: "sign", name: site.clue[0], dialogue: site.clue[1] });
-  obj(entry, expeditionCrew(id));
-  for (const actor of site.actors) {
+  for (const [a, b, , req, hint] of sidePassages[id] ?? []) {
+    const from = id + "_" + a, to = id + "_" + b;
+    const staffDoor = id === "meridian" && a === 2;
+    connect(from, to, dungeonPlans[id][b-1].name, dungeonPlans[id][a-1].name, req, staffDoor ? { flags: ["keycard"] } : undefined);
+    if (hint) WORLD[from].exits.find(e => e.to === to)!.lockedDialogue = hint;
+    if (staffDoor) WORLD[to].exits.find(e => e.to === from)!.lockedDialogue = "Win the marshal’s clearance here or request a staff pass at the front desk.";
+  }
+  for (const actor of [expeditionCrew(id), ...site.actors]) {
     const room = dungeonPlans[id].findIndex(r => r.marks.includes(actor.id));
     if (room < 0) throw Error("Missing room for " + actor.id);
     obj(id + "_" + (room + 1), actor);
@@ -1084,7 +1093,7 @@ const legendary: [string, string, number, Requirement][] = [
   ["route22", "Raikou", 243, { flags: ["champion"] }],
   ["route23", "Entei", 244, { flags: ["champion"] }],
   ["route24", "Suicune", 245, { flags: ["champion"] }],
-  ["undertow_3", "Lugia", 249, { ability: "whirlpool" }],
+  ["undertow_4", "Lugia", 249, { ability: "whirlpool" }],
   ["echo_3", "Ho-Oh", 250, { flags: ["champion"] }],
   ["aurora_3", "Celebi", 251, { flags: ["champion", "aurora_restored"] }],
 ];

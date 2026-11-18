@@ -35,7 +35,7 @@ describe("authored region", () => {
   it("has the promised areas and all 251 species in reachable habitats", () => {
     expect(maps.filter((m) => m.kind === "town")).toHaveLength(12);
     expect(maps.filter((m) => m.kind === "route")).toHaveLength(25);
-    expect(maps.filter((m) => m.kind === "dungeon")).toHaveLength(36);
+    expect(maps.filter((m) => m.kind === "dungeon")).toHaveLength(40);
     expect(maps.filter((m) => m.kind === "gym")).toHaveLength(8);
     const species = new Set(
       maps.flatMap((m) => [

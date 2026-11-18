@@ -198,8 +198,12 @@ export function trailLandmark(
   time: number,
 ) {
   const design = designs[Number(map.id.slice(5)) - 1];
+  paintRelief(c, design, map.palette, x, y, time);
+}
+export function paintRelief(c: CanvasRenderingContext2D, design: keyof typeof relief,
+  palette: string, x: number, y: number, time: number) {
   const rows = relief[design];
-  const [b, h, l] = pigments[map.palette] ?? ["#87634e", "#b99a6f", "#e8cd91"];
+  const [b, h, l] = pigments[palette] ?? ["#87634e", "#b99a6f", "#e8cd91"];
   const colors: Record<string, string> = {
     k: "#35424a",
     b,

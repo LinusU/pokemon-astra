@@ -1,7 +1,7 @@
 import type { Exit, WorldMap } from "./index";
 
 import { dungeonPlans } from "./dungeon-plans";
-import { expeditionFloor, expeditions } from "./expeditions";
+import { expeditionFloor, expeditions, sidePassages } from "./expeditions";
 import { gyms } from "./gyms";
 import { routes, settlements, surveyTrail, type Point } from "./atlas";
 type Patch = [
@@ -404,6 +404,7 @@ const towns: Record<string, TownPlan> = {
     ],
     anchors: {
       quest_oasis: [8, 8],
+      oasis_spring: [10, 7],
       resident_sunspire_0: [5, 15],
       resident_sunspire_1: [12, 6],
     },
@@ -487,7 +488,7 @@ const towns: Record<string, TownPlan> = {
       [10, 15, 4, 3, "f"],
       [20, 8, 5, 2, "#"],
     ],
-    anchors: { resident_rimepeak_0: [15, 6], resident_rimepeak_1: [9, 12] },
+    anchors: { medicine_spring: [8, 17], resident_rimepeak_0: [15, 6], resident_rimepeak_1: [9, 12] },
     lane: [
       [6, 6],
       [6, 7],
@@ -772,6 +773,13 @@ function dungeonLayout(world: Region, map: WorldMap) {
       if (!object || placed.has(key)) throw Error("Invalid anchor " + key + " in " + map.id);
       placed.add(key);
       object.x = x; object.y = y;
+      return ".";
+    }
+    if (tile === "+" || tile === "^") {
+      const link = sidePassages[id].find(([a,b,mark]) => (a === i+1 || b === i+1) && tile === mark)!;
+      const other = link[0] === i+1 ? link[1] : link[0];
+      const exit = map.exits.find(e => e.to === id + "_" + other)!;
+      relocateExit(world, map, exit, [x, y]);
       return ".";
     }
     if ("@><".includes(tile)) {

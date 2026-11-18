@@ -1,6 +1,7 @@
 // Each drawing is the walkable survey inside a one-tile outer wall. Short rows
 // end in cliff or canopy. @ is the way back, > the way onward, < the shortcut.
-// Digits locate named actors and objects; * marks terrain changed by the story.
+// + and ^ connect side passages. Digits locate actors and objects.
+// * and ! mark terrain changed by the story.
 export interface DungeonRoom {
   name: string;
   plan: string[];
@@ -61,25 +62,35 @@ export const dungeonPlans: Record<string, DungeonRoom[]> = {
       ..##..ooooooo.......
       @.....ooooooo....###
     `),
-    room("Horn mouth", ["undertow_objective", "legendary_249", "evolution_supply_7", "lighthouse_lapras"], `
+    room("Horn mouth", ["undertow_objective", "evolution_supply_7"], `
       ooo.......ooooo
-      oo...0..1..oooo
-      ooo..==.~~~oooo
-      ooo..==.~~3oooo
+      oo...0..+..oooo
+      ooo..==...ooooo
+      ooo..==..oooooo
       .........oooooo
-      @..2.......<...
+      @..1.......<...
+    `),
+    room("Pilot’s sound", ["lighthouse_lapras", "legendary_249"], `
+      ooooooooooo...,..oooooo
+      oooooooo...1...##.ooooo
+      ooooooo..#####.....oooo
+      ooo~~~~~~~~~~o....ooooo
+      oo~~~0~~~~~~~~~~ooooooo
+      ooo~~~~~~~~~oo~~ooooooo
+      ooooo~~.....ooooooo
+      ####....+...#######
     `),
   ],
   copperworks: [
-    room("Meter alley", ["copperworks_trail_clue", "copperworks_guardian_trainer", "copper_load"], `
+    room("Meter alley", ["copperworks_trail_clue", "copperworks_guardian_trainer"], `
       ....CC.....CC....<...
-      .1..CC..2..CC....CC..
+      .1..CC..+..CC....CC..
       .....................
       .CC..CC.....CC..CC...
       @..0...............>.
     `),
     room("Feeder gallery", ["copper_breaker", "pickup_part_c"], `
-      ..CC..0..CC..
+      ^.CC..0..CC..
       ..CC.....CC..
       ...tttttt....
       ..tt..C.ttt..
@@ -93,6 +104,13 @@ export const dungeonPlans: Record<string, DungeonRoom[]> = {
       ...CC...CC....
       .....tt.......
       @.......<.....
+    `),
+    room("Meter loft", ["copper_load"], `
+      ...CC..0..CC...
+      ..CCCC...CCCC..
+      ..ttttttttttt..
+      ..t..#####..t..
+      .+t..#####..t^.
     `),
   ],
   hourglass: [
@@ -213,29 +231,37 @@ export const dungeonPlans: Record<string, DungeonRoom[]> = {
       ...BB..BB.....
       ##...@......##
     `),
-    room("Wax archive", ["echo_objective", "legendary_250", "quest_echoes", "echo_rubbing"], `
+    room("Wax archive", ["echo_objective", "legendary_250", "echo_rubbing"], `
       ...BBBB....1..
       ..0....BB.....
-      .....3.....BB.
+      .....2.....BB.
       .BB...BB...BB.
-      ....2.........
+      ....+.........
       @..........<..
+    `),
+    room("Silent choir", ["quest_echoes"], `
+      ######...######
+      ####..B.B..####
+      ##..B.....B..##
+      ...B...0...B...
+      ##..B.....B..##
+      ####...+...####
     `),
   ],
   meridian: [
-    room("Public lobby", ["meridian_trail_clue", "meridian_guardian_trainer", "meridian_clerk"], `
+    room("Public lobby", ["meridian_trail_clue", "meridian_clerk"], `
       ..BB..BB.....CC.....
-      .............CC.2...
+      .............CC.1...
       ..CC....0...........
       ..CC.........###....
-      ..1....<.....###..>.
+      ..+....<.....###..>.
       .@..................
     `),
     room("Night-shift records", ["meridian_deposition"], `
       ...BB.....BB.....BB..
       ...BB..0..BB.....BB..
       ...................>.
-      ..BBBBB...BBBBB......
+      ..BBBBB...BBBBB...^..
       .@...............###.
     `),
     room("Director’s floor", ["meridian_objective", "legendary_150", "evolution_supply_9"], `
@@ -244,6 +270,15 @@ export const dungeonPlans: Record<string, DungeonRoom[]> = {
       ..CC......CC....
       ..2.............
       @.............<.
+    `),
+    room("Loading dock", ["meridian_guardian_trainer"], `
+      ######.....^.##
+      .CCC....#.CC...
+      .CCC.0..#.CC...
+      ....tttttttt...
+      .CC.t..###.t...
+      .CC.t..###.t...
+      .+..tttttttt...
     `),
   ],
   starfall: [
@@ -282,7 +317,7 @@ export const dungeonPlans: Record<string, DungeonRoom[]> = {
     room("Twin pitches", ["victory_crag", "victory_falls"], `
       ####....>....####
       ###...#####...###
-      ####*#######*####
+      ####*#######!####
       #...0.#####.1...#
       ...##..ooo..##...
       ..###..ooo..###..

@@ -852,3 +852,45 @@ canvas {
 .scope-grid { margin:auto; display:grid; width:max-content; grid-template-columns:repeat(5,1.3em); grid-auto-rows:1.2em }
 .scope-grid i { font-style:normal; line-height:1.2; color:#ffe9a7 }
 .fieldwork .field-status { min-height:2em }
+.fieldwork .scope-grid {
+  border-radius:50%; background:#26314b; color:#f1d591;
+  box-shadow:0 0 0 2px #675844, inset 0 0 0 3px #444656;
+}
+.fieldwork .dig-grid button { background:#d8c49e; color:#443c35; border-color:#8f795c }
+.fieldwork .dig-grid [data-exposed] { background:#77664e; color:#fff1c4 }
+.float-pool {
+  height:3rem; position:relative; overflow:hidden; border:2px solid #526a69;
+  background:linear-gradient(to bottom,#ccdfcd 0 45%,#a9d2c8 45% 49%,#679ea2 49% 56%,#538791 56%);
+}
+.float-pool i {
+  position:absolute; top:25%; left:48%; width:6px; height:18px; border:1px solid #514f4d;
+  background:linear-gradient(to bottom,#b54c43 0 50%,#f9e7c4 50%);
+}
+.float-pool[data-dip="1"] i { top:36%; transform:rotate(35deg) }
+.float-pool[data-dip="2"] i { top:59%; opacity:.44 }
+.carillon .instrument-reading { background:#4d3f54; color:#ffe5a0 }
+.forge .instrument-reading { background:#513c3d; color:#fbc383 }
+
+@media (max-width:650px), (max-height:540px) {
+  .overlay:has(.fieldwork) { padding:4px }
+  .panel.fieldwork {
+    display:grid; grid-template-columns:minmax(0,1fr) auto;
+    grid-template-areas:"title leave" "brief brief" "display display" "status status" "keys keys";
+    align-items:center; gap:4px 8px; padding:7px 9px; border-width:2px;
+  }
+  .fieldwork h2 { grid-area:title; font-size:23px; margin:0 }
+  .fieldwork > p:not(.field-status) { grid-area:brief; font-size:17px; margin:0 }
+  .fieldwork .field-display { grid-area:display }
+  .fieldwork .field-status { grid-area:status; margin:0; min-height:0; font-size:16px !important }
+  .fieldwork .field-keys { grid-area:keys; margin:0; gap:3px }
+  .fieldwork button { font-size:17px; padding:4px 7px; min-height:28px }
+  .fieldwork #back { grid-area:leave; justify-self:end }
+  .fieldwork .instrument-reading { font-size:17px; padding:3px }
+  .fieldwork.telescope {
+    grid-template-columns:minmax(0,1fr) auto;
+    grid-template-areas:"title leave" "brief display" "status display" "keys keys";
+  }
+  .fieldwork .scope-grid { padding:4px; font-size:15px; grid-template-columns:repeat(5,1em); grid-auto-rows:1em }
+  .fieldwork .scope-grid i { line-height:1 }
+  .fieldwork .dig-grid button { min-height:24px; padding:1px 7px }
+}

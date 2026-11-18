@@ -1,7 +1,8 @@
+import { paintFieldObject, paintExpeditionFloor, paintReturn, expeditionActivity } from "./expedition-art";
 import { paintGymTile, paintGymFixtures, paintGymActivity } from "./gym-art";
 import { trailPalette } from "../world/atlas";
 import { trailLandmark } from "./trail-landmarks";
-import { WORLD, type Exit, type WorldMap, type WorldObject } from "../world";
+import { WORLD, isWildEncounter, type Exit, type WorldMap, type WorldObject } from "../world";
 import type { Engine } from "../engine";
 import { interactionTarget, objectVisible } from "./actors";
 import { barrierTarget, barrierTiles, connectionOffset } from "./navigation";
@@ -1115,11 +1116,13 @@ export class Renderer {
           )
             this.atlas(ctx, slot, x * 16, y * 16);
         }
+    if (m.kind === "dungeon") paintExpeditionFloor(ctx, m);
     if (m.kind === "gym") paintGymFixtures(ctx, m);
     if (m.kind === "town") this.roofLandmark(ctx, m);
     for (const e of m.exits) {
       const px = e.x * 16,
         py = e.y * 16;
+      if (paintReturn(ctx, m, e.to, px, py)) continue;
       if (e.entrance === "cave") {
         // The base stays on the portal tile while the arch extends over its back.
         ctx.fillStyle = p.ink;
@@ -1528,6 +1531,11 @@ export class Renderer {
       if (!done) this.npc(c, "item", x, y);
       return;
     }
+    if (o.field?.light && (o.field.light === "night") !== this.night) {
+      c.fillStyle = this.night ? "#798b77" : "#81a6a0";
+      c.fillRect(x-4,y+2,3,1); c.fillRect(x+2,y,4,1);
+      return;
+    }
     if (o.wildlife && this.engine) {
       const species = o.wildlife;
       const creature = this.sprite("mon:" + species, () => this.engine!.sprite(species));
@@ -1540,7 +1548,7 @@ export class Renderer {
         return;
       }
     }
-    if (o.kind === "legendary") {
+    if (isWildEncounter(o)) {
       if (done) return;
       const id = o.trainer?.team[0]?.species || o.reward?.species;
       const image =
@@ -1551,6 +1559,7 @@ export class Renderer {
       else this.npc(c, "sage", x, y);
       return;
     }
+    if (paintFieldObject(c, map, o, x, y, time, done)) return;
     if (o.kind === "switch") {
       this.switch(c, o, map, x, y, time, done);
       return;
@@ -1845,6 +1854,7 @@ export class Renderer {
     }
     this.drawTerrain(c, map);
     this.animateGround(c, map, time);
+    if (map.kind === "dungeon") expeditionActivity(c, map, time, done);
     if (map.kind === "gym") paintGymActivity(c, map, done, time);
     this.roadBarriers(c, map, isOpen);
     const objects = map.objects.filter((o) => objectVisible(o, done));

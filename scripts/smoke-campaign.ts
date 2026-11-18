@@ -9,7 +9,7 @@ import { Engine, type BattleMon, type BattleOptions, type BattleSnapshot } from 
 import { MEDICINE, useMedicine } from "../src/game/medicine";
 import { freshSave, isValidSave, normalizeSavePosition, type Save } from "../src/game/save";
 import { awardBadge, badgeMask, fieldHabitats, fieldTeam } from "../src/game/badges";
-import { WORLD, type WorldObject } from "../src/world";
+import { WORLD, isWildEncounter, type WorldObject } from "../src/world";
 
 const { values: options } = parseArgs({
   options: {
@@ -52,8 +52,8 @@ const targetSpecies: Record<number, number[]> = {
 const detours: Record<number, string[]> = {
   3: ["lantern_1", "gym1"], 5: ["undertow_1", "gym2"],
   7: ["copperworks_1", "gym3"], 9: ["hourglass_1", "gym4"],
-  11: ["bamboo_1"], 13: ["ember_1", "gym5"], 15: ["frostvault_1", "gym6"],
-  17: ["echo_1", "gym7"], 19: ["meridian_1", "meridian_3", "starfall_1", "gym8"],
+  11: ["bamboo_1"], 13: ["ember_1", "ember_2", "gym5"], 15: ["frostvault_1", "gym6"],
+  17: ["echo_1", "gym7"], 19: ["meridian_4", "meridian_3", "starfall_1", "gym8"],
   20: ["victory_1"],
 };
 const league = Object.values(WORLD)
@@ -288,10 +288,11 @@ function runCampaign(starter: number) {
   save.party = [engine.makeStarter(starter)];
   save.items.poke_ball = 10;
   save.items.potion = 5;
+  const starterMon = save.party[0];
   save.flags = ["partner", `starter_${starter}`];
   save.caught = [starter];
   save.seen = [starter];
-  // Show Growlithe to the Dewdrop elder for the Fire Stone before leaving.
+  // Light the bread oven with Growlithe and collect the elder’s Fire Stone before leaving.
   if (starter === 58) evolve(0, 59);
   let bestBall = pokeballId;
   const partnerFamily = new Set(starter === 58 ? [58, 59] : starter === 60 ? [60, 61, 62, 186] : [69, 70, 71]);
@@ -439,6 +440,7 @@ function runCampaign(starter: number) {
     if (object.kind === "leader") {
       awardBadge(save, object.reward!.badge!);
     }
+    return outcome;
   }
 
   function giveMedicine(mon: Save["party"][number], key: Medicine) {
@@ -509,12 +511,13 @@ function runCampaign(starter: number) {
     }
     for (const location of [map.id, ...(detours[route] ?? [])]) {
       for (const object of WORLD[location].objects) {
-        if (!object.trainer || object.kind === "legendary" || (object.requires?.badges ?? 0) > save.badges)
+        if (!object.trainer || isWildEncounter(object) || (object.requires?.badges ?? 0) > save.badges)
           continue;
+        const required = object.kind === "leader" || object.id === "meridian_objective" || object.id === "ember_dispatcher";
         // The road teams may backtrack to town between training fights.
         save.party = save.party.map((mon) => engine.healPokemon(mon));
         if (save.items.potion < 4) buy("potion", 4, MEDICINE.potion.price);
-        if (object.kind === "leader" || object.id === "meridian_objective") {
+        if (required) {
           for (const key of ["super_potion", "hyper_potion", "revive"] as const)
             if (save.badges >= MEDICINE[key].badges && (save.items[key] ?? 0) < 3)
               buy(key, 3, MEDICINE[key].price);
@@ -525,7 +528,7 @@ function runCampaign(starter: number) {
           save.money -= 2100;
           evolve(0, lead.species + 1);
         }
-        challenge(object, object.kind === "leader" || object.id === "meridian_objective");
+        challenge(object, required);
         if (WORLD[location].kind === "route" && !/^rival_/.test(object.id)
           && save.flags.includes(object.setsFlag ?? object.id))
           routePractice.push(object);
@@ -534,6 +537,22 @@ function runCampaign(starter: number) {
   }
 
   assert.equal(save.badges, 8, "Eight badges are required before entering the League");
+  // At the summit PC, recover trained partners that made room for late catches.
+  // Keep the original starter, then give the other slots to the strongest
+  // distinct species raised during this run.
+  const roster = [...save.party, ...save.storage];
+  const original = roster.find(mon =>
+    partnerFamily.has(mon.species) && mon.ot_id === starterMon.ot_id &&
+    mon.dvs.every((dv, i) => dv === starterMon.dvs[i]),
+  );
+  assert(original, "The original partner is available for the League");
+  const selected = [original];
+  for (const mon of roster.sort((a, b) => b.level - a.level)) {
+    if (selected.length === 6) break;
+    if (!selected.some(entered => entered.species === mon.species)) selected.push(mon);
+  }
+  save.party = selected;
+  save.storage = roster.filter(mon => !selected.includes(mon));
   // Use up to eight route rematches to build the endgame team, with each new
   // recruit taking the lead on a route fight they can handle.
   const trainees = [...save.party].sort((a, b) => b.level - a.level).slice(0, 5);
@@ -543,39 +562,48 @@ function runCampaign(starter: number) {
     practice(trainer, save.party.findIndex((mon) => mon.species === species));
   }
   const kit = Object.entries(leagueSupplies) as [keyof typeof leagueSupplies, number][];
-  const kitCost = kit.reduce((sum, [key, quantity]) =>
-    sum + Math.max(0, quantity - (save.items[key] ?? 0)) * MEDICINE[key].price, 0);
-  // Trainers on the return routes provide a last expedition if the team's
-  // captures and supplies have used most of its prize money.
-  for (const n of [21, 22, 23, 24]) {
-    if (save.money >= kitCost) break;
-    const scout = WORLD["route" + n].objects.find(o => o.id === "trainer_route" + n)!;
-    if (save.flags.includes(scout.setsFlag!)) continue;
-    save.party = save.party.map(mon => engine.healPokemon(mon));
-    challenge(scout, false);
-  }
-  console.log(`League preparation: ${save.money} funds after ${trainerWins} trainer wins, ${practiceWins} rematches and ${captures} captures`);
-  for (const [key, quantity] of kit)
-    assert(buy(key, Math.max(0, quantity - (save.items[key] ?? 0)), MEDICINE[key].price), `Cannot afford League supplies: ${key}`);
-
-  // One full heal before Rowan. Use only purchased supplies between chambers.
-  save.party = save.party.map((mon) => engine.healPokemon(mon));
-  for (const opponent of league) {
-    if (opponent.id !== "league_0") {
-      save.party = save.party.map((mon) => {
-        let ready = giveMedicine(mon, "revive");
-        if (ready.status) ready = giveMedicine(ready, "full_restore");
-        const missing = ready.stats[0] - ready.hp;
-        if (missing >= 55) ready = giveMedicine(ready, "hyper_potion");
-        else if (missing >= 28) ready = giveMedicine(ready, "super_potion");
-        if (ready.moves.some((id, slot) => id && move(id).power > 0 && (ready.pp[slot] & 63) <= 3))
-          ready = giveMedicine(ready, "max_elixer");
-        return ready;
-      });
+  // A blackout ends the entire League attempt. Re-register in Crown with the
+  // experience, money and medicine that actually survived the native battles.
+  for (let attempt = 1; attempt <= 3 && !save.flags.includes("champion"); attempt++) {
+    if (attempt > 1) {
+      console.log("Registering for League attempt " + attempt);
+      save.flags = save.flags.filter(flag => !/^league_[0-3]_won$/.test(flag));
+      for (const trainer of lastTrainers) practice(trainer);
     }
-    if (opponent.id === "league_4" && options["pre-mira"])
-      writeFileSync(options["pre-mira"], JSON.stringify(preMiraSave(save, opponent)));
-    challenge(opponent, true);
+    const kitCost = kit.reduce((sum, [key, quantity]) =>
+      sum + Math.max(0, quantity - (save.items[key] ?? 0)) * MEDICINE[key].price, 0);
+    // Trainers on the return routes provide a last expedition if the team's
+    // captures and supplies have used most of its prize money.
+    for (const n of [21, 22, 23, 24]) {
+      if (save.money >= kitCost) break;
+      const scout = WORLD["route" + n].objects.find(o => o.id === "trainer_route" + n)!;
+      if (save.flags.includes(scout.setsFlag!)) continue;
+      save.party = save.party.map(mon => engine.healPokemon(mon));
+      challenge(scout, false);
+    }
+    console.log(`League preparation: ${save.money} funds after ${trainerWins} trainer wins, ${practiceWins} rematches and ${captures} captures`);
+    for (const [key, quantity] of kit)
+      assert(buy(key, Math.max(0, quantity - (save.items[key] ?? 0)), MEDICINE[key].price), `Cannot afford League supplies: ${key}`);
+
+    // One full heal before Rowan. Use only purchased supplies between chambers.
+    save.party = save.party.map((mon) => engine.healPokemon(mon));
+    for (const opponent of league) {
+      if (opponent.id !== "league_0") {
+        save.party = save.party.map((mon) => {
+          let ready = giveMedicine(mon, "revive");
+          if (ready.status) ready = giveMedicine(ready, "full_restore");
+          const missing = ready.stats[0] - ready.hp;
+          if (missing >= 55) ready = giveMedicine(ready, "hyper_potion");
+          else if (missing >= 28) ready = giveMedicine(ready, "super_potion");
+          if (ready.moves.some((id, slot) => id && move(id).power > 0 && (ready.pp[slot] & 63) <= 3))
+            ready = giveMedicine(ready, "max_elixer");
+          return ready;
+        });
+      }
+      if (opponent.id === "league_4" && options["pre-mira"])
+        writeFileSync(options["pre-mira"], JSON.stringify(preMiraSave(save, opponent)));
+      if (challenge(opponent, false) !== "win") break;
+    }
   }
   assert(save.flags.includes("champion"));
   console.log(`Won the League with ${engine.species(starter).name} as the original partner.`);

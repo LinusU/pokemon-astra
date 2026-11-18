@@ -2,7 +2,7 @@ import { openFieldwork } from "./ui/fieldwork";
 import { requestHint, updateChart } from "./world/requests";
 import { gymBattleBackdrop } from "./game/gym-art";
 import { iceLanding, advanceGlide } from "./game/skating";
-import { expeditionState } from "./world/expeditions";
+import { expeditionState, pitchFlag } from "./world/expeditions";
 import { gymState } from "./world/gyms";
 import { awardBadge, badgeMask, fieldHabitats, fieldTeam } from "./game/badges";
 import { fishingPool } from "./game/pokedex";
@@ -42,6 +42,7 @@ import { createShell, panel, escapeHtml, type PanelCursor } from "./ui/shell";
 import {
   WORLD,
   QUESTS,
+  isWildEncounter,
   BADGES,
   type Exit,
   type Requirement,
@@ -579,7 +580,8 @@ function interact() {
     persist();
   }
   // Finished errands remain finished even after a party or held item changes.
-  if (o.setsFlag && save.flags.includes(o.setsFlag) && !o.repeatable) {
+  const completed = pitchFlag(o.id) ?? o.setsFlag;
+  if (completed && save.flags.includes(completed) && !o.repeatable) {
     const practice =
       map.kind === "route" &&
       o.kind === "trainer" &&
@@ -688,7 +690,7 @@ function interact() {
     shop();
     return;
   }
-  if (o.kind === "legendary" && !save.flags.includes(o.setsFlag || o.id)) {
+  if (isWildEncounter(o) && !save.flags.includes(o.setsFlag || o.id)) {
     const target = o.trainer?.team[0];
     if (target) {
       message(o.dialogue, () => startBattle(target.species, target.level, o));
@@ -749,6 +751,7 @@ function interact() {
 function finishErrand(o: WorldObject, reward?: Reward) {
   const receipt = rewardReceipt(reward);
   flag(o.setsFlag);
+  flag(pitchFlag(o.id));
   updateChart(save.flags, save.map);
   applyReward(reward);
   persist();
@@ -1460,7 +1463,7 @@ function startBattle(species: number, level: number, o?: WorldObject) {
     battleSpecies = species;
     if (!save.seen.includes(species)) save.seen.push(species);
     const opponent =
-      o?.trainer && o.kind !== "legendary"
+      o?.trainer && !isWildEncounter(o)
         ? {
             party: (o.id.startsWith("rematch_") ? o.trainer.team : fieldTeam(o, save)).map((m, i) =>
               engine.makePokemon(rivalSpecies(o, i, m.species), m.level),
@@ -1518,13 +1521,13 @@ function showBattle() {
     let receipt = "";
     if (
       battleObject &&
-      ((battleObject.kind === "legendary" && caughtSpecies === battleSpecies) ||
-        (battleObject.kind !== "legendary" && won))
+      ((isWildEncounter(battleObject) && caughtSpecies === battleSpecies) ||
+        (!isWildEncounter(battleObject) && won))
     ) {
       flag(battleObject.setsFlag || battleObject.id);
       // Custom Astra trainers have authored prizes; the native cartridge's
       // trainer-class payout table does not describe these new teams.
-      if (won && battleObject.kind !== "legendary")
+      if (won && !isWildEncounter(battleObject))
         save.money = Math.min(
           999999,
           save.money + (battleObject.trainer?.reward ?? 0),
@@ -1591,7 +1594,7 @@ function showBattle() {
   battlePresenter = new BattlePresenter({
     layer,
     trainerName:
-      battleObject?.trainer && battleObject.kind !== "legendary"
+      battleObject?.trainer && !isWildEncounter(battleObject)
         ? battleObject.trainer.name || battleObject.name
         : undefined,
     gymBackdrop: gymBattleBackdrop(currentField()),

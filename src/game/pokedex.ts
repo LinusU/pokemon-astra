@@ -1,4 +1,4 @@
-import { WORLD, type Requirement, type WorldMap } from "../world";
+import { WORLD, isWildEncounter, type Requirement, type WorldMap } from "../world";
 import { fieldHabitats } from "./badges";
 import type { Save } from "./save";
 
@@ -55,10 +55,10 @@ export function buildDex(save: Pick<Save, "map" | "visited" | "flags" | "seen" |
       }
     }
     for (const object of map.objects) {
-      const guardian = object.kind === "legendary" && object.trainer?.team[0];
+      const guardian = isWildEncounter(object) && object.trainer?.team[0];
       const collected = object.setsFlag && save.flags.includes(object.setsFlag);
       if (guardian) {
-        add(guardian.species, object.request ? "Field request" : "Guardian", String(guardian.level),
+        add(guardian.species, object.kind === "wild" ? "Field request" : "Guardian", String(guardian.level),
           collected ? "Already captured" : guardianHint(object.requires));
       }
       if (object.reward?.species) {

@@ -1,4 +1,4 @@
-import type { WorldMap, WorldObject } from "../world";
+import { isWildEncounter, type WorldMap, type WorldObject } from "../world";
 
 export type Facing = "up" | "down" | "left" | "right";
 export interface ActorState {
@@ -94,7 +94,7 @@ export function interactionDistance(
 export function objectVisible(object: WorldObject, flags: ReadonlySet<string>) {
   if (object.field?.appearsAfter && !flags.has(object.field.appearsAfter)) return false;
   return (
-    (object.kind !== "item" && object.kind !== "legendary" && !object.field?.disappear) ||
+    (object.kind !== "item" && !isWildEncounter(object) && !object.field?.disappear) ||
     !flags.has(object.setsFlag || object.id)
   );
 }

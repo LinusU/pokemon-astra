@@ -20,7 +20,24 @@ Road exits have three-tile approaches at the map edge. Reciprocal exits face the
 
 Trees, rocks, dark passages, rapids and trail barriers occupy the roads they close. Face an obstacle and press A to inspect it. Most field abilities clear a landmark with an explicit action that persists in the save. Surf lets the player move directly into the water at an open launch point.
 
-A dungeon’s entrance holds the clue and first mechanism. Completing it opens the next room, where the second interaction powers the passage to the objective chamber. The objective opens the return stairs between the chamber and the entrance. The twelve sites use distinct layouts and local devices, including sluice tunnels, a flooded bridgehouse, a relay hall, a gallery of bells and a security wing. Puzzle state uses persisted flags and gated exits.
+The twelve expeditions occupy forty surveyed rooms. Each story objective opens a direct return to its entrance. Four sites have a side room or an alternative way through. Optional catches and field requests can be completed on a return visit.
+
+| Expedition | What the player does |
+| --- | --- |
+| Lantern Wood | Follow paired moth blooms through a forked forest to the surveyor’s hollow oak. A lone flower marks an abandoned snare. |
+| Undertow Cave | Drain the breathing pool and walk the exposed shell bar to the foghorn. Come back with Surf for the pilot’s sound and its Lapras. |
+| Copperworks | Compare the night readings in the meter loft and isolate the stolen load while keeping the clinic and canal pumps live. Two ladders connect the loft to the machinery. |
+| Hourglass Ruins | Stand in the gnomon’s western shadow and sight east through a slotted disk. The beam opens a glass causeway. |
+| Bamboo Sanctuary | Study the stranded nest and Wooper’s exposed burrow in either order. The island ranger uses both observations to identify Meridian’s diversion. |
+| Ember Mine | Defeat the freight dispatcher, then free Cyndaquil and Slugma from their separate wagons. Flint’s refuge receives the passengers. |
+| Frostvault Cavern | Push an ice plug east along a steam groove from its western face. Each push moves the physical plug and persists. |
+| Echo Bell Tower | Play the three-rope watch peal using its carved verse. Each pitch also has a visible name. Flash reveals a rubbing and the entrance to the silent choir. |
+| Meridian HQ | Ask the night clerk for a staff pass or battle the marshal on the loading dock. Take a signed carbon copy upstairs to confront Vale. |
+| Starfall Observatory | Turn the telescope’s altitude and azimuth wheels until the double star meets the crosshair. Return to the Engine after Orion’s match. |
+| Victory Ascent | Scale the eastern cataract with Waterfall or cut steps into the western scree with Rock Smash. Each field action opens its own pitch to the summit cairn. |
+| Aurora Sanctuary | Record a daylight pollinator and a moonlit spawning pool. The local tents advance the watch immediately. The nursery restores the sanctuary from both records. |
+
+Yellow’s Seafoam boulders change traversal beyond the room where the player pushes them. Crystal’s Ilex Forest links the Farfetch’d encounter to its position and the direction of approach. Emerald’s Shoal Cave swaps the actual map layout with the tide. Astra adapts those principles to its ice plug, reed-bed rescue and exposed shell crossing. [Seafoam current script](https://github.com/pret/pokeyellow/blob/master/scripts/SeafoamIslandsB3F.asm) · [Ilex Forest script](https://github.com/pret/pokecrystal/blob/master/maps/IlexForest.asm) · [Shoal Cave layout change](https://github.com/pret/pokeemerald/blob/master/data/maps/ShoalCave_LowTideEntranceRoom/scripts.inc)
 
 The [eight gym plans](../src/world/gyms.ts) place each trainer, sight line, mat and keeper on its own tile survey. Fern accepts challengers on arrival. The surveyor marks the onward route to Tideglass. Marina’s gangway lowers with the fog signal. Either Copperwick operator can release a catwalk to Volt. Awarding the Dynamo Badge opens both for return visits.
 
@@ -33,6 +50,8 @@ Victory Ascent opens the Astral League challenge. Rowan, Petra, Nyx, Gale and Mi
 Requirements combine flags, minimum badge counts, field abilities, species and type checks, caught counts and items. A successful switch or NPC interaction records its flag and grants its reward once. Trainers and leaders grant them after victory. Legendary encounters remain retryable until capture.
 
 ## Habitats and research
+
+The [sixteen field requests](../src/world/requests.ts) can be discovered at a requester or a field site. The journal tracks missing parts, locations, survey counts and rewards. Fossil Memory uses a brushable chalk face and offers two revivals. Lighthouse Lens leads to a retryable wild Lapras capture. A Rival’s Promise grants Eevee and the player’s choice of stone. The field book plots each beacon on arrival regardless of when the player meets the stargazer. The complete atlas preserves the player’s choice of opening habitat.
 
 Side trails lead to overlooks, supplies and optional trainers. Sixteen habitats also have a visible wild resident. Inspecting one plays its cry and registers it as seen. Encounter grass is optional on main roads. Habitat pools group species by landscape and progression, with evolved forms appearing at lower weights in many pools. The Aurora rooms split the late research grounds into starter plant, water and fire families. Legendary hints name the appropriate ability or story milestone, while the Living Atlas quest checks all 251 catches after the sanctuary is restored. The prerequisite for entering the sanctuary itself is the Hall of Fame.
 

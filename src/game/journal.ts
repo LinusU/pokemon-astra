@@ -1,4 +1,4 @@
-import { expeditions } from "../world/expeditions";
+import { expeditions, expeditionState } from "../world/expeditions";
 import {
   WORLD,
   type Exit,
@@ -71,7 +71,10 @@ export function campaignObjective(save: Pick<Save, "flags" | "survey">) {
     // A completed chapter stays complete when maps gain new mechanisms.
     if (done(chapter.steps[chapter.steps.length - 1])) continue;
     const step = chapter.steps.find((id) => !done(id))!;
-    return { title: chapter.title, ...landmarks.get(step)! };
+    const landmark = landmarks.get(step)!;
+    const map = expeditionState(landmark.map, save.flags);
+    const object = map === landmark.map ? landmark.object : map.objects.find(o => o.id === step)!;
+    return { title: chapter.title, map, object };
   }
 }
 
