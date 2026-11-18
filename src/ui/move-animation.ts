@@ -59,7 +59,7 @@ export function drawMove(
         const p = between(from, end, f);
         const lift = visual.pattern === "arc" ? -44 * peak(f) : 0;
         const spread = (i - (count - 1) / 2) * 5 * peak(f);
-        const directional = ["needle", "wing", "leaf", "glint"].includes(visual.motif);
+        const directional = ["needle", "wing", "leaf", "glint", "dragon"].includes(visual.motif);
         const rotation = visual.pattern === "arc" ? f * TAU : directional ? along : 0;
         glyph(offset(p, 0, lift + spread), count > 2 ? 0.52 + 0.18 * (i % 2) : 0.86, 1, rotation);
       }
@@ -67,6 +67,14 @@ export function drawMove(
         const hit = clamp((t - 0.58) / 0.42);
         glyph(at, 0.65 + hit * 0.45, peak(hit), 0, "spark");
       }
+      break;
+    }
+    case "boomerang": {
+      const turnsAt = miss ? end : at;
+      const f = t <= 0.5 ? t * 2 : (1 - t) * 2;
+      const bend = Math.sin(t * TAU) * -27;
+      glyph(offset(between(from, turnsAt, f), 0, bend), 1, Math.min(1, peak(t) * 4), t * TAU * 2);
+      if (!miss) glyph(at, 0.68, clamp(1 - Math.abs(t - 0.5) * 9), 0, "spark");
       break;
     }
     case "beam": {
@@ -88,6 +96,46 @@ export function drawMove(
       if (!miss && t > 0.28) glyph(at, 0.9 + peak(t) * 0.25, peak(t), 0, "glint");
       break;
     }
+    case "spectrum": {
+      const f = clamp(t * 1.65);
+      const tail = clamp((t - 0.51) * 2.05);
+      for (const [index, palette] of (["blue", "red", "gold"] as const).entries()) {
+        const start = offset(between(from, end, tail), 0, (index - 1) * size * .23);
+        const tip = offset(between(from, end, f), 0, (index - 1) * size * .29);
+        ctx.globalAlpha = peak(t);
+        ctx.beginPath();
+        ctx.moveTo(start.x, start.y);
+        ctx.lineTo(tip.x, tip.y);
+        ctx.strokeStyle = colors[palette][1];
+        ctx.lineWidth = size * 0.17;
+        ctx.stroke();
+        battleGlyph(ctx, visual.motif, palette, tip.x, tip.y, size * 0.40, t);
+      }
+      break;
+    }
+    case "column": {
+      if (miss) break;
+      const f = clamp(t * 2);
+      ctx.globalAlpha = peak(t) * 0.8;
+      ctx.beginPath();
+      ctx.moveTo(at.x, Math.max(-10, at.y - height));
+      for (let i = 1; i <= 7; i++) {
+        const y = Math.max(-10, at.y - height + height * f * i / 7);
+        const x = i === 7 ? at.x : at.x + Math.sin(i * 8 + param) * size * 0.29;
+        ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = fill;
+      ctx.lineWidth = size * 0.46;
+      ctx.stroke();
+      ctx.strokeStyle = light;
+      ctx.lineWidth = size * 0.14;
+      ctx.stroke();
+      for (let i = 0; i < count; i++)
+        glyph(offset(at, (i % 2 ? -1 : 1) * size * 0.33, -height * ((i * 0.19 + 1 - f) % 1)),
+          0.72, peak(t));
+      glyph(at, 0.93, peak(t), 0, "spark");
+      break;
+    }
     case "orbit":
     case "link": {
       if (miss && visual.anchor !== "user") break;
@@ -98,6 +146,32 @@ export function drawMove(
         glyph(offset(center, Math.cos(turn) * radius, Math.sin(turn) * radius * 0.63),
           count === 1 ? 0.66 : 0.55, Math.min(1, peak(t) * 2), visual.motif === "wind" ? turn : 0);
       }
+      break;
+    }
+    case "vortex": {
+      if (miss && visual.anchor !== "user") break;
+      const total = Math.max(count, 7);
+      for (let i = 0; i < total; i++) {
+        const spin = t * TAU * 1.5 + i * 2.4;
+        const vertical = i / (total - 1);
+        const radius = (0.42 + vertical * 1.1) * size * (0.65 + peak(t) * 0.45);
+        glyph(offset(at, Math.cos(spin) * radius, 21 - vertical * 55 + Math.sin(spin) * 7),
+          0.35 + 0.4 * vertical, peak(t) * (0.76 + Math.sin(spin) * 0.24),
+          visual.motif === "wind" || visual.motif === "petal" ? spin : 0);
+      }
+      break;
+    }
+    case "burst": {
+      if (miss && visual.anchor !== "user") break;
+      const spread = 1 - (1 - t) ** 2;
+      const total = Math.max(count, 5);
+      for (let i = 0; i < total; i++) {
+        const angle = i * TAU / total + param * 0.2;
+        const radius = spread * size * (1.2 + (i % 3) * 0.38);
+        glyph(offset(at, Math.cos(angle) * radius, Math.sin(angle) * radius * 0.79),
+          0.72 - t * 0.37, peak(t), visual.motif === "bolt" ? angle : 0);
+      }
+      glyph(at, peak(t) * 1.25, peak(t), 0, "spark");
       break;
     }
     case "fall":
@@ -119,12 +193,63 @@ export function drawMove(
       const field = visual.anchor === "field";
       const footprint = offset(at, 0, field ? height * 0.18 : height * 0.16);
       const total = field ? Math.max(count, 5) : Math.max(count, 1);
+      if (field) {
+        ctx.globalAlpha = peak(t) * 0.25;
+        ctx.fillStyle = ink;
+        ctx.fillRect(0, Math.round(footprint.y + Math.sin(t * 48) * 4), width, height * 0.22);
+      }
       for (let i = 0; i < total; i++) {
         const f = clamp(t * 1.4 - i * 0.045);
         const spread = (i - (total - 1) / 2) * (field ? width * 0.145 : 14);
         glyph(offset(footprint, spread + (field ? 0 : Math.sin(f * Math.PI) * 9), -peak(f) * 8),
           field ? 1.4 + 0.38 * f : 0.8 + 0.6 * f, peak(f), visual.motif === "rock" ? f * TAU : 0);
       }
+      break;
+    }
+    case "tether": {
+      if (miss) break;
+      const extent = clamp(t * 3.1);
+      const floor = visual.motif === "crack" ? height * 0.19 : 0;
+      const tip = between(from, at, extent);
+      ctx.globalAlpha = peak(t);
+      ctx.beginPath();
+      ctx.moveTo(from.x, from.y + floor);
+      for (let i = 1; i <= 12; i++) {
+        const p = between(from, tip, i / 12);
+        const sway = Math.sin(i * 2.1 + t * 15) * Math.sin(i * Math.PI / 12);
+        ctx.lineTo(p.x, p.y + floor + sway * size * 0.52);
+      }
+      ctx.strokeStyle = ink;
+      ctx.lineWidth = size * 0.25;
+      ctx.stroke();
+      ctx.strokeStyle = fill;
+      ctx.lineWidth = size * 0.13;
+      ctx.stroke();
+      glyph(offset(tip, 0, floor), 0.94, peak(t), visual.motif === "leaf" ? along : 0);
+      break;
+    }
+    case "flood": {
+      const direction = opponent.x > from.x ? 1 : -1;
+      const crest = between(from, opponent, t * 1.5 - 0.15);
+      for (let band = 0; band < 3; band++) {
+        const x = crest.x - direction * band * 20;
+        const base = height - band * 10;
+        ctx.globalAlpha = peak(t) * (0.9 - band * 0.14);
+        ctx.beginPath();
+        ctx.moveTo(x - direction * width, base);
+        ctx.quadraticCurveTo(x - direction * 65, base - height * 0.18, x - direction * 20, crest.y - 23);
+        ctx.quadraticCurveTo(x + direction * 10, crest.y - 40, x + direction * 22, crest.y - 8);
+        ctx.lineTo(x + direction * 40, height);
+        ctx.lineTo(x - direction * width, height);
+        ctx.closePath();
+        ctx.fillStyle = band % 2 ? fill : ink;
+        ctx.fill();
+        ctx.strokeStyle = light;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+      for (let i = 0; i < 6; i++)
+        glyph(offset(crest, direction * i * 8, -peak(t) * (12 + i % 3 * 15)), .35, peak(t));
       break;
     }
     case "wave": {
@@ -148,10 +273,32 @@ export function drawMove(
       ctx.globalAlpha = 0.24 * peak(t);
       ctx.fillStyle = fill;
       ctx.fillRect(0, 0, width, height);
+      if (visual.motif === "sun") {
+        glyph({ x: width * .63, y: height * .18 }, 2, peak(t));
+        for (let i = 0; i < 6; i++)
+          glyph({ x: width * (.15 + i * .15), y: height * (.62 + Math.sin(i * 3) * .23) },
+            0.4, peak(t) * 0.65, 0, "glint");
+        break;
+      }
       for (let i = 0; i < (visual.count ?? 18); i++) {
         const x = (i * 71 + t * (visual.motif === "drop" ? 18 : 56)) % width;
         const y = (i * 47 + t * 78) % height;
-        glyph({ x, y }, visual.motif === "sun" ? 0.83 : 0.30 + (i % 3) * 0.13, peak(t) * 0.85);
+        glyph({ x, y }, 0.30 + (i % 3) * 0.13, peak(t) * 0.85);
+      }
+      break;
+    }
+    case "shield": {
+      glyph(offset(at, 0, -4), 0.9 + peak(t) * 1.4, peak(t) * 0.56);
+      for (let i = -1; i <= 1; i++)
+        glyph(offset(at, i * size * 0.95, -peak(t) * 22), 0.28, peak(t), 0, "glint");
+      break;
+    }
+    case "echo": {
+      for (let i = 0; i < 5; i++) {
+        const f = clamp((t - i * 0.045) * 1.4);
+        const center = between(from, at, f);
+        const direction = i % 2 ? -1 : 1;
+        glyph(offset(center, direction * i * 8 * peak(f), -i * 4), 0.74, peak(f));
       }
       break;
     }
@@ -170,6 +317,11 @@ const movement: Record<NonNullable<MoveVisual["motion"]>, (x: number, y: number)
     { transform: `translate(${-x / 3}px, ${-y / 3}px)`, offset: 0.66 }, { transform: "translate(0)" }],
   shake: () => [{ transform: "translateX(0)" }, { transform: "translateX(-5px)" }, { transform: "translateX(5px)" },
     { transform: "translateX(-4px)" }, { transform: "translateX(0)" }],
+  dig: () => [{ transform: "translateY(0)" }, { transform: "translateY(22px)", opacity: 0.12, offset: 0.64 },
+    { transform: "translateY(22px)", opacity: 0.12 }],
+  launch: () => [{ transform: "translateY(0)" }, { transform: "translateY(-52px)", opacity: 0.14, offset: 0.65 },
+    { transform: "translateY(-52px)", opacity: 0.14 }],
+  shrink: () => [{ transform: "scale(1)" }, { transform: "scale(.52)", offset: 0.5 }, { transform: "scale(1)" }],
 };
 
 export function playMove(

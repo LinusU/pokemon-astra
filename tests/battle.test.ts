@@ -37,6 +37,13 @@ describe("battle presentation", () => {
     expect(findMoveVisual("Pay Day")).toMatchObject({ motif: "coin", pattern: "arc" });
     expect(findMoveVisual("Rock Slide")).toMatchObject({ motif: "rock", pattern: "fall" });
   });
+  it("stages beams, field attacks, and charge turns separately", () => {
+    expect(findMoveVisual("Thunder")).toMatchObject({ motif: "bolt", pattern: "column" });
+    expect(findMoveVisual("Surf")).toMatchObject({ pattern: "flood", anchor: "field" });
+    expect(findMoveVisual("Earthquake")).toMatchObject({ motif: "crack", anchor: "field" });
+    expect(findMoveVisual("Solarbeam", 1)).toMatchObject({ motif: "sun", anchor: "user" });
+    expect(findMoveVisual("Solarbeam", 0)).toMatchObject({ motif: "sun", pattern: "beam" });
+  });
 });
 
 import { readFileSync, existsSync } from "node:fs";

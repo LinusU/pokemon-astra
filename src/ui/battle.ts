@@ -794,7 +794,7 @@ export class BattlePresenter {
           e.Message?.DidntAffect ||
           e.Message?.DoesntAffect,
       );
-      const visual = findMoveVisual(name);
+      const visual = findMoveVisual(name, a.param);
       if (visual) this.showMoveVisual(user, visual, miss, !!move?.power, a.param);
       else this.moveAnimation(user, side, moveEffect(name, move?.type), miss);
       return;
