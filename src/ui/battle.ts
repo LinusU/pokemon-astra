@@ -2,7 +2,7 @@ import type { BattleMon, BattleSnapshot } from "../engine";
 import { escapeHtml } from "./shell";
 import { battleBagKey, itemInfo, mountBag, type BagItem, type BagState } from "./bag";
 import { playMove } from "./move-animation";
-import { findMoveVisual, type MoveVisual } from "./move-visuals";
+import { findMoveVisual, healingSparkle, nativeConditionVisual, type MoveVisual } from "./move-visuals";
 import "./battle.css";
 
 type Side = "Player" | "Enemy";
@@ -411,48 +411,6 @@ export function battleMessage(
     : "The battle continues.";
 }
 
-/** Distinct visual families cover every move ID, including unknown future IDs. */
-export function moveEffect(name: string, type?: number): string {
-  const byType: Record<number, string> = {
-    1: "impact",
-    2: "impact",
-    3: "poison",
-    4: "earth",
-    5: "earth",
-    7: "grass",
-    8: "psychic",
-    20: "fire",
-    21: "water",
-    22: "grass",
-    23: "electric",
-    24: "psychic",
-    25: "ice",
-    26: "psychic",
-    27: "psychic",
-  };
-  const n = name.toLowerCase();
-  if (/^(bite|crunch)$/.test(n)) return "bite";
-  if (/^(scratch|cut|slash|fury swipes|metal claw)$/.test(n)) return "slash";
-  if (/fire|flame|ember|burn|heat/.test(n)) return "fire";
-  if (/water|bubble|surf|hydro|rain|whirlpool|crabhammer/.test(n))
-    return "water";
-  if (/thunder|shock|spark|zap/.test(n)) return "electric";
-  if (/ice|freeze|blizzard|frost/.test(n)) return "ice";
-  if (/leaf|vine|razor|seed|solar|grass|petal/.test(n)) return "grass";
-  if (/psychic|psybeam|confusion|dream|hypnosis/.test(n)) return "psychic";
-  if (/poison|toxic|sludge|acid|smog/.test(n)) return "poison";
-  if (/rock|earth|mud|sand|dig|magnitude/.test(n)) return "earth";
-  if (/heal|recover|rest|softboiled|wish/.test(n)) return "heal";
-  if (
-    /growl|leer|tail whip|screech|charm|sing|dance|agility|barrier|protect/.test(
-      n,
-    )
-  )
-    return "status";
-  if (/beam|blast|pulse|ray/.test(n)) return "beam";
-  return byType[type ?? -1] || "impact";
-}
-
 /** Recover HP at the start of this Pokémon's remaining event sequence. */
 export function battleMonAtSendOut(
   snapshot: BattleSnapshot,
@@ -518,7 +476,6 @@ export class BattlePresenter {
         <div class="battle-hud battle-player-hud"></div>
         <div class="battle-mon battle-enemy"><img alt=""></div>
         <div class="battle-mon battle-player"><img alt=""></div>
-        <div class="battle-fx"></div>
         <canvas class="battle-move-fx" aria-hidden="true"></canvas>
         <div class="battle-party-effect" hidden></div>
       </div>
@@ -611,8 +568,12 @@ export class BattlePresenter {
         enemy: structuredClone(this.snapshot.state.enemy.active),
       };
       this.expProgress = this.snapshot.exp_progress[this.shownSlots.player] ?? 0;
-      for (const side of ["player", "enemy"] as const)
+      for (const side of ["player", "enemy"] as const) {
         this.root.querySelector(`.battle-${side}`)?.classList.toggle("faint", this.shown[side].hp === 0);
+        // Crystal stores Underground and Flying in bits 5 and 6 of SubStatus3.
+        const substatus = this.snapshot.state[side].substatus?.[2] ?? 0;
+        this.setOutOfReach(side, (substatus & 0x60) !== 0);
+      }
       if (this.snapshot.site === "OfferSwitch")
         this.conceal("enemy");
       else if (this.shown.enemy.hp > 0) this.conceal("enemy", false);
@@ -660,6 +621,7 @@ export class BattlePresenter {
       const battler = side === "Player" ? "player" : "enemy";
       this.shownSlots[battler] = slot;
       this.shown[battler] = mon;
+      this.setOutOfReach(battler, false);
       if (battler === "player") this.expProgress = this.expAtSendOut(slot, this.queue);
       this.paint();
       this.next();
@@ -717,7 +679,7 @@ export class BattlePresenter {
     }
     if (event.StatsBox) {
       if (event.StatsBox.slot === this.shownSlots.player)
-        this.animate("player", "effect-heal", 500);
+        this.showMoveVisual("player", healingSparkle, false, false, 0);
       else this.next();
       return;
     }
@@ -737,8 +699,13 @@ export class BattlePresenter {
       const a = event.Animation;
       const user = a.user === "Player" ? "player" : "enemy";
       if (a.anim === 257) {
-        if (a.param !== 1) this.conceal(user, false);
-        this.animate(user, a.param === 1 ? "effect-status" : "appear", 500);
+        if (a.param === 1) {
+          const substitute = findMoveVisual("Substitute", 2)!;
+          this.showMoveVisual(user, substitute, false, false, 0);
+        } else {
+          this.conceal(user, false);
+          this.animate(user, "appear", 500);
+        }
         return;
       }
       if (a.anim === 258) {
@@ -758,33 +725,21 @@ export class BattlePresenter {
         });
         return;
       }
-      if (a.anim >= 260) {
-        const family =
-          (
-            {
-              260: "status",
-              262: "poison",
-              263: "heal",
-              265: "electric",
-              273: "status",
-              274: "impact",
-            } as Record<number, string>
-          )[a.anim] || "status";
-        this.animate(user, `effect-${family}`, 500);
+      if (a.anim >= 259) {
+        const condition = nativeConditionVisual(a.anim);
+        if (condition) this.showMoveVisual(user, condition, false, false, a.param);
+        else this.next();
         return;
       }
-      let move: ReturnType<Options["move"]> | undefined;
-      if (a.anim > 0 && a.anim < 256) {
-        try {
-          move = this.o.move(a.anim);
-        } catch {}
+      const move = a.anim >= 1 && a.anim <= 251 ? this.o.move(a.anim) : undefined;
+      const name = a.anim === 255 ? "Sweet Scent" : move?.name;
+      const visual = name && findMoveVisual(name, a.param);
+      if (!visual) {
+        this.next();
+        return;
       }
-      const name = move?.name ?? "";
-      const self =
-        /heal|recover|rest|softboiled|agility|barrier|protect|swords dance|growth|harden|defense curl|amnesia|meditate|focus energy/i.test(
-          name,
-        );
-      const side = (a.user === "Player") === self ? "player" : "enemy";
+      const vanishes = name === "DIG" || name === "FLY";
+      if (vanishes) this.setOutOfReach(user, false);
       const nextMove = this.queue.findIndex((e) => e.Message?.UsedMove);
       const following = this.queue.slice(0, nextMove < 0 ? undefined : nextMove);
       const miss = following.some(
@@ -794,14 +749,24 @@ export class BattlePresenter {
           e.Message?.DidntAffect ||
           e.Message?.DoesntAffect,
       );
-      const visual = findMoveVisual(name, a.param);
-      if (visual) this.showMoveVisual(user, visual, miss, !!move?.power, a.param);
-      else this.moveAnimation(user, side, moveEffect(name, move?.type), miss);
+      this.showMoveVisual(user, visual, miss, !!move?.power, a.param, () => {
+        if (vanishes && a.param === 1) this.setOutOfReach(user, true);
+      });
       return;
     }
     this.next();
   }
-  private showMoveVisual(user: Battler, visual: MoveVisual, miss: boolean, hit: boolean, param: number) {
+  private setOutOfReach(side: Battler, active: boolean) {
+    this.root.querySelector(`.battle-${side}`)!.classList.toggle("out-of-reach", active);
+  }
+  private showMoveVisual(
+    user: Battler,
+    visual: MoveVisual,
+    miss: boolean,
+    hit: boolean,
+    param: number,
+    after?: () => void,
+  ) {
     const canvas = this.root.querySelector<HTMLCanvasElement>(".battle-move-fx")!;
     const attacker = this.root.querySelector<HTMLElement>(`.battle-${user}`)!;
     const defender = this.root.querySelector<HTMLElement>(user === "player" ? ".battle-enemy" : ".battle-player")!;
@@ -809,35 +774,8 @@ export class BattlePresenter {
       speed: this.o.speed, miss, hit, param,
     }, () => {
       this.stopMove = undefined;
+      after?.();
       this.next();
-    });
-  }
-  private moveAnimation(
-    user: Battler,
-    target: Battler,
-    family: string,
-    miss: boolean,
-  ) {
-    if (user === target) {
-      this.animate(target, `effect-${family}`, 500);
-      return;
-    }
-    const attacker = this.root.querySelector<HTMLElement>(`.battle-${user}`)!;
-    const fx = this.root.querySelector<HTMLElement>(".battle-fx")!;
-    attacker.classList.add("attack-windup");
-    this.delay(180, () => {
-      attacker.classList.remove("attack-windup");
-      if (family === "bite" || family === "slash") {
-        if (miss) this.next();
-        else this.animate(target, `effect-${family}`, 500);
-        return;
-      }
-      fx.className = `battle-fx projectile ${family} from-${user}${miss ? " misses" : ""}`;
-      this.delay(360, () => {
-        fx.className = "battle-fx";
-        if (miss) this.next();
-        else this.animate(target, `effect-${family}`, 500);
-      });
     });
   }
   private animate(side: Battler, effect: string, duration: number) {

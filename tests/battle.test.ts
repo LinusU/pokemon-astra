@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { battleMessage, moveEffect, battleMonAtSendOut } from "../src/ui/battle";
-import { findMoveVisual } from "../src/ui/move-visuals";
+import { readFileSync, existsSync } from "node:fs";
+import { battleMessage, battleMonAtSendOut } from "../src/ui/battle";
+import { findMoveVisual, nativeConditionVisual } from "../src/ui/move-visuals";
+import { Engine } from "../src/engine";
 
 describe("battle presentation", () => {
   const move = (id: number) => ({ name: id === 85 ? "Thunderbolt" : "Tackle" });
@@ -23,13 +25,12 @@ describe("battle presentation", () => {
       "broke free",
     );
   });
-  it("provides an effect for known and unfamiliar moves", () => {
-    expect(moveEffect("Thunderbolt")).toBe("electric");
-    expect(moveEffect("Flamethrower")).toBe("fire");
-    expect(moveEffect("Hydro Pump")).toBe("water");
-    expect(moveEffect("Tackle")).toBe("impact");
-    expect(moveEffect("Bite", 27)).toBe("bite");
-    expect(moveEffect("Metal Claw", 9)).toBe("slash");
+  it("has an authored effect for every move in the native catalog", () => {
+    const source = readFileSync(new URL("../vendor/crystal-battle/src/data/names.rs", import.meta.url), "utf8");
+    const table = source.match(/const MOVE_NAMES: &\[&str\] = &\[([\s\S]*?)\];/)![1];
+    const names = Array.from(table.matchAll(/"([^"]+)"/g), (entry) => entry[1]);
+    expect(names).toHaveLength(251);
+    expect(names.filter((name) => !findMoveVisual(name))).toEqual([]);
   });
   it("gives contact moves and thrown objects distinct staging", () => {
     expect(findMoveVisual("Bite")).toMatchObject({ motif: "jaw", pattern: "hit" });
@@ -44,10 +45,19 @@ describe("battle presentation", () => {
     expect(findMoveVisual("Solarbeam", 1)).toMatchObject({ motif: "sun", anchor: "user" });
     expect(findMoveVisual("Solarbeam", 0)).toMatchObject({ motif: "sun", pattern: "beam" });
   });
+  it("anchors recovery and shields on the user and distinguishes ongoing conditions", () => {
+    expect(findMoveVisual("Recover")).toMatchObject({ motif: "plus", anchor: "user" });
+    expect(findMoveVisual("Protect")).toMatchObject({ pattern: "shield", anchor: "user" });
+    expect(findMoveVisual("Sing")).toMatchObject({ motif: "note", pattern: "wave" });
+    expect(findMoveVisual("Present", 3)).toMatchObject({ motif: "plus", pattern: "rise" });
+    expect(findMoveVisual("Substitute", 2)).toMatchObject({ motif: "doll", pattern: "rise" });
+    expect(findMoveVisual("Curse", 1)).toMatchObject({ motif: "arrow", anchor: "user" });
+    expect(nativeConditionVisual(260)).toMatchObject({ motif: "sleep", anchor: "user" });
+    expect(nativeConditionVisual(261)).toMatchObject({ motif: "fire", anchor: "user" });
+    expect(nativeConditionVisual(262)).toMatchObject({ motif: "bubbles", anchor: "user" });
+  });
 });
 
-import { readFileSync, existsSync } from "node:fs";
-import { Engine } from "../src/engine";
 const romAvailable =
   existsSync("pokecrystal11.gbc") && existsSync("public/astra_native.wasm");
 describe.skipIf(!romAvailable)("real native battle events", () => {
@@ -93,10 +103,18 @@ describe.skipIf(!romAvailable)("real native battle events", () => {
       caught: true,
       wobbles: 3,
     });
-    for (let id = 1; id <= 251; id++) {
-      const move = engine.move(id);
-      expect(moveEffect(move.name, move.type)).toBeTruthy();
-    }
+  });
+  it("delivers separate native charge and strike events for Dig", async () => {
+    const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});
+    const engine = new Engine(instance.exports as never, readFileSync("pokecrystal11.gbc"));
+    const lead = { ...engine.makePokemon(58, 22), moves: [91, 0, 0, 0], pp: [10, 0, 0, 0] };
+    const battle = engine.startBattle({ party: [lead], opponent: { species: 19, level: 3 }, seed: 5 });
+    const move = battle.snapshot().legal.findIndex((action: any) => action.Move?.slot === 0);
+    const snapshot = battle.act(move);
+    const phases = (snapshot.events as { Animation?: { anim: number; user: string; param: number } }[])
+      .flatMap(({ Animation }) => Animation?.anim === 91 && Animation.user === "Player" ? [Animation.param] : []);
+    expect(phases).toEqual([1, 0]);
+    expect(snapshot.state.player.substatus?.[2]).toBe(0);
   });
 });
 

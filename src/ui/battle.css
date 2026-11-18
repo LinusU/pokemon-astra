@@ -114,6 +114,9 @@
   object-position: center bottom;
   image-rendering: pixelated;
 }
+.battle-mon.out-of-reach img {
+  visibility: hidden;
+}
 .battle-enemy {
   right: 4%;
   bottom: 45%;
@@ -242,12 +245,6 @@
 .battle-mon.appear {
   animation: battle-appear 0.5s;
 }
-.battle-mon[class*="effect-"] {
-  animation: battle-hit 0.6s steps(2, end);
-}
-.battle-mon[class*="effect-"]:after {
-  animation: battle-spark 0.6s ease-out;
-}
 .battle-scene.capture .battle-enemy img {
   opacity: 0;
 }
@@ -256,34 +253,6 @@
 }
 .battle-scene.capture.caught .battle-enemy:after {
   filter: brightness(1.15);
-}
-@keyframes battle-hit {
-  0%,
-  100% {
-    transform: translateX(0);
-  }
-  25% {
-    transform: translateX(5px);
-  }
-  50% {
-    transform: translateX(-4px);
-  }
-  75% {
-    transform: translateX(3px);
-  }
-}
-@keyframes battle-spark {
-  0% {
-    transform: scale(0.2);
-    opacity: 0;
-  }
-  35% {
-    opacity: 1;
-  }
-  100% {
-    transform: scale(1.4);
-    opacity: 0;
-  }
 }
 @keyframes battle-faint {
   to {
@@ -311,42 +280,6 @@
   0%, 100% { transform: translateX(0) rotate(0); }
   25% { transform: translateX(-12%) rotate(-20deg); }
   75% { transform: translateX(12%) rotate(20deg); }
-}
-.battle-mon.attack-windup {
-  animation: battle-windup 0.18s ease-in;
-}
-.battle-fx.projectile {
-  position: absolute;
-  z-index: 4;
-  width: 11%;
-  height: 14%;
-  left: 20%;
-  top: 69%;
-  pointer-events: none;
-  animation: battle-projectile 0.36s linear forwards;
-}
-.battle-fx.projectile.from-enemy {
-  left: 76%;
-  top: 25%;
-  animation-name: battle-projectile-reverse;
-}
-.battle-fx.projectile.misses {
-  opacity: 0.65;
-}
-@keyframes battle-windup {
-  50% {
-    transform: translate(-8px, 6px) scale(0.95);
-  }
-}
-@keyframes battle-projectile {
-  to {
-    transform: translate(450%, -240%);
-  }
-}
-@keyframes battle-projectile-reverse {
-  to {
-    transform: translate(-450%, 240%);
-  }
 }
 .battle-exp {
   height: 4px;
@@ -421,208 +354,6 @@
 .conceal-player .battle-player,
 .conceal-player .battle-player-hud {
   visibility: hidden;
-}
-.battle-mon[class*="effect-"]:after,
-.battle-fx.projectile:after {
-  content: "";
-  display: block;
-  position: absolute;
-  inset: 32%;
-  width: auto;
-  height: auto;
-  background: #f4d45a;
-  box-shadow:
-    -14px -8px #d9a940,
-    13px 7px #d9a940,
-    14px -9px #fff4a1,
-    -13px 9px #fff4a1;
-  clip-path: polygon(
-    35% 0,
-    65% 0,
-    65% 30%,
-    100% 30%,
-    100% 65%,
-    65% 65%,
-    65% 100%,
-    35% 100%,
-    35% 65%,
-    0 65%,
-    0 30%,
-    35% 30%
-  );
-  text-shadow: none;
-}
-.battle-fx.projectile:after {
-  inset: 20%;
-  box-shadow: none;
-}
-.battle-mon.effect-fire:after,
-.battle-fx.fire:after {
-  background: #f36a35;
-  box-shadow:
-    -12px -6px #ffd05a,
-    12px 5px #b84234;
-  clip-path: polygon(
-    35% 0,
-    60% 20%,
-    60% 0,
-    85% 35%,
-    100% 70%,
-    75% 100%,
-    25% 100%,
-    0 70%,
-    15% 35%
-  );
-}
-.battle-mon.effect-water:after,
-.battle-fx.water:after {
-  background: #62b9db;
-  box-shadow:
-    -12px -8px #a4e6ea,
-    12px 8px #368db7;
-  clip-path: polygon(
-    30% 0,
-    70% 0,
-    100% 30%,
-    100% 70%,
-    70% 100%,
-    30% 100%,
-    0 70%,
-    0 30%
-  );
-}
-.battle-mon.effect-ice:after,
-.battle-fx.ice:after {
-  background: #a5e9e9;
-  clip-path: polygon(
-    40% 0,
-    60% 0,
-    60% 35%,
-    90% 15%,
-    100% 30%,
-    70% 50%,
-    100% 70%,
-    90% 85%,
-    60% 65%,
-    60% 100%,
-    40% 100%,
-    40% 65%,
-    10% 85%,
-    0 70%,
-    30% 50%,
-    0 30%,
-    10% 15%,
-    40% 35%
-  );
-}
-.battle-mon.effect-electric:after,
-.battle-fx.electric:after {
-  background: #f3db4d;
-  clip-path: polygon(48% 0, 87% 0, 61% 39%, 89% 39%, 16% 100%, 38% 55%, 9% 55%);
-}
-.battle-mon.effect-grass:after,
-.battle-fx.grass:after {
-  background: #65ad56;
-  clip-path: polygon(100% 0, 85% 65%, 45% 100%, 0 100%, 15% 35%, 55% 0);
-}
-.battle-mon.effect-psychic:after,
-.battle-fx.psychic:after {
-  background: #be7ac7;
-  clip-path: polygon(
-    25% 0,
-    75% 0,
-    100% 25%,
-    100% 75%,
-    75% 100%,
-    25% 100%,
-    0 75%,
-    0 25%,
-    25% 0,
-    30% 30%,
-    30% 70%,
-    70% 70%,
-    70% 30%,
-    30% 30%
-  );
-}
-.battle-mon.effect-poison:after,
-.battle-fx.poison:after {
-  background: #a96cb6;
-  clip-path: polygon(
-    25% 0,
-    75% 0,
-    100% 25%,
-    100% 75%,
-    75% 100%,
-    25% 100%,
-    0 75%,
-    0 25%
-  );
-}
-.battle-mon.effect-earth:after,
-.battle-fx.earth:after {
-  background: #a17a57;
-  clip-path: polygon(25% 0, 80% 10%, 100% 50%, 75% 100%, 20% 90%, 0 50%);
-}
-.battle-mon.effect-bite {
-  animation: none;
-}
-.battle-mon.effect-bite::before,
-.battle-mon.effect-bite::after {
-  content: "";
-  position: absolute;
-  z-index: 1;
-  inset: auto 23% 50%;
-  height: 26%;
-  background: linear-gradient(#654553 0 28%, #fff8de 28%);
-  clip-path: polygon(0 22%, 15% 0, 85% 0, 100% 22%, 100% 43%, 84% 100%, 74% 54%, 62% 80%, 50% 54%, 38% 80%, 26% 54%, 16% 100%, 0 43%);
-  animation: bite-snap calc(500ms * var(--battle-speed, 1)) steps(5, end) both;
-  --jaw-open: -75%;
-  --jaw-closed: 30%;
-  --jaw-turn: 1;
-}
-.battle-mon.effect-bite::after {
-  inset: 50% 23% auto;
-  --jaw-open: 75%;
-  --jaw-closed: -30%;
-  --jaw-turn: -1;
-}
-@keyframes bite-snap {
-  0%, 100% {
-    opacity: 0;
-    transform: translateY(var(--jaw-open)) scaleY(var(--jaw-turn));
-  }
-  20%, 80% {
-    opacity: 1;
-    transform: translateY(var(--jaw-open)) scaleY(var(--jaw-turn));
-  }
-  45%, 60% {
-    opacity: 1;
-    transform: translateY(var(--jaw-closed)) scaleY(var(--jaw-turn));
-  }
-}
-.battle-mon.effect-slash::after {
-  inset: 20% 26%;
-  background: #fff6d1;
-  clip-path: polygon(0 76%, 70% 0, 23% 69%, 88% 12%, 38% 85%, 100% 29%, 45% 100%, 57% 70%, 23% 96%, 39% 62%);
-}
-.battle-mon.effect-heal:after,
-.battle-mon.effect-status:after {
-  background: #9dd9a8;
-  clip-path: polygon(
-    35% 0,
-    65% 0,
-    65% 35%,
-    100% 35%,
-    100% 65%,
-    65% 65%,
-    65% 100%,
-    35% 100%,
-    35% 65%,
-    0 65%,
-    0 35%,
-    35% 35%
-  );
 }
 .battle-scene.capture .battle-enemy:after {
   content: "";
@@ -796,13 +527,8 @@
 .battle-mon.faint { animation-duration: calc(650ms * var(--battle-speed, 1)); }
 .battle-mon.withdraw { animation-duration: calc(450ms * var(--battle-speed, 1)); }
 .battle-mon.appear { animation-duration: calc(500ms * var(--battle-speed, 1)); }
-.battle-mon[class*="effect-"],
-.battle-mon[class*="effect-"]:after { animation-duration: calc(500ms * var(--battle-speed, 1)); }
 .battle-scene.capture.throwing .battle-enemy:after,
 .battle-scene.capture.throwing .battle-enemy img { animation-duration: calc(450ms * var(--battle-speed, 1)); }
-
-.battle-mon.attack-windup { animation-duration: calc(180ms * var(--battle-speed, 1)); }
-.battle-fx.projectile { animation-duration: calc(360ms * var(--battle-speed, 1)); }
 
 .battle-controls {
   grid-auto-rows: max-content;

@@ -23,13 +23,13 @@ export type Motif =
   | "wind" | "ring" | "crack" | "bubbles" | "web" | "coil" | "screen"
   | "shell" | "mirror" | "sword" | "clock" | "target" | "moon" | "sun"
   | "question" | "arrow" | "doll" | "baton" | "hand" | "thread" | "glint"
-  | "flameburst" | "dragon" | "spike";
+  | "flameburst" | "dragon" | "spike" | "tail" | "bell" | "drum" | "bottle" | "brush";
 type Pattern =
   | "hit" | "shot" | "arc" | "beam" | "orbit" | "fall" | "rise" | "ground"
   | "wave" | "weather" | "link" | "flood" | "vortex" | "tether" | "burst"
   | "spectrum" | "column" | "boomerang" | "shield" | "echo";
 type Anchor = "target" | "user" | "field";
-type Motion = "dash" | "leap" | "spin" | "stomp" | "hop" | "fade" | "recoil" | "shake" | "dig" | "launch" | "shrink";
+type Motion = "dash" | "leap" | "spin" | "stomp" | "hop" | "fade" | "recoil" | "shake" | "dig" | "launch" | "shrink" | "duplicate";
 
 export type MoveVisual = Readonly<{
   motif: Motif;
@@ -199,6 +199,89 @@ use("RAIN DANCE", { motif: "drop", pattern: "weather", palette: "blue", anchor: 
 use("SUNNY DAY", { motif: "sun", pattern: "weather", palette: "gold", anchor: "field", duration: 670 });
 use("SANDSTORM", { motif: "cloud", pattern: "weather", palette: "earth", anchor: "field", count: 22 });
 
+// Debuffs and recovery are staged on the Pokémon affected by them.
+use("TAIL WHIP", { motif: "tail", pattern: "hit", palette: "earth", anchor: "user", motion: "shake", scale: 1.4 });
+use("LEER", { motif: "eye", pattern: "hit", palette: "red", scale: 1.15 });
+use("GLARE", { motif: "eye", pattern: "beam", palette: "gold", scale: 0.88 });
+use("SCARY FACE", { motif: "eye", pattern: "burst", palette: "dark", scale: 1.36 });
+use("MEAN LOOK", { motif: "eye", pattern: "shield", palette: "dark", scale: 1.3 });
+use("FORESIGHT", { motif: "target", pattern: "wave", palette: "teal", count: 3 });
+use("LOCK-ON", { motif: "target", pattern: "hit", palette: "red", scale: 1.5 });
+use("MIND READER", { motif: "eye", pattern: "link", palette: "lilac", count: 4 });
+use("HYPNOSIS", { motif: "ring", pattern: "vortex", palette: "lilac", count: 7 });
+use("CONFUSE RAY", { motif: "orb", pattern: "beam", palette: "dark", scale: 0.72 });
+use("NIGHTMARE", { motif: "moon", pattern: "orbit", palette: "dark", count: 5 });
+use("DISABLE", { motif: "cross", pattern: "shield", palette: "red" });
+use("SPITE", { motif: "moon", pattern: "link", palette: "dark", count: 3, scale: 0.72 });
+use("KINESIS", { motif: "mirror", pattern: "wave", palette: "steel", count: 3 });
+use("CURSE", { motif: "doll", pattern: "column", palette: "dark", scale: 1.25 });
+use("DESTINY BOND", { motif: "thread", pattern: "tether", palette: "dark", scale: 1.45 });
+use("PAIN SPLIT", { motif: "heart", pattern: "tether", palette: "pink", scale: 1.12 });
+use("FLASH", { motif: "glint", pattern: "burst", palette: "gold", scale: 1.95, count: 7 });
+use("SMOKESCREEN", { motif: "cloud", pattern: "burst", palette: "dark", count: 9 });
+use("MIST", { motif: "cloud", pattern: "orbit", palette: "ice", anchor: "user", count: 6 });
+use("HAZE", { motif: "cloud", pattern: "weather", palette: "dark", anchor: "field", count: 22 });
+use("SWEET SCENT", { motif: "petal", pattern: "wave", palette: "pink", count: 6 });
+
+use("GROWL", { motif: "ring", pattern: "wave", palette: "ivory", scale: 0.76, count: 3 });
+use("ROAR", { motif: "ring", pattern: "wave", palette: "red", scale: 1.45, count: 5 });
+use("SCREECH", { motif: "slash", pattern: "wave", palette: "gold", scale: 1.2, count: 5 });
+use("SUPERSONIC", { motif: "ring", pattern: "wave", palette: "teal", count: 7 });
+use("SING", { motif: "note", pattern: "wave", palette: "pink", count: 5, duration: 670 });
+use("PERISH SONG", { motif: "note", pattern: "weather", palette: "dark", anchor: "field", count: 11, duration: 730 });
+use("HEAL BELL", { motif: "bell", pattern: "orbit", palette: "gold", anchor: "user", count: 4 });
+use("ENCORE", { motif: "hand", pattern: "echo", palette: "gold", scale: 1.15 });
+use("BELLY DRUM", { motif: "drum", pattern: "hit", palette: "red", anchor: "user", motion: "hop", count: 3 });
+use("LOVELY KISS", { motif: "heart", pattern: "shot", palette: "dark", scale: 1.2 });
+use("SWEET KISS", { motif: "heart", pattern: "arc", palette: "pink", count: 3 });
+use("ATTRACT", { motif: "heart", pattern: "orbit", palette: "pink", count: 6 });
+use("CHARM", { motif: "heart", pattern: "wave", palette: "pink", count: 3, scale: 0.84 });
+use("SWAGGER", { motif: "star", pattern: "burst", palette: "red", motion: "hop", count: 5 });
+
+use("SWORDS DANCE", { motif: "sword", pattern: "orbit", palette: "steel", anchor: "user", count: 4, scale: 1.38 });
+use("SHARPEN", { motif: "cross", pattern: "orbit", palette: "steel", anchor: "user", count: 3 });
+use("GROWTH", { motif: "leaf", pattern: "rise", palette: "leaf", anchor: "user", count: 5, scale: 1.15 });
+use("MEDITATE", { motif: "orb", pattern: "orbit", palette: "lilac", anchor: "user", count: 3 });
+use("FOCUS ENERGY", { motif: "glint", pattern: "rise", palette: "gold", anchor: "user", count: 6 });
+use("AGILITY", { motif: "arrow", pattern: "rise", palette: "teal", anchor: "user", count: 5, motion: "duplicate" });
+use("DOUBLE TEAM", { motif: "glint", pattern: "echo", palette: "steel", anchor: "user", motion: "duplicate" });
+use("TELEPORT", { motif: "ring", pattern: "column", palette: "lilac", anchor: "user", motion: "launch" });
+use("MINIMIZE", { motif: "spark", pattern: "orbit", palette: "steel", anchor: "user", scale: 0.7, motion: "shrink" });
+use("HARDEN", { motif: "shell", pattern: "shield", palette: "steel", anchor: "user" });
+use("WITHDRAW", { motif: "shell", pattern: "shield", palette: "blue", anchor: "user", motion: "shrink" });
+use("DEFENSE CURL", { motif: "ring", pattern: "shield", palette: "earth", anchor: "user", motion: "shrink" });
+use("ACID ARMOR", { motif: "bubbles", pattern: "rise", palette: "poison", anchor: "user", motion: "fade", count: 6 });
+use("BARRIER", { motif: "screen", pattern: "shield", palette: "steel", anchor: "user", scale: 1.25 });
+use("LIGHT SCREEN", { motif: "screen", pattern: "shield", palette: "gold", anchor: "user", scale: 1.5 });
+use("REFLECT", { motif: "mirror", pattern: "shield", palette: "lilac", anchor: "user", scale: 1.5 });
+use("PROTECT", { motif: "screen", pattern: "shield", palette: "teal", anchor: "user", scale: 1.1 });
+use("DETECT", { motif: "eye", pattern: "shield", palette: "teal", anchor: "user", motion: "hop" });
+use("ENDURE", { motif: "shell", pattern: "shield", palette: "gold", anchor: "user", scale: 1.14 });
+use("SAFEGUARD", { motif: "glint", pattern: "vortex", palette: "teal", anchor: "user", count: 9, scale: 1.45 });
+use("AMNESIA", { motif: "question", pattern: "rise", palette: "lilac", anchor: "user", count: 3 });
+use("PSYCH UP", { motif: "arrow", pattern: "link", palette: "lilac", count: 5 });
+use("BIDE", { motif: "orb", pattern: "orbit", palette: "red", anchor: "user", count: 4 });
+use("SPLASH", { motif: "drop", pattern: "ground", palette: "ice", anchor: "user", motion: "hop", count: 3, scale: 0.6 });
+
+use("RECOVER", { motif: "plus", pattern: "rise", palette: "leaf", anchor: "user", count: 5 });
+use("SOFTBOILED", { motif: "egg", pattern: "rise", palette: "ivory", anchor: "user" });
+use("MILK DRINK", { motif: "bottle", pattern: "rise", palette: "ice", anchor: "user" });
+use("REST", { motif: "sleep", pattern: "rise", palette: "dark", anchor: "user", count: 3, duration: 650 });
+use("MORNING SUN", { motif: "sun", pattern: "column", palette: "gold", anchor: "user", count: 3 });
+use("SYNTHESIS", { motif: "leaf", pattern: "orbit", palette: "leaf", anchor: "user", count: 6, scale: 1.4 });
+use("MOONLIGHT", { motif: "moon", pattern: "column", palette: "lilac", anchor: "user", count: 3 });
+
+use("METRONOME", { motif: "hand", pattern: "orbit", palette: "gold", anchor: "user", count: 3 });
+use("MIMIC", { motif: "mirror", pattern: "link", palette: "steel", count: 3 });
+use("MIRROR MOVE", { motif: "mirror", pattern: "echo", palette: "teal", anchor: "user" });
+use("MIRROR COAT", { motif: "mirror", pattern: "beam", palette: "lilac", scale: 1.18 });
+use("TRANSFORM", { motif: "orb", pattern: "burst", palette: "pink", anchor: "user", motion: "fade", count: 7 });
+use("CONVERSION|CONVERSION2", { motif: "orb", pattern: "orbit", palette: "teal", anchor: "user", count: 6 });
+use("SUBSTITUTE", { motif: "doll", pattern: "hit", palette: "leaf", anchor: "user", scale: 1.75 });
+use("SKETCH", { motif: "brush", pattern: "link", palette: "ivory", count: 4 });
+use("SLEEP TALK", { motif: "question", pattern: "rise", palette: "dark", anchor: "user", count: 3 });
+use("BATON PASS", { motif: "baton", pattern: "rise", palette: "gold", anchor: "user", motion: "fade" });
+
 const chargeVisuals = new Map<string, MoveVisual>([
   ["DIG", { motif: "rock", pattern: "ground", palette: "earth", anchor: "user", motion: "dig", count: 4 }],
   ["FLY", { motif: "wing", pattern: "rise", palette: "teal", anchor: "user", motion: "launch", count: 3 }],
@@ -208,12 +291,50 @@ const chargeVisuals = new Map<string, MoveVisual>([
   ["RAZOR WIND", { motif: "wind", pattern: "vortex", palette: "teal", anchor: "user" }],
   ["JUMP KICK", { motif: "spark", pattern: "ground", palette: "earth", anchor: "user", motion: "stomp" }],
   ["HI JUMP KICK", { motif: "spark", pattern: "ground", palette: "earth", anchor: "user", motion: "stomp" }],
+  ["CURSE", { motif: "arrow", pattern: "rise", palette: "dark", anchor: "user", count: 5 }],
+  ["BIDE", { motif: "orb", pattern: "beam", palette: "red", scale: 1.5 }],
+  ["SUBSTITUTE", { motif: "doll", pattern: "fall", palette: "leaf", anchor: "user", duration: 225 }],
 ]);
 
-export function findMoveVisual(name: string, param = 0) {
+export function findMoveVisual(name: string, param = 0): MoveVisual | undefined {
   const key = name.trim().toUpperCase();
-  if (param === 1 && chargeVisuals.has(key)) return chargeVisuals.get(key);
+  const variation = param === 1 ? chargeVisuals.get(key) : undefined;
+  if (variation) return variation;
   if (key === "PRESENT" && param === 3)
-    return { motif: "plus", pattern: "rise", palette: "leaf", count: 4 } satisfies MoveVisual;
+    return { motif: "plus", pattern: "rise", palette: "leaf", count: 4 };
+  if (key === "SUBSTITUTE" && param === 2)
+    return { motif: "doll", pattern: "rise", palette: "leaf", anchor: "user", duration: 225 };
   return moves.get(key);
 }
+
+// Crystal's non-move animation IDs after send-out and recall.
+const conditions: Record<number, MoveVisual> = {
+  259: { motif: "star", pattern: "orbit", palette: "gold", count: 4 },
+  260: { motif: "sleep", pattern: "rise", palette: "dark", count: 3 },
+  261: { motif: "fire", pattern: "rise", palette: "red", count: 4 },
+  262: { motif: "bubbles", pattern: "rise", palette: "poison", count: 4 },
+  263: { motif: "orb", pattern: "link", palette: "leaf", anchor: "target", count: 3 },
+  264: { motif: "ice", pattern: "shield", palette: "ice" },
+  265: { motif: "bolt", pattern: "burst", palette: "gold", count: 5, motion: "shake" },
+  266: { motif: "heart", pattern: "orbit", palette: "pink", count: 4 },
+  267: { motif: "cloud", pattern: "wave", palette: "earth", anchor: "user" },
+  268: { motif: "moon", pattern: "orbit", palette: "dark", count: 4 },
+  269: { motif: "drop", pattern: "vortex", palette: "blue", count: 7 },
+  270: { motif: "wind", pattern: "hit", palette: "steel", motion: "dash" },
+  271: { motif: "spark", pattern: "hit", palette: "ivory" },
+  272: { motif: "arrow", pattern: "fall", palette: "steel" },
+  273: { motif: "arrow", pattern: "fall", palette: "steel" },
+  274: { motif: "spark", pattern: "hit", palette: "ivory" },
+  275: { motif: "wind", pattern: "orbit", palette: "teal", motion: "shake" },
+  276: { motif: "crack", pattern: "ground", palette: "earth", motion: "shake" },
+  277: { motif: "spark", pattern: "hit", palette: "gold", motion: "recoil" },
+};
+
+export function nativeConditionVisual(id: number): MoveVisual | undefined {
+  const visual = conditions[id];
+  return visual && { anchor: "user", duration: 330, ...visual };
+}
+
+export const healingSparkle: MoveVisual = {
+  motif: "plus", pattern: "rise", palette: "leaf", anchor: "user", count: 4, duration: 470,
+};

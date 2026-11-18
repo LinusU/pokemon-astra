@@ -323,6 +323,31 @@ export function battleGlyph(
       line([[-8, 1], [-5, -3], [-2, 2], [2, -2], [5, 3], [8, 0]], ink, 2.6);
       line([[-8, 1], [-5, -3], [-2, 2], [2, -2], [5, 3], [8, 0]], light);
       break;
+    case "tail": {
+      const flick = Math.sin(phase * Math.PI * 4) * 3;
+      line([[-7, 4], [-2, 4], [2, 1], [4, -5], [7, -3 + flick]], ink, 5.4);
+      line([[-7, 4], [-2, 4], [2, 1], [4, -5], [7, -3 + flick]], fill, 3.4);
+      break;
+    }
+    case "bell":
+      shape([[-7, 4], [-5, 1], [-4, -4], [0, -7], [4, -4], [5, 1], [7, 4]]);
+      oval(2, 1.6, 0, 6, light);
+      line([[-5, 3], [5, 3]], light);
+      break;
+    case "drum":
+      shape([[-7, -3], [7, -3], [6, 5], [3, 7], [-3, 7], [-6, 5]]);
+      oval(7, 3.2, 0, -3, light);
+      line([[-5, 1], [-2, 5], [0, 1], [2, 5], [5, 1]], light);
+      break;
+    case "bottle":
+      shape([[-2, -5], [2, -5], [2, -2], [5, 1], [5, 7], [-5, 7], [-5, 1], [-2, -2]], light);
+      rect(-3, -8, 6, 3, fill);
+      rect(-3, 2, 6, 3, fill);
+      break;
+    case "brush":
+      shape([[-6, 7], [-7, 5], [1, -4], [4, -2]], fill);
+      shape([[1, -4], [3, -7], [7, -8], [6, -4], [4, -2]], light);
+      break;
   }
   ctx.restore();
 }

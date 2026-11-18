@@ -47,7 +47,8 @@ export function drawMove(
             0.18, 0.72 * peak(t), angle, "glint");
         }
       }
-      glyph(p, open ? 1.2 : 0.6 + 0.5 * peak(t), Math.min(peak(t) * 2.6, 1), pointsAtTarget ? along : 0);
+      const pulse = peak((t * count) % 1);
+      glyph(p, open ? 1.2 : 0.6 + 0.5 * pulse, Math.min(peak(t) * 2.6, 1), pointsAtTarget ? along : 0);
       break;
     }
     case "shot":
@@ -180,7 +181,8 @@ export function drawMove(
       const rising = visual.pattern === "rise";
       for (let i = 0; i < count; i++) {
         const f = clamp(t * 1.6 - i * 0.09);
-        const scatter = (i - (count - 1) / 2) * size / Math.max(2, count * 0.42);
+        const lane = i % 2 ? Math.ceil(i / 2) : -i / 2;
+        const scatter = lane * size / Math.max(2, count * 0.30);
         const y = rising ? 13 - f * 55 : -61 + f * f * 64;
         glyph(offset(at, scatter + (i ? Math.sin(f * 4 + i) * 5 : 0), y),
           count > 3 ? 0.46 + (i % 2) * 0.16 : 1, peak(f));
@@ -191,7 +193,8 @@ export function drawMove(
     case "ground": {
       if (miss && visual.anchor !== "field") break;
       const field = visual.anchor === "field";
-      const footprint = offset(at, 0, field ? height * 0.18 : height * 0.16);
+      const floorDepth = field ? 0.18 : at.y > height * 0.6 ? 0.26 : 0.20;
+      const footprint = offset(at, 0, height * floorDepth);
       const total = field ? Math.max(count, 5) : Math.max(count, 1);
       if (field) {
         ctx.globalAlpha = peak(t) * 0.25;
@@ -201,7 +204,9 @@ export function drawMove(
       for (let i = 0; i < total; i++) {
         const f = clamp(t * 1.4 - i * 0.045);
         const spread = (i - (total - 1) / 2) * (field ? width * 0.145 : 14);
-        glyph(offset(footprint, spread + (field ? 0 : Math.sin(f * Math.PI) * 9), -peak(f) * 8),
+        const drift = field ? Math.sin(t * 45 + i) * 4 : peak(f) * 9;
+        const elevation = field ? (i % 3 - 1) * 8 : 0;
+        glyph(offset(footprint, spread + drift, elevation - peak(f) * 8),
           field ? 1.4 + 0.38 * f : 0.8 + 0.6 * f, peak(f), visual.motif === "rock" ? f * TAU : 0);
       }
       break;
@@ -322,6 +327,8 @@ const movement: Record<NonNullable<MoveVisual["motion"]>, (x: number, y: number)
   launch: () => [{ transform: "translateY(0)" }, { transform: "translateY(-52px)", opacity: 0.14, offset: 0.65 },
     { transform: "translateY(-52px)", opacity: 0.14 }],
   shrink: () => [{ transform: "scale(1)" }, { transform: "scale(.52)", offset: 0.5 }, { transform: "scale(1)" }],
+  duplicate: () => [{ transform: "translateX(0)" }, { transform: "translateX(-9px)" },
+    { transform: "translateX(9px)" }, { transform: "translateX(0)" }],
 };
 
 export function playMove(
@@ -342,10 +349,11 @@ export function playMove(
   const animations: Animation[] = [];
   const source = attacker.getBoundingClientRect();
   const destination = defender.getBoundingClientRect();
+  const sprite = attacker.querySelector("img")!;
   if (!reduced && visual.motion) {
     const x = visual.anchor === "user" ? 0 : (destination.left - source.left) * 0.19;
     const y = visual.anchor === "user" ? 0 : (destination.top - source.top) * 0.14;
-    animations.push(attacker.querySelector("img")!.animate(movement[visual.motion](x, y), { duration, easing: "ease-in-out" }));
+    animations.push(sprite.animate(movement[visual.motion](x, y), { duration, easing: "ease-in-out" }));
   }
   if (!reduced && options.hit && !options.miss && visual.anchor !== "user") {
     const direction = destination.left > source.left ? 1 : -1;
@@ -384,6 +392,17 @@ export function playMove(
         };
       };
       ctx.clearRect(0, 0, width, height);
+      if (!reduced && visual.motion === "duplicate" && sprite.complete && sprite.naturalWidth > 0) {
+        const size = Math.min(source.width, source.height) * width / bounds.width;
+        const origin = center(attacker);
+        ctx.imageSmoothingEnabled = false;
+        for (const direction of [-1, 1]) {
+          ctx.globalAlpha = peak(t) * 0.38;
+          ctx.drawImage(sprite, origin.x - size / 2 + direction * 45 * t,
+            origin.y - size * 0.46, size, size);
+        }
+        ctx.globalAlpha = 1;
+      }
       drawMove(ctx, visual, center(attacker), center(defender), reduced ? 0.62 : t, options.miss, options.param);
     }
     frame = requestAnimationFrame(step);

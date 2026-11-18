@@ -31,6 +31,7 @@ interface BattleSide {
   active: BattleMon;
   active_slot: number;
   party?: BattleMon[];
+  substatus?: number[];
 }
 export interface BattleSnapshot {
   site: string | null;
