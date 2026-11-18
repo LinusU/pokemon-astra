@@ -34,6 +34,7 @@ interface BattleSide {
 }
 export interface BattleSnapshot {
   site: string | null;
+  exp_progress: number[];
   bag: BattleBag;
   legal: unknown[];
   state: {

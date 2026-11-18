@@ -38,11 +38,17 @@ fn snapshot(b: &Battle) -> Value {
             json!(outcome),
         ),
     };
+    let engine = b.engine().engine();
+    let exp_progress: Vec<_> = engine
+        .read_party(false)
+        .iter()
+        .map(|mon| GameData::crystal().experience_progress(mon.species, mon.level, mon.exp))
+        .collect();
     let learning_slot = b
         .decision()
         .filter(|d| d.site == PromptSite::LearnMove)
         .map(|_| b.engine().engine().mem.rb(W_CUR_PARTY_MON));
-    json!({"site":site,"bag":b.engine().engine().bag(),"legal":legal,"state":state,"events":events,"outcome":outcome,"result":b.result(),"learning_slot":learning_slot})
+    json!({"site":site,"bag":engine.bag(),"legal":legal,"state":state,"events":events,"outcome":outcome,"result":b.result(),"learning_slot":learning_slot,"exp_progress":exp_progress})
 }
 fn run(v: Value) -> Result<Value, String> {
     match v["op"].as_str().unwrap_or("") {

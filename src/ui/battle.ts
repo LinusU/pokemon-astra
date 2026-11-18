@@ -429,6 +429,8 @@ export function moveEffect(name: string, type?: number): string {
     27: "psychic",
   };
   const n = name.toLowerCase();
+  if (/^(bite|crunch)$/.test(n)) return "bite";
+  if (/^(scratch|cut|slash|fury swipes|metal claw)$/.test(n)) return "slash";
   if (/fire|flame|ember|burn|heat/.test(n)) return "fire";
   if (/water|bubble|surf|hydro|rain|whirlpool|crabhammer/.test(n))
     return "water";
@@ -474,6 +476,8 @@ export class BattlePresenter {
   private snapshot: BattleSnapshot;
   private shown: Record<Battler, BattleMon>;
   private shownSlots: Record<Battler, number>;
+  private expProgress: number;
+  private lastMoves = new Map<number, { slot: number; id: number }>();
   private readonly trainerBattle: boolean;
   private queue: Event[] = [];
   private category = "";
@@ -495,6 +499,7 @@ export class BattlePresenter {
       player: this.initialMon("player"),
       enemy: this.initialMon("enemy"),
     };
+    this.expProgress = this.expAtSendOut(this.shownSlots.player, o.snapshot.events as Event[]);
     const arena = o.arena ?? (o.trainerName === "Champion Mira" ? "champion" : o.wildEncounter ?? "field");
     const trainer = o.wildEncounter ? undefined : o.trainerName;
     const teamSize = o.snapshot.state.enemy.party?.length ?? 0;
@@ -542,6 +547,13 @@ export class BattlePresenter {
   ): BattleMon {
     return battleMonAtSendOut(this.snapshot, side, events);
   }
+  private expAtSendOut(slot: number, events: Event[]) {
+    for (const event of events) {
+      if (event.SendOut?.side === "Player" && event.SendOut.slot !== slot) break;
+      if (event.ExpBar?.slot === slot) return event.ExpBar.from as number;
+    }
+    return this.snapshot.exp_progress[slot] ?? 0;
+  }
   private paint() {
     for (const side of ["player", "enemy"] as const) {
       const mon = this.shown[side];
@@ -560,7 +572,7 @@ export class BattlePresenter {
       const badge = status
         ? `<span class="battle-status ${status[0].toLowerCase()}" aria-label="${status[1]}" title="${status[1]}">${status[0]}</span>`
         : "";
-      hud.innerHTML = `<div class="battle-hud-top"><strong>${escapeHtml(name)}</strong><span>Lv${mon.level}</span></div><div class="battle-hp"><b>HP</b><div class="battle-hp-track"><i class="${ratio <= 0.2 ? "low" : ratio <= 0.5 ? "mid" : ""}" style="width:${ratio * 100}%"></i></div></div><div class="battle-hud-bottom">${badge}${side === "player" ? `<span class="battle-hp-value">${mon.hp} / ${mon.max_hp}</span>` : ""}</div>`;
+      hud.innerHTML = `<div class="battle-hud-top"><strong>${escapeHtml(name)}</strong><span>Lv${mon.level}</span></div><div class="battle-hp"><b>HP</b><div class="battle-hp-track"><i class="${ratio <= 0.2 ? "low" : ratio <= 0.5 ? "mid" : ""}" style="width:${ratio * 100}%"></i></div></div><div class="battle-hud-bottom">${badge}${side === "player" ? `<span class="battle-hp-value">${mon.hp} / ${mon.max_hp}</span>` : ""}</div>${side === "player" ? `<div class="battle-exp" role="meter" aria-label="Experience to next level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${this.expProgress}"><i style="width:${this.expProgress}%"></i></div>` : ""}`;
     }
   }
   private enqueue(snapshot: BattleSnapshot) {
@@ -594,6 +606,7 @@ export class BattlePresenter {
         player: structuredClone(this.snapshot.state.player.active),
         enemy: structuredClone(this.snapshot.state.enemy.active),
       };
+      this.expProgress = this.snapshot.exp_progress[this.shownSlots.player] ?? 0;
       for (const side of ["player", "enemy"] as const)
         this.root.querySelector(`.battle-${side}`)?.classList.toggle("faint", this.shown[side].hp === 0);
       if (this.snapshot.site === "OfferSwitch")
@@ -611,6 +624,10 @@ export class BattlePresenter {
       const growth = message.GrewToLevel ?? message.PartyGrewToLevel;
       if (growth?.slot === this.shownSlots.player) {
         this.shown.player.level = growth.level;
+        const finalLevel = this.snapshot.state.player.party?.[growth.slot]?.level;
+        this.expProgress = growth.level === finalLevel
+          ? this.expAtSendOut(growth.slot, this.queue)
+          : 0;
         this.paint();
       }
       if (kind === "BallBlocked" || kind === "BallDontBeAThief") this.clearCapture();
@@ -639,6 +656,7 @@ export class BattlePresenter {
       const battler = side === "Player" ? "player" : "enemy";
       this.shownSlots[battler] = slot;
       this.shown[battler] = mon;
+      if (battler === "player") this.expProgress = this.expAtSendOut(slot, this.queue);
       this.paint();
       this.next();
       return;
@@ -681,15 +699,14 @@ export class BattlePresenter {
     }
     if (event.ExpBar?.slot === this.shownSlots.player) {
       const { from, to } = event.ExpBar;
-      const hud = this.root.querySelector<HTMLElement>(".battle-player-hud")!;
-      const bar = document.createElement("div");
-      bar.className = "battle-exp";
-      bar.style.setProperty("--exp-from", `${from}%`);
-      bar.style.setProperty("--exp-to", `${to}%`);
-      bar.innerHTML = "<i></i>";
-      hud.append(bar);
+      const meter = this.root.querySelector(".battle-exp")!;
+      meter.querySelector("i")!.animate(
+        [{ width: `${from}%` }, { width: `${to}%` }],
+        { duration: 550 / Math.max(0.25, this.o.speed), fill: "forwards" },
+      );
       this.delay(550, () => {
-        bar.remove();
+        this.expProgress = to;
+        this.paint();
         this.next();
       });
       return;
@@ -716,7 +733,7 @@ export class BattlePresenter {
       const a = event.Animation;
       const user = a.user === "Player" ? "player" : "enemy";
       if (a.anim === 257) {
-        this.conceal(user, false);
+        if (a.param !== 1) this.conceal(user, false);
         this.animate(user, a.param === 1 ? "effect-status" : "appear", 500);
         return;
       }
@@ -781,8 +798,8 @@ export class BattlePresenter {
     this.next();
   }
   private moveAnimation(
-    user: string,
-    target: string,
+    user: Battler,
+    target: Battler,
     family: string,
     miss: boolean,
   ) {
@@ -795,6 +812,11 @@ export class BattlePresenter {
     attacker.classList.add("attack-windup");
     this.delay(180, () => {
       attacker.classList.remove("attack-windup");
+      if (family === "bite" || family === "slash") {
+        if (miss) this.next();
+        else this.animate(target, `effect-${family}`, 500);
+        return;
+      }
       fx.className = `battle-fx projectile ${family} from-${user}${miss ? " misses" : ""}`;
       this.delay(360, () => {
         fx.className = "battle-fx";
@@ -803,8 +825,16 @@ export class BattlePresenter {
       });
     });
   }
-  private animate(side: string, effect: string, duration: number) {
+  private animate(side: Battler, effect: string, duration: number) {
     const el = this.root.querySelector(`.battle-${side}`)!;
+    if (effect !== "appear" && (
+      this.root.classList.contains(`conceal-${side}`) ||
+      el.classList.contains("faint") ||
+      el.classList.contains("withdraw")
+    )) {
+      this.next();
+      return;
+    }
     if (effect === "appear") el.classList.remove("faint", "withdraw");
     el.classList.add(effect);
     this.delay(duration, () => {
@@ -1091,8 +1121,16 @@ export class BattlePresenter {
         };
       });
     }
+    const last = this.lastMoves.get(s.state.player.active_slot);
+    const preferred = this.category === "FIGHT" && last && active.moves[last.slot] === last.id
+      ? actions.findIndex((a) => a.Move?.slot === last.slot)
+      : -1;
     controls.scrollTop = 0;
-    controls.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus({ preventScroll: true });
+    const selected = controls.querySelector<HTMLButtonElement>(`[data-index="${preferred}"]`)
+      ?? controls.querySelector<HTMLButtonElement>("button:not(:disabled)");
+    selected?.focus({ preventScroll: true });
+    if (selected && preferred >= 0)
+      selected.scrollIntoView({ block: "nearest" });
     controls.querySelectorAll<HTMLButtonElement>("[data-target]").forEach((button) => {
       button.onclick = () => {
         const target = Number(button.dataset.target);
@@ -1130,6 +1168,11 @@ export class BattlePresenter {
     if (this.waiting || !this.choosing || index < 0) return;
     this.root.querySelector(".battle-controls")!.innerHTML = "";
     try {
+      const move = (this.snapshot.legal[index] as { Move?: { slot: number } })?.Move;
+      if (move) {
+        const player = this.snapshot.state.player;
+        this.lastMoves.set(player.active_slot, { slot: move.slot, id: player.active.moves[move.slot] });
+      }
       this.category = "";
       this.bagItem = undefined;
       this.bagTarget = undefined;

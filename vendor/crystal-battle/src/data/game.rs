@@ -349,6 +349,30 @@ impl GameData {
         &self.growth_rates[usize::from(id)]
     }
 
+    /// Total experience required for a species to reach this level.
+    pub fn experience_at_level(&self, species: u8, level: u8) -> u32 {
+        if level <= 1 {
+            return 0;
+        }
+        let rate = self.growth_rate(self.species(species).growth_rate);
+        let n = i32::from(level);
+        let quadratic = i32::from(rate.quadratic & 0x7f)
+            * if rate.quadratic & 0x80 == 0 { 1 } else { -1 };
+        (i32::from(rate.cubic >> 4) * n.pow(3) / i32::from(rate.cubic & 0x0f)
+            + quadratic * n.pow(2) + i32::from(rate.linear) * n - i32::from(rate.constant))
+            .max(0) as u32
+    }
+
+    pub fn experience_progress(&self, species: u8, level: u8, total: u32) -> u8 {
+        if level >= crate::defs::MAX_LEVEL {
+            return 100;
+        }
+        let bottom = self.experience_at_level(species, level);
+        let top = self.experience_at_level(species, level + 1);
+        let span = top.saturating_sub(bottom).max(1);
+        (total.saturating_sub(bottom).min(span) * 100 / span) as u8
+    }
+
     /// Party `id` of trainer class `class`, the way `ReadTrainerParty` finds
     /// it: counting parties from the class's first (an id past the class's
     /// last party is the next class's).

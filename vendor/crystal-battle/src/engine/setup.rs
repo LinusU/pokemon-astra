@@ -219,11 +219,6 @@ impl Engine {
         }
     }
 
-    fn exp_threshold(&mut self, level: u8) -> u32 {
-        self.calc_exp_at_level(level);
-        u32::from_be_bytes([0, self.mem.rb(H_PRODUCT + 1), self.mem.rb(H_PRODUCT + 2), self.mem.rb(H_PRODUCT + 3)])
-    }
-
     /// `CalcExpAtLevel.LevelSquared`.
     fn level_squared(&mut self, d: u8) {
         self.mem.wb(H_MULTIPLICAND, 0);
@@ -381,13 +376,7 @@ impl Engine {
             return 0;
         }
         let species = self.mem.rb(bc + u16::from(MON_SPECIES));
-        let rate = self.data.growth_rate(self.data.species(species).growth_rate);
-        let exp_at = |level: u8| {
-            let n = i32::from(level);
-            let c = i32::from(rate.quadratic & 0x7f) * if rate.quadratic & 0x80 == 0 { 1 } else { -1 };
-            (i32::from(rate.cubic >> 4) * n.pow(3) / i32::from(rate.cubic & 0x0f)
-                + c * n.pow(2) + i32::from(rate.linear) * n - i32::from(rate.constant)).max(0)
-        };
+        let exp_at = |level| self.data.experience_at_level(species, level) as i32;
         let exp = bc + u16::from(MON_EXP);
         let current = i32::from_be_bytes([0, self.mem.rb(exp), self.mem.rb(exp + 1), self.mem.rb(exp + 2)]);
         let step = exp_at(level + 1) - exp_at(level);
@@ -631,12 +620,8 @@ impl Engine {
         let exp = W_TEMP_MON_EXP;
         let total_exp = u32::from_be_bytes([0, self.mem.rb(exp), self.mem.rb(exp + 1), self.mem.rb(exp + 2)]);
         let gained = u16::from_be_bytes([p2, p3]);
-        let bottom = if e == 1 { 0 } else { self.exp_threshold(e) };
-        let top = self.exp_threshold(e + 1);
-        let progress = |total: u32| -> u8 {
-            let span = top.saturating_sub(bottom).max(1);
-            (total.saturating_sub(bottom).min(span) * 100 / span) as u8
-        };
+        let species = self.mem.rb(W_TEMP_MON_SPECIES);
+        let progress = |total| self.data.experience_progress(species, e, total);
         let slot = self.mem.rb(W_CUR_PARTY_MON);
         self.show(crate::battle::Event::ExpBar {
             slot,

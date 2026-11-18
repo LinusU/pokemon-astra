@@ -27,6 +27,8 @@ describe("battle presentation", () => {
     expect(moveEffect("Flamethrower")).toBe("fire");
     expect(moveEffect("Hydro Pump")).toBe("water");
     expect(moveEffect("Tackle")).toBe("impact");
+    expect(moveEffect("Bite", 27)).toBe("bite");
+    expect(moveEffect("Metal Claw", 9)).toBe("slash");
   });
 });
 
@@ -126,6 +128,8 @@ describe.skipIf(!romAvailable)("complete native battle decisions", () => {
       opponent: { party: [enemy, enemy] },
       seed: 4,
     });
+    const span = engine.makePokemon(1, 7).exp - engine.makePokemon(1, 6).exp;
+    expect(battle.snapshot().exp_progress[1]).toBe(Math.floor((span - 1) * 100 / span));
     const seen = new Set<string>();
     for (let step = 0; step < 100; step++) {
       const snap = battle.snapshot();
