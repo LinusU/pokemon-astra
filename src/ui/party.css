@@ -61,12 +61,12 @@
   font: inherit;
   text-align: left;
 }
-.party-member:focus {
+.party-member[aria-current="true"] {
   outline: 0.65cqw solid #326049;
   outline-offset: -0.65cqw;
   background: #dce8bf;
 }
-.party-member:focus::before {
+.party-member[aria-current="true"]::before {
   content: "";
   position: absolute;
   left: 1.4cqw;
@@ -135,4 +135,8 @@
   background: #e7e6c6;
   color: #254536;
   font: inherit;
+}
+.party-screen footer [aria-current="true"] {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
 }

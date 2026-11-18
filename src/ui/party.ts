@@ -54,11 +54,23 @@ export function mountParty(host: HTMLElement, options: PartyOptions) {
     <footer>${options.rows.some(row => !row.disabled) ? `<span><kbd>A</kbd> ${escapeHtml(options.confirm)}</span>` : '<span>No eligible Pokémon</span>'}
     ${options.onBack ? `<button type="button" id="back" tabindex="-1"><kbd>B</kbd> Back</button>` : ""}</footer>`;
   host.append(screen);
-  const buttons = screen.querySelectorAll<HTMLButtonElement>("[data-slot]");
-  for (const button of buttons) button.onclick = () => options.onSelect(Number(button.dataset.slot));
+  const buttons = screen.querySelectorAll<HTMLButtonElement>("[data-slot]:enabled");
+  let current: HTMLButtonElement | undefined;
+  function select(button: HTMLButtonElement) {
+    current?.removeAttribute("aria-current");
+    current = button;
+    button.setAttribute("aria-current", "true");
+  }
+  for (const button of buttons) {
+    button.onfocus = () => select(button);
+    button.onclick = () => options.onSelect(Number(button.dataset.slot));
+  }
   const back = screen.querySelector<HTMLButtonElement>("#back");
   if (back && options.onBack) back.onclick = options.onBack;
   const selected = screen.querySelector<HTMLButtonElement>(`[data-slot="${options.initialSlot ?? 0}"]:enabled`)
-    ?? screen.querySelector<HTMLButtonElement>("[data-slot]:enabled") ?? back;
-  selected?.focus({ preventScroll: true });
+    ?? buttons[0] ?? back;
+  if (selected) {
+    select(selected);
+    selected.focus({ preventScroll: true });
+  }
 }

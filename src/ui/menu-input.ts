@@ -55,14 +55,14 @@ export class MenuInput {
     battle: boolean,
   ) {
     const bag = bagController(layer);
-    const party = layer.querySelector<HTMLElement>(".party-slots");
-    const scroller = party ??
+    const party = layer.querySelector<HTMLElement>(".party-screen");
+    const scroller =
       layer.querySelector<HTMLElement>(
         battle ? ".battle-controls" : ".panel",
       ) ?? layer;
     // Battle submenus replace their buttons without replacing the scene.
     const start =
-      bag ??
+      bag ?? party ??
       (battle
         ? scroller.querySelector("button:not(:disabled)")
         : layer.firstElementChild);
@@ -86,6 +86,18 @@ export class MenuInput {
     if (bag) {
       if (confirm) bag.input("a");
       else if (direction) bag.input(direction);
+      return;
+    }
+    if (party) {
+      const current = party.querySelector<HTMLButtonElement>('[aria-current="true"]');
+      if (!current) return;
+      if (confirm) current.click();
+      else if (direction === "up" || direction === "down") {
+        const rows = Array.from(party.querySelectorAll<HTMLButtonElement>("[data-slot]:enabled"));
+        const index = rows.indexOf(current);
+        const next = rows[index + (direction === "up" ? -1 : 1)];
+        next?.focus({ preventScroll: true });
+      }
       return;
     }
 
@@ -139,7 +151,7 @@ export class MenuInput {
       next.bounds.bottom > viewport.top - 18;
     if (next && (visible(next) || (vertical && nearby) || battle)) {
       focus(next);
-    } else if (!battle && !party && vertical) {
+    } else if (!battle && vertical) {
       const step = Math.max(24, scroller.clientHeight * 0.24);
       scroller.scrollTop += direction === "down" ? step : -step;
     } else if (current && !focused) {

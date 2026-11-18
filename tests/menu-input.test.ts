@@ -10,6 +10,7 @@ function panel(
   party = false,
 ) {
   const ownerDocument = { activeElement: null as unknown };
+  let partyCursor: unknown;
   const rect = (left: number, top: number, right: number, bottom: number) => ({
     left,
     right,
@@ -21,8 +22,10 @@ function panel(
     clientHeight: height,
     getBoundingClientRect: () => rect(0, 0, 200, height),
     querySelectorAll: () => buttons,
-    querySelector: (selector: string) =>
-      selector === "button:not(:disabled)" ? buttons[0] : journey ? {} : null,
+    querySelector: (selector: string) => {
+      if (selector === '[aria-current="true"]') return partyCursor;
+      return selector === "button:not(:disabled)" ? buttons[0] : journey ? {} : null;
+    },
   };
   const buttons = layout.map(([left, top, width, buttonHeight]) => {
     const button = {
@@ -35,16 +38,18 @@ function panel(
         ),
       focus: vi.fn((_: FocusOptions) => {
         ownerDocument.activeElement = button;
+        if (party) partyCursor = button;
       }),
       click: vi.fn(),
     };
     return button;
   });
+  if (party) buttons[0]?.focus({ preventScroll: true });
   const layer = {
     firstElementChild: {},
     ownerDocument,
     querySelector: (selector: string) =>
-      selector === "[data-bag]" || (selector === ".party-slots" && !party) ? null : scroller,
+      selector === "[data-bag]" || (selector === ".party-screen" && !party) ? null : scroller,
   } as unknown as HTMLElement;
   const menu = new MenuInput();
   const update = (now: number, pressed?: Action, held = pressed) =>
@@ -112,6 +117,22 @@ describe("menu input", () => {
     expect(scroller.scrollTop).toBe(0);
     update(440, "a");
     expect(buttons[2].click).toHaveBeenCalledOnce();
+  });
+
+  it.each([false, true])("keeps the party cursor after focus leaves (battle %s)", (battle) => {
+    const { update, buttons, ownerDocument } = panel(
+      [[0, 2, 190, 18], [0, 42, 190, 18], [0, 82, 190, 18]],
+      120, battle, false, true,
+    );
+    update(0);
+    update(10, "down");
+    ownerDocument.activeElement = null;
+    update(20, "down");
+    expect(ownerDocument.activeElement).toBe(buttons[2]);
+    ownerDocument.activeElement = null;
+    update(30, "a");
+    expect(buttons[2].click).toHaveBeenCalledOnce();
+    expect(buttons[0].click).not.toHaveBeenCalled();
   });
 
   it("scrolls text before reaching Back and repeats only while a direction is held", () => {
