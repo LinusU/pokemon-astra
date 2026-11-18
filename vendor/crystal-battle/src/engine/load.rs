@@ -126,6 +126,7 @@ impl Engine {
                 let mut launch = Launch::default();
                 if let Some(party) = party {
                     self.write_party(party, true)?;
+                    self.prepare_trainer_party(*class, party);
                     self.mem.wb(W_CUR_OT_MON, 0);
                     self.mem.wb(W_CUR_PARTY_MON, 0);
                     launch.trainer_party_override = true;
@@ -141,6 +142,29 @@ impl Engine {
                 self.write_party(party, true)?;
                 self.launch_link_with(name)
             }
+        }
+    }
+
+    /// Match the supplied party's stats to the class DVs and untrained stats
+    /// that LoadEnemyMon uses when a trainer sends out a Pokémon.
+    fn prepare_trainer_party(&mut self, class: u8, party: &[Pokemon]) {
+        let [atk_def, spd_spc] = self.data.trainer_class(class).dvs;
+        for (slot, mon) in (0u16..).zip(party) {
+            let addr = W_OT_PARTY_MON1 + slot * STRUCT;
+            self.mem.wb(W_CUR_SPECIES, mon.species);
+            self.mem.wb(W_CUR_PARTY_LEVEL, mon.level);
+            self.get_base_data();
+            self.mem.wb(addr + u16::from(MON_DVS), atk_def);
+            self.mem.wb(addr + u16::from(MON_DVS) + 1, spd_spc);
+            let max_hp_addr = addr + u16::from(MON_MAXHP);
+            self.calc_mon_stats(addr + u16::from(MON_STAT_EXP) - 1, max_hp_addr, false);
+            let max_hp = self.mem.rw(max_hp_addr);
+            let hp = if mon.hp != 0 && mon.hp == mon.stats[0] {
+                max_hp
+            } else {
+                mon.hp.min(max_hp)
+            };
+            self.mem.ww(addr + u16::from(MON_HP), hp);
         }
     }
 }

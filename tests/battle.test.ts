@@ -61,6 +61,41 @@ describe("battle presentation", () => {
 const romAvailable =
   existsSync("pokecrystal11.gbc") && existsSync("public/astra_native.wasm");
 describe.skipIf(!romAvailable)("real native battle events", () => {
+  it("sends out fresh trainer Pokémon at full HP", async () => {
+    const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});
+    const engine = new Engine(instance.exports as never, readFileSync("pokecrystal11.gbc"));
+    const lead = engine.makePokemon(58, 50);
+    lead.hp -= 5;
+    const battle = engine.startBattle({
+      party: [lead],
+      opponent: { party: [engine.makePokemon(19, 10), engine.makePokemon(16, 11)] },
+      seed: 4,
+    });
+    const opening = battle.snapshot();
+    expect(opening.state.player.active.hp).toBe(lead.hp);
+    const { hp, max_hp } = opening.state.enemy.active;
+    expect(hp).toBe(max_hp);
+    expect(opening.state.enemy.party?.every((mon) => mon.hp === mon.max_hp)).toBe(true);
+    expect(opening.events).toContainEqual({
+      SendOut: { side: "Enemy", slot: 0, mon: expect.objectContaining({ hp, max_hp }) },
+    });
+
+    let snapshot = opening;
+    for (let step = 0; step < 10; step++) {
+      const legal = snapshot.legal as { Move?: { slot: number }; OfferSwitch?: { keep: boolean } }[];
+      const action = legal.findIndex((choice) => choice.OfferSwitch?.keep || choice.Move?.slot === 0);
+      expect(action).toBeGreaterThanOrEqual(0);
+      snapshot = battle.act(action);
+      const replacement = (snapshot.events as { SendOut?: { side: string; slot: number; mon: { hp: number; max_hp: number } } }[])
+        .find((event) => event.SendOut?.side === "Enemy" && event.SendOut.slot === 1)?.SendOut;
+      if (replacement) {
+        expect(replacement.mon.hp).toBe(replacement.mon.max_hp);
+        return;
+      }
+    }
+    expect.fail("The trainer never sent out their second Pokémon");
+  });
+
   it("supplies ordered move, status, HP, and capture events", async () => {
     const { instance } = await WebAssembly.instantiate(
       readFileSync("public/astra_native.wasm"),
