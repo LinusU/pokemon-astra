@@ -3,7 +3,14 @@ import { GameAudio } from "../src/game/audio";
 import type { Engine } from "../src/engine";
 let context: FakeContext;
 class FakeNode {
-  gain = { value: 0 };
+  gain = {
+    value: 0,
+    setValueAtTime: vi.fn(),
+    linearRampToValueAtTime: vi.fn(),
+    exponentialRampToValueAtTime: vi.fn(),
+    cancelScheduledValues: vi.fn(),
+  };
+  frequency = { value: 0 };
   buffer: any;
   connect() {
     return this;
@@ -16,6 +23,7 @@ class FakeContext {
   currentTime = 0;
   destination = new FakeNode();
   sources: FakeNode[] = [];
+  oscillators: FakeNode[] = [];
   constructor() {
     context = this;
   }
@@ -33,6 +41,11 @@ class FakeContext {
     this.sources.push(source);
     return source;
   }
+  createOscillator() {
+    const oscillator = new FakeNode();
+    this.oscillators.push(oscillator);
+    return oscillator;
+  }
   createBuffer(_channels: number, count: number, rate: number) {
     return { duration: count / rate, copyToChannel() {} };
   }
@@ -45,6 +58,24 @@ beforeEach(() => {
     Object.assign(new EventTarget(), { hidden: false }),
   );
   vi.stubGlobal("AudioContext", FakeContext);
+});
+it("schedules distinct healing and item fanfares and honors mute", async () => {
+  const audio = new GameAudio(() => "town");
+  audio.attach({
+    startMusic() {},
+    nextMusicChunk: () => new Float32Array(12000),
+  } as unknown as Engine);
+  await audio.unlock();
+  audio.fanfare("item");
+  const item = context.oscillators.slice();
+  audio.fanfare("heal");
+  const heal = context.oscillators.slice(item.length);
+  expect(item.length).toBeGreaterThan(1);
+  expect(heal.map((note) => note.frequency.value)).not.toEqual(item.map((note) => note.frequency.value));
+  expect(item[1].start.mock.calls[0][0]).toBeGreaterThan(item[0].start.mock.calls[0][0]);
+  audio.setEnabled(false);
+  audio.fanfare("heal");
+  expect(context.oscillators).toHaveLength(item.length + heal.length);
 });
 afterEach(() => {
   vi.useRealTimers();

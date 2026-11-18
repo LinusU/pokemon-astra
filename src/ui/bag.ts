@@ -52,6 +52,7 @@ const descriptions: Record<string, string> = {
   master_ball: "A ball that catches any wild Pokémon without fail.",
   aurora_certificate:
     "Professor Alder’s award for recording every species in Astra.",
+  courier_parcel: "A sealed delivery from Mossford. Take it to the courier in Bramble.",
 };
 const heldItems = [
   "exp_share",
@@ -82,6 +83,8 @@ export function battleBagKey(id: number) {
 }
 
 export function itemInfo(key: string): ItemInfo {
+  if (key === "courier_parcel")
+    return { name: "Courier’s Parcel", pocket: "key", description: descriptions[key], action: "Inspect" };
   if (key === "aurora_certificate")
     return { pocket: "key", description: descriptions[key], action: "Read" };
   if (Object.hasOwn(descriptions, key) && key.endsWith("_ball"))

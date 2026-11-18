@@ -3,6 +3,7 @@ import {
   freshSave,
   isValidSave,
   normalizeSavePosition,
+  restoreQuestItems,
 } from "../src/game/save";
 import { WORLD } from "../src/world";
 import type { Pokemon } from "../src/engine";
@@ -36,6 +37,15 @@ function populated() {
   };
 }
 describe("save files", () => {
+  it("restores the Key Item for a legacy parcel handoff in progress", () => {
+    const save = freshSave();
+    save.flags.push("found_parcel");
+    const restored = restoreQuestItems(save);
+    expect(restored.items.courier_parcel).toBe(1);
+    expect(restoreQuestItems(restored)).toBe(restored);
+    save.flags.push("quest_parcel_complete");
+    expect(restoreQuestItems(save).items.courier_parcel).toBeUndefined();
+  });
   it("round-trips a party and item inventory without losing native fields", () => {
     const original = populated();
     original.items.fire_stone = 2;

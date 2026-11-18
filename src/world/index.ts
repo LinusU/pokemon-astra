@@ -31,6 +31,7 @@ export interface Trainer {
   reward?: number;
 }
 export interface Reward {
+  takeItem?: string;
   items?: { item: string; amount?: number }[];
   item?: string;
   amount?: number;
@@ -1502,11 +1503,11 @@ function pickup(
 // The courier starts the quest and the recipient finishes it.
 const parcel = questById("parcel");
 parcel.dialogue =
-  "Heading to Bramble? Please take this delivery along Orchard Lane. You received the courier’s parcel!";
+  "Heading to Bramble? Please take this delivery to the courier there. Follow Orchard Lane east.";
 parcel.victoryDialogue =
   "The parcel is safely in your pack. Follow Orchard Lane east to Bramble and find the courier there.";
 parcel.setsFlag = "found_parcel";
-parcel.reward = undefined;
+parcel.reward = { item: "courier_parcel" };
 parcel.quest = undefined;
 obj("bramble", {
   id: "parcel_recipient",
@@ -1514,10 +1515,10 @@ obj("bramble", {
   name: "Bramble courier",
   dialogue:
     "My delivery from Mossford! Thank you for bringing it. Please take these Great Balls.",
-  requires: { flags: ["found_parcel"] },
+  requires: { flags: ["found_parcel"], items: ["courier_parcel"] },
   lockedDialogue: "I am waiting for a delivery from Mossford.",
   setsFlag: "quest_parcel_complete",
-  reward: { item: "great_ball", amount: 5 },
+  reward: { takeItem: "courier_parcel", item: "great_ball", amount: 5 },
   quest: "parcel",
 });
 questRequirement(

@@ -43,6 +43,14 @@ export const freshSave = (): Save => ({
   steps: 0,
   settings: { battleSpeed: 1, music: true },
 });
+
+/** Earlier saves recorded the courier handoff without adding a Key Item. */
+export function restoreQuestItems(save: Save): Save {
+  if (!save.flags.includes("found_parcel") || save.flags.includes("quest_parcel_complete"))
+    return save;
+  if (save.items.courier_parcel === 1) return save;
+  return { ...save, items: { ...save.items, courier_parcel: 1 } };
+}
 const integer = (x: unknown, min: number, max: number): x is number =>
   typeof x === "number" && Number.isInteger(x) && x >= min && x <= max;
 const exact = (a: unknown, n: number, max: number) =>

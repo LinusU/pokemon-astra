@@ -10,6 +10,11 @@ export const MUSIC_TRACKS: Record<string, [number, number]> = {
   gym: [0x3a, 0x650d],
   champion: [0x3a, 0x69c1],
 };
+const MUSIC_VOLUME = 0.28;
+const FANFARES: Record<"heal" | "item", readonly [pitch: number, beats: number][]> = {
+  heal: [[60, 1], [64, 1], [67, 1], [72, 2], [76, 1], [79, 3]],
+  item: [[72, 1], [76, 1], [79, 1], [84, 3]],
+};
 
 /** One gesture-unlocked audio context, with continuous ROM synthesis and no overlapping tracks. */
 export class GameAudio {
@@ -51,7 +56,7 @@ export class GameAudio {
       if (!this.context || this.context.state === "closed") {
         this.context = new AudioContext({ latencyHint: "interactive" });
         this.musicGain = this.context.createGain();
-        this.musicGain.gain.value = 0.28;
+        this.musicGain.gain.value = MUSIC_VOLUME;
         this.musicGain.connect(this.context.destination);
         this.effectsGain = this.context.createGain();
         this.effectsGain.gain.value = 0.55;
@@ -162,26 +167,50 @@ export class GameAudio {
       console.warn("Astra sound effect could not play", error);
     }
   }
-  cue(kind: "notice" | "step" | "confirm" | "heal") {
+  fanfare(kind: keyof typeof FANFARES) {
+    const ctx = this.context;
+    if (!this.enabled || !ctx || ctx.state !== "running") return;
+    const start = ctx.currentTime;
+    let time = start + 0.02;
+    for (const [pitch, beats] of FANFARES[kind]) {
+      const note = ctx.createOscillator();
+      const envelope = ctx.createGain();
+      const end = time + 0.11 * beats;
+      note.type = "square";
+      note.frequency.value = 440 * 2 ** ((pitch - 69) / 12);
+      envelope.gain.setValueAtTime(0.001, time);
+      envelope.gain.linearRampToValueAtTime(0.22, time + 0.008);
+      envelope.gain.exponentialRampToValueAtTime(0.001, end - 0.015);
+      note.connect(envelope).connect(this.effectsGain!);
+      note.start(time);
+      note.stop(end);
+      time = end;
+    }
+    const music = this.musicGain!.gain;
+    music.cancelScheduledValues(start);
+    music.setValueAtTime(music.value, start);
+    music.linearRampToValueAtTime(0.035, start + 0.02);
+    music.setValueAtTime(0.035, time);
+    music.linearRampToValueAtTime(MUSIC_VOLUME, time + 0.12);
+  }
+  cue(kind: "notice" | "step" | "confirm") {
     const ctx = this.context;
     if (!this.enabled || !ctx || ctx.state !== "running") return;
     const oscillator = ctx.createOscillator(),
       gain = ctx.createGain();
     oscillator.type = kind === "step" ? "triangle" : "square";
     const time = ctx.currentTime,
-      duration = kind === "notice" ? 0.22 : kind === "heal" ? 0.4 : 0.06;
+      duration = kind === "notice" ? 0.22 : 0.06;
     oscillator.frequency.setValueAtTime(
       kind === "notice"
         ? 740
-        : kind === "heal"
-          ? 523
-          : kind === "step"
+        : kind === "step"
             ? 140
             : 880,
       time,
     );
     oscillator.frequency.exponentialRampToValueAtTime(
-      kind === "notice" ? 1108 : kind === "heal" ? 1047 : 300,
+      kind === "notice" ? 1108 : 300,
       time + duration,
     );
     gain.gain.setValueAtTime(kind === "step" ? 0.018 : 0.05, time);

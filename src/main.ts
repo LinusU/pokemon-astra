@@ -20,6 +20,7 @@ import {
   freshSave,
   isValidSave,
   normalizeSavePosition,
+  restoreQuestItems,
   meetsRequirement,
   type Save,
 } from "./game/save";
@@ -156,7 +157,7 @@ function persist() {
   });
 }
 function restoreSession(data: Save) {
-  save = normalizeSavePosition(data);
+  save = normalizeSavePosition(restoreQuestItems(data));
   actors.reset();
   encounterDistance = 0;
   encounterTarget = 6;
@@ -356,6 +357,7 @@ function starter() {
           save.flags = save.flags.filter(
             (f) => f !== "starter_supplies_pending",
           );
+          sound.fanfare("item");
         }
         flag("partner");
         persist();
@@ -367,13 +369,9 @@ function starter() {
 }
 function itemName(key: string) {
   const name =
-    (isMedicine(key) ? MEDICINE[key].name : undefined) ??
+    itemInfo(key).name ??
     (
       {
-        poke_ball: "Poké Ball",
-        great_ball: "Great Ball",
-        ultra_ball: "Ultra Ball",
-        master_ball: "Master Ball",
         kings_rock: "King’s Rock",
         exp_share: "Exp. Share",
         up_grade: "Up-Grade",
@@ -404,6 +402,7 @@ function rewardReceipt(r?: Reward) {
 }
 function applyReward(r?: Reward) {
   if (!r) return;
+  if (r.takeItem) delete save.items[r.takeItem];
   if (r.badge) save.badges = Math.max(save.badges, r.badge);
   if (r.ability && !save.abilities.includes(r.ability))
     save.abilities.push(r.ability);
@@ -574,7 +573,7 @@ function interact() {
       );
       return;
     }
-    sound.cue("heal");
+    sound.fanfare("heal");
     save.center = save.map;
     save.party = save.party.map((m) => engine.healPokemon(m));
     persist();
@@ -645,11 +644,11 @@ function finishErrand(o: WorldObject, reward?: Reward) {
   flag(o.setsFlag);
   applyReward(reward);
   persist();
-  message(
-    o.dialogue,
-    receipt ? () => message(receipt, undefined, "Received") : undefined,
-    o.name,
-  );
+  message(o.dialogue, receipt ? () => showReceipt(receipt) : undefined, o.name);
+}
+function showReceipt(receipt: string, next?: () => void) {
+  sound.fanfare("item");
+  message(receipt, next, "Received");
 }
 function offerRematch(o: WorldObject, practice: boolean) {
   const trainer = o.trainer!;
@@ -752,6 +751,7 @@ function shop(selected?: string) {
           save.money -= cost * quantity;
           save.items[key] = (save.items[key] || 0) + quantity;
           persist();
+          sound.fanfare("item");
           message(
             `You put ${itemName(key)} × ${quantity} in your Bag.`,
             back,
@@ -1238,6 +1238,10 @@ function rivalSpecies(o: WorldObject, slot: number, original: number) {
 }
 function useItem(item: string) {
   if ((save.items[item] || 0) < 1) return;
+  if (item === "courier_parcel") {
+    message(itemInfo(item).description!, () => view("bag"));
+    return;
+  }
   if (item in ballIds || item === "aurora_certificate") {
     message(
       item === "aurora_certificate"
@@ -1440,6 +1444,7 @@ function showBattle() {
     if (caughtSpecies && !save.caught.includes(caughtSpecies))
       save.caught.push(caughtSpecies);
     const won = ["win", "won", "victory"].includes(s.outcome.toLowerCase());
+    let receipt = "";
     if (
       battleObject &&
       ((battleObject.kind === "legendary" && caughtSpecies === battleSpecies) ||
@@ -1453,6 +1458,7 @@ function showBattle() {
           999999,
           save.money + (battleObject.trainer?.reward ?? 0),
         );
+      receipt = rewardReceipt(battleObject.reward);
       applyReward(battleObject.reward);
     }
     const blackout =
@@ -1488,10 +1494,12 @@ function showBattle() {
       else postBattle(result.may_evolve);
     };
     if (won) {
-      if (victory) message(victory, wrapUp, battleObject?.name);
-      else wrapUp();
+      const afterVictory = receipt ? () => showReceipt(receipt, wrapUp) : wrapUp;
+      if (victory) message(victory, afterVictory, battleObject?.name);
+      else afterVictory();
       return;
     }
+    if (blackout) sound.fanfare("heal");
     message(
       caughtSpecies
         ? `${engine.species(caughtSpecies).name} joined ${result.caught >= 6 ? "your storage" : "your party"}!`
@@ -1502,7 +1510,7 @@ function showBattle() {
             : s.outcome.toLowerCase().includes("enemy")
               ? "The wild Pokémon fled."
               : "Got away safely!",
-      wrapUp,
+      receipt ? () => showReceipt(receipt, wrapUp) : wrapUp,
     );
     return;
   }
