@@ -10,7 +10,7 @@ function panel(
   party = false,
 ) {
   const ownerDocument = { activeElement: null as unknown };
-  let partyCursor: unknown;
+  let cursor: unknown;
   const rect = (left: number, top: number, right: number, bottom: number) => ({
     left,
     right,
@@ -23,7 +23,7 @@ function panel(
     getBoundingClientRect: () => rect(0, 0, 200, height),
     querySelectorAll: () => buttons,
     querySelector: (selector: string) => {
-      if (selector === '[aria-current="true"]') return partyCursor;
+      if (selector === '[aria-current="true"]') return cursor;
       return selector === "button:not(:disabled)" ? buttons[0] : journey ? {} : null;
     },
   };
@@ -38,7 +38,7 @@ function panel(
         ),
       focus: vi.fn((_: FocusOptions) => {
         ownerDocument.activeElement = button;
-        if (party) partyCursor = button;
+        cursor = button;
       }),
       click: vi.fn(),
     };
@@ -82,6 +82,21 @@ describe("menu input", () => {
     expect(ownerDocument.activeElement).toBe(buttons[1]);
     update(70, "a");
     expect(buttons[1].click).toHaveBeenCalledOnce();
+  });
+
+  it.each([false, true])("uses the marked grid choice after focus leaves (battle %s)", battle => {
+    const { update, buttons, ownerDocument } = panel(
+      [[0, 0, 88, 26], [96, 0, 88, 26], [0, 38, 88, 26], [96, 38, 88, 26]],
+      120, battle,
+    );
+    update(0);
+    update(10, "right");
+    ownerDocument.activeElement = null;
+    update(20, "down");
+    expect(ownerDocument.activeElement).toBe(buttons[3]);
+    ownerDocument.activeElement = null;
+    update(30, "a");
+    expect(buttons[3].click).toHaveBeenCalledOnce();
   });
 
   it("focuses the first battle option on a submenu redraw", () => {
@@ -153,6 +168,26 @@ describe("menu input", () => {
     update(360, "up");
     expect(scroller.scrollTop).toBeCloseTo(firstStep);
     expect(buttons[0].focus).not.toHaveBeenCalled();
+  });
+
+  it("highlights a newly revealed action in a scrolling text panel", () => {
+    const { update, buttons, ownerDocument } = panel([[0, 135, 88, 26]]);
+    update(0);
+    expect(ownerDocument.activeElement).toBeNull();
+    update(10, "down");
+    expect(ownerDocument.activeElement).toBe(buttons[0]);
+  });
+
+  it("reveals the remembered selection before confirming after manual scrolling", () => {
+    const { update, buttons, scroller, ownerDocument } = panel([[0, 6, 88, 26], [0, 200, 88, 26]]);
+    update(0);
+    scroller.scrollTop = 160;
+    ownerDocument.activeElement = null;
+    update(10, "a");
+    expect(ownerDocument.activeElement).toBe(buttons[0]);
+    expect(buttons[1].click).not.toHaveBeenCalled();
+    update(20, "a");
+    expect(buttons[0].click).toHaveBeenCalledOnce();
   });
 
   it("reveals the first Journey action when the header fills a compact panel", () => {

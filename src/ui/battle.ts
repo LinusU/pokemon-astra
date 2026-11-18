@@ -1,3 +1,4 @@
+import { trackMenuCursor } from "./menu-cursor";
 import type { BattleMon, BattleSnapshot, Pokemon } from "../engine";
 import type { CaptureSoundState } from "../engine/battle-sound";
 import { battleStatus, mountParty } from "./party";
@@ -440,6 +441,7 @@ export class BattlePresenter {
   private readonly trainerBattle: boolean;
   private queue: Event[] = [];
   private category = "";
+  private lastCommand = "FIGHT";
   private bagItem: number | undefined;
   private bagTarget: number | undefined;
   private bagState: BagState = {};
@@ -483,6 +485,10 @@ export class BattlePresenter {
       </div>
     </section>`;
     this.root = o.layer.querySelector(".battle-scene")!;
+    trackMenuCursor(this.root.querySelector<HTMLElement>(".battle-controls")!, button => {
+      if (this.snapshot.site === "BattleMenu" && button.dataset.group)
+        this.lastCommand = button.dataset.group;
+    });
     this.root.style.setProperty(
       "--battle-speed",
       `${1 / Math.max(0.25, o.speed)}`,
@@ -1109,15 +1115,18 @@ export class BattlePresenter {
         button.onfocus = () => {
           const prefix = this.bagTarget === undefined ? "" : "Restore PP · ";
           copy.textContent = prefix + button.dataset.moveDetail;
+          const move = actions[Number(button.dataset.index)]?.Move;
+          if (move) this.lastMoves.set(s.state.player.active_slot, { slot: move.slot, id: active.moves[move.slot] });
         };
       });
     }
     const last = this.lastMoves.get(s.state.player.active_slot);
-    const preferred = this.category === "FIGHT" && last && active.moves[last.slot] === last.id
+    const preferred = moveMenu && this.bagTarget === undefined && last && active.moves[last.slot] === last.id
       ? actions.findIndex((a) => a.Move?.slot === last.slot)
       : -1;
     controls.scrollTop = 0;
-    const selected = controls.querySelector<HTMLButtonElement>(`[data-group="${previousGroup}"], [data-index="${preferred}"]:enabled`)
+    const command = previousGroup || (standard && !this.category ? this.lastCommand : "");
+    const selected = controls.querySelector<HTMLButtonElement>(`[data-group="${command}"]:enabled, [data-index="${preferred}"]:enabled`)
       ?? controls.querySelector<HTMLButtonElement>("button:not(:disabled)");
     selected?.focus({ preventScroll: true });
     controls.querySelectorAll<HTMLButtonElement>("[data-group]").forEach(
@@ -1144,11 +1153,6 @@ export class BattlePresenter {
     this.root.querySelector(".party-screen")?.remove();
     this.root.querySelector(".battle-controls")!.innerHTML = "";
     try {
-      const move = (this.snapshot.legal[index] as { Move?: { slot: number } })?.Move;
-      if (move) {
-        const player = this.snapshot.state.player;
-        this.lastMoves.set(player.active_slot, { slot: move.slot, id: player.active.moves[move.slot] });
-      }
       this.category = "";
       this.bagItem = undefined;
       this.bagTarget = undefined;

@@ -110,21 +110,22 @@ export class MenuInput {
         ({ bounds }) =>
           bounds.right > bounds.left && bounds.bottom > bounds.top,
       );
-    const visible = ({ bounds }: ButtonPosition) =>
+    const visible = (bounds: Bounds) =>
       bounds.bottom > viewport.top + 2 &&
       bounds.top < viewport.bottom - 2 &&
       bounds.right > viewport.left &&
       bounds.left < viewport.right;
-    const focused = buttons.find(
-      ({ button }) => button === layer.ownerDocument.activeElement,
-    );
-    const firstVisible = buttons.find(visible);
+    const marked = scroller.querySelector('[aria-current="true"]');
+    const selected = buttons.find(({ button }) => button === marked);
+    const focused = buttons.find(({ button }) => button === layer.ownerDocument.activeElement);
+    const previous = selected ?? focused;
+    const firstVisible = buttons.find(({ bounds }) => visible(bounds));
     const menuStart =
       opened && scroller.querySelector(".menu-grid, [data-menu-start]")
         ? buttons[0]
         : undefined;
     const current =
-      focused && visible(focused) ? focused : (firstVisible ?? menuStart);
+      previous && visible(previous.bounds) ? previous : (firstVisible ?? menuStart);
     const focus = ({ button, bounds }: ButtonPosition) => {
       button.focus({ preventScroll: true });
       if (bounds.top < viewport.top)
@@ -133,13 +134,17 @@ export class MenuInput {
         scroller.scrollTop += bounds.bottom - viewport.bottom;
     };
     if (confirm) {
+      if (selected && !visible(selected.bounds)) {
+        focus(selected);
+        return;
+      }
       current?.button.click();
       return;
     }
     if (battle && buttons.length <= 1) return;
     if (opened && current && !focused) {
       focus(current);
-      if (!visible(current)) return;
+      if (!visible(current.bounds)) return;
     }
     if (!direction) return;
 
@@ -149,11 +154,16 @@ export class MenuInput {
       next &&
       next.bounds.top < viewport.bottom + 18 &&
       next.bounds.bottom > viewport.top - 18;
-    if (next && (visible(next) || (vertical && nearby) || battle)) {
+    if (next && (visible(next.bounds) || (vertical && nearby) || battle)) {
       focus(next);
     } else if (!battle && vertical) {
       const step = Math.max(24, scroller.clientHeight * 0.24);
       scroller.scrollTop += direction === "down" ? step : -step;
+      // Text-heavy panels can reveal their first action only after scrolling.
+      const inView = (entry: ButtonPosition) =>
+        visible(entry.button.getBoundingClientRect());
+      if (!previous || !inView(previous))
+        buttons.find(inView)?.button.focus({ preventScroll: true });
     } else if (current && !focused) {
       current.button.focus({ preventScroll: true });
     }

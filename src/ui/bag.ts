@@ -1,3 +1,4 @@
+import { trackMenuCursor } from "./menu-cursor";
 import type { Action } from "../game/input";
 import { MEDICINE } from "../game/medicine";
 import { escapeHtml } from "./shell";
@@ -5,7 +6,7 @@ import "./bag.css";
 
 const pocketLabels = { items: "Items", balls: "Poké Balls", key: "Key Items" };
 export type BagPocket = keyof typeof pocketLabels;
-export type BagState = { pocket?: BagPocket; selected?: string };
+export type BagState = { pocket?: BagPocket; selected?: Partial<Record<BagPocket, string>> };
 export type BagItem = {
   key: string;
   name: string;
@@ -148,16 +149,18 @@ export function mountBag(
 
   if (!state.pocket || !pockets.includes(state.pocket))
     state.pocket = pockets[0];
+  const byPocket = state.selected ??= {};
+  trackMenuCursor(bag);
   let shown: BagItem[];
   let choosing = false;
-  const selected = () => shown.find((item) => item.key === state.selected);
+  const selected = () => shown.find((item) => item.key === byPocket[state.pocket!]);
   const button = (selector: string) =>
     bag.querySelector<HTMLButtonElement>(selector);
   const focus = (target?: HTMLElement | null) =>
     (target ?? bag).focus({ preventScroll: true });
 
   function select(key: string | undefined, moveFocus: boolean) {
-    state.selected = key;
+    byPocket[state.pocket!] = key;
     const item = selected();
     let active: HTMLButtonElement | undefined;
     for (const row of bag.querySelectorAll<HTMLButtonElement>(
@@ -222,7 +225,6 @@ export function mountBag(
   }
 
   function changePocket(pocket: BagPocket) {
-    if (state.pocket !== pocket) state.selected = undefined;
     state.pocket = pocket;
     render();
   }
@@ -262,12 +264,12 @@ export function mountBag(
   }
 
   function input(action: BagControl) {
+    if (action === "a") {
+      button('button[aria-current="true"]:enabled')?.click();
+      return;
+    }
     if (choosing) {
-      const active = bag.ownerDocument
-        .activeElement as HTMLButtonElement | null;
-      if (action === "a") {
-        if (active && bag.contains(active)) active.click();
-      } else if (action === "up") {
+      if (action === "up") {
         focus(
           button("[data-bag-use]:enabled") ??
             button("[data-bag-action-cancel]"),
@@ -281,11 +283,8 @@ export function mountBag(
       const next =
         pockets.indexOf(state.pocket!) + (action === "left" ? -1 : 1);
       changePocket(pockets[(next + pockets.length) % pockets.length]);
-    } else if (action === "a") {
-      if (shown.length) chooseItem();
-      else onCancel();
     } else {
-      const index = shown.findIndex((item) => item.key === state.selected);
+      const index = shown.findIndex((item) => item.key === byPocket[state.pocket!]);
       const next = index + (action === "up" ? -1 : 1);
       if (shown[next]) select(shown[next].key, true);
     }

@@ -195,13 +195,13 @@
 .battle-controls button:hover:not(:disabled) {
   background: #dfebcf;
 }
-.battle-controls button:focus {
+.battle-controls button[aria-current="true"] {
   outline: 2px solid #345e48;
   outline-offset: -2px;
   color: #193d2d;
   background: #cadfba;
 }
-.battle-controls button:focus:before {
+.battle-controls button[aria-current="true"]:before {
   content: "";
   position: absolute;
   left: 3px;

@@ -143,12 +143,12 @@
   cursor: default;
 }
 .astra-bag-rows button[data-selected],
-.astra-bag-actions button:focus {
+.astra-bag-actions button[aria-current="true"] {
   background: var(--bag-tint);
 }
 
 .astra-bag-rows button[data-selected]::before,
-.astra-bag-actions button:focus::before {
+.astra-bag-actions button[aria-current="true"]::before {
   position: absolute;
   inset-inline-start: 0.3em;
   top: 50%;
@@ -173,7 +173,7 @@
   content: "";
 }
 
-.astra-bag button:focus {
+.astra-bag button[aria-current="true"] {
   outline: 2px solid var(--bag-pocket);
   outline-offset: -2px;
 }
