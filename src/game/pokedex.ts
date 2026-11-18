@@ -1,21 +1,32 @@
-import { WORLD, type WorldMap } from "../world";
+import { WORLD, type Requirement, type WorldMap } from "../world";
 import type { Save } from "./save";
 
 export const dexFilters = ["All", "Seen", "Caught", "Missing", "Local"] as const;
 export type DexFilter = typeof dexFilters[number];
-export const allSpecies = Array.from({ length: 251 }, (_, index) => index + 1);
+const allSpecies = Array.from({ length: 251 }, (_, index) => index + 1);
 
 export function fishingPool(map: WorldMap, isWaterType: (id: number) => boolean) {
   const pool = map.encounters.filter(entry => isWaterType(entry.species));
   return pool.length ? pool : [{ species: 129, minLevel: 10 }];
 }
 
-export type HabitatRecord = {
+type HabitatRecord = {
   map: WorldMap;
   method: string;
   level: string;
   note: string;
 };
+
+function guardianHint(requirement?: Requirement) {
+  if (requirement?.ability) {
+    const ability = requirement.ability.replace(/[A-Z]/g, letter => " " + letter).replace(/^./, letter => letter.toUpperCase());
+    return `Requires ${ability}`;
+  }
+  if (requirement?.caught) return `Register ${requirement.caught} caught`;
+  if (requirement?.flags?.includes("aurora_restored")) return "League clear + restored sanctuary";
+  if (requirement?.flags?.includes("champion")) return "After the Astral League";
+  return "Fixed encounter";
+}
 
 export function buildDex(save: Pick<Save, "map" | "visited" | "flags" | "seen" | "caught">,
   isWaterType: (id: number) => boolean) {
@@ -44,9 +55,14 @@ export function buildDex(save: Pick<Save, "map" | "visited" | "flags" | "seen" |
     }
     for (const object of map.objects) {
       const guardian = object.kind === "legendary" && object.trainer?.team[0];
-      if (guardian) add(guardian.species, "Guardian", String(guardian.level), "Fixed encounter");
+      const collected = object.setsFlag && save.flags.includes(object.setsFlag);
+      if (guardian) {
+        add(guardian.species, "Guardian", String(guardian.level),
+          collected ? "Already captured" : guardianHint(object.requires));
+      }
       if (object.reward?.species) {
-        add(object.reward.species, "Gift", String(object.reward.level ?? 5), `From ${object.name}`);
+        add(object.reward.species, "Gift", String(object.reward.level ?? 5),
+          collected ? "Gift received" : `From ${object.name}`);
       }
     }
   }

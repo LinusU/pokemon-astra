@@ -194,10 +194,10 @@
 .dex-empty small { display: block; margin-top: 1cqw; color: var(--dex-muted); }
 .dex-record { grid-template-rows: 6.2cqw minmax(0, 1fr) auto; }
 .dex-record:focus { outline: none; }
-.dex-location { align-self: center; padding: 1.6cqw 2.4cqw; }
+.dex-location { align-self: center; padding: 0 2.4cqw; }
 .dex-location small { display: block; color: var(--dex-muted); font-size: 4.1cqw; }
-.dex-location h3 { margin-top: 1cqw; font-size: 6.4cqw; font-weight: 400; }
-.dex-method { display: grid; gap: 0.7cqw; margin: 0 2.4cqw; padding: 1.6cqw 0; border-top: 0.4cqw solid var(--dex-line); }
+.dex-location h3 { margin-top: 1cqw; font-size: 6.1cqw; font-weight: 400; }
+.dex-method { display: grid; gap: 0.7cqw; margin: 0 2.4cqw; padding: 1cqw 0; border-top: 0.4cqw solid var(--dex-line); }
 .dex-method strong { font-weight: 400; }
 .dex-method span { font-size: 4.5cqw; color: var(--dex-muted); }
 .dex-foot {
@@ -210,7 +210,7 @@
   white-space: nowrap;
 }
 .dex-foot button { gap: 0.8cqw; height: 100%; }
-.dex-foot #back { margin-left: auto; }
+.pokedex[data-mode="filters"] .dex-foot #back { margin-left: auto; }
 .dex-foot kbd {
   min-width: 3.8cqw;
   padding: 0 0.4cqw;

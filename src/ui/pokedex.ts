@@ -28,7 +28,8 @@ const pageSize = 6;
 const number = (id: number) => String(id).padStart(3, "0");
 
 function arrows(previous: string, next: string, label: string, position: number, total: number) {
-  return `<div class="dex-pager"><button data-command="${previous}" aria-label="Previous ${label}" ${position <= 0 ? "disabled" : ""}>◂</button><span>${position + 1} / ${total}</span><button data-command="${next}" aria-label="Next ${label}" ${position + 1 >= total ? "disabled" : ""}>▸</button></div>`;
+  const vertical = label === "habitat";
+  return `<div class="dex-pager"><button data-command="${previous}" aria-label="Previous ${label}" ${position <= 0 ? "disabled" : ""}>${vertical ? "▴" : "◂"}</button><span>${position + 1} / ${total}</span><button data-command="${next}" aria-label="Next ${label}" ${position + 1 >= total ? "disabled" : ""}>${vertical ? "▾" : "▸"}</button></div>`;
 }
 
 export function mountPokedex(host: HTMLElement, options: Options) {
