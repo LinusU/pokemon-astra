@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
 import { Engine } from "../src/engine";
+import { HEAL_TRACK, OVERWORLD_SOUNDS } from "../src/game/audio";
 const available =
   existsSync("pokecrystal11.gbc") && existsSync("public/astra_native.wasm");
 describe.skipIf(!available)("Crystal ROM native bridge", () => {
@@ -62,7 +63,7 @@ describe.skipIf(!available)("Crystal ROM native bridge", () => {
       instance.exports as never,
       readFileSync("pokecrystal11.gbc"),
     );
-    const sounds = new Set([4, 5, 42, 43, 47, 94, 171, 172, 173, 182]);
+    const sounds = new Set([42, 43, 47, 94, 171, 172, 173, 182, ...Object.values(OVERWORLD_SOUNDS)]);
     for (let move = 1; move <= 277; move++) {
       if (move > 251 && move < 255) continue;
       for (const param of [0, 1, 2, 3, 4, 5, 7, 10]) {
@@ -78,6 +79,16 @@ describe.skipIf(!available)("Crystal ROM native bridge", () => {
       expect(pcm.some((sample) => Math.abs(sample) > 0.01), `SFX ${id}`).toBe(true);
     }
     expect(() => engine.soundEffect(0xcf)).toThrow("Unsupported sound effect");
+  });
+  it("decodes the finite Pokémon Center healing music from the cartridge", async () => {
+    const rom = readFileSync("pokecrystal11.gbc");
+    const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});
+    const engine = new Engine(instance.exports as never, rom);
+    const entry = 0x3a * 0x4000 + 0x106e + 0x0d * 3;
+    expect(HEAL_TRACK).toEqual([rom[entry], rom.readUInt16LE(entry + 1)]);
+    const samples = engine.music(...HEAL_TRACK);
+    expect(samples.some((sample) => Math.abs(sample) > 0.03)).toBe(true);
+    expect(samples.length).toBeLessThan(48000 * 10);
   });
   it("follows timed repeats, parameter branches, and actor cries", async () => {
     const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});

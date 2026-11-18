@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { GameAudio } from "../src/game/audio";
+import { GameAudio, HEAL_TRACK } from "../src/game/audio";
 import type { Engine } from "../src/engine";
 let context: FakeContext;
 class FakeNode {
@@ -26,6 +26,7 @@ class FakeContext {
   sources: FakeNode[] = [];
   oscillators: FakeNode[] = [];
   panners: FakeNode[] = [];
+  gains: FakeNode[] = [];
   constructor() {
     context = this;
   }
@@ -36,7 +37,9 @@ class FakeContext {
     this.state = "suspended";
   });
   createGain() {
-    return new FakeNode();
+    const node = new FakeNode();
+    this.gains.push(node);
+    return node;
   }
   createBufferSource() {
     const source = new FakeNode();
@@ -54,7 +57,7 @@ class FakeContext {
     return node;
   }
   createBuffer(_channels: number, count: number, rate: number) {
-    return { duration: count / rate, copyToChannel() {} };
+    return { duration: count / rate, sampleRate: rate, copyToChannel() {} };
   }
 }
 beforeEach(() => {
@@ -66,23 +69,35 @@ beforeEach(() => {
   );
   vi.stubGlobal("AudioContext", FakeContext);
 });
-it("schedules distinct healing and item fanfares and honors mute", async () => {
-  const audio = new GameAudio(() => "town");
+it("plays the cartridge heal tune and restores the map music at the end", async () => {
+  const music = vi.fn(() => new Float32Array([0, 0.2, -0.1, 0, 0]));
+  const soundEffect = vi.fn(() => new Float32Array(2400));
+  const audio = new GameAudio(() => "center");
   audio.attach({
     startMusic() {},
     nextMusicChunk: () => new Float32Array(12000),
+    music, soundEffect,
   } as unknown as Engine);
   await audio.unlock();
-  audio.fanfare("item");
-  const item = context.oscillators.slice();
-  audio.fanfare("heal");
-  const heal = context.oscillators.slice(item.length);
-  expect(item.length).toBeGreaterThan(1);
-  expect(heal.map((note) => note.frequency.value)).not.toEqual(item.map((note) => note.frequency.value));
-  expect(item[1].start.mock.calls[0][0]).toBeGreaterThan(item[0].start.mock.calls[0][0]);
+  audio.overworld("item");
+  audio.overworld("purchase");
+  expect(soundEffect.mock.calls).toEqual([[0x01], [0x22]]);
+  audio.heal();
+  expect(music).toHaveBeenCalledWith(...HEAL_TRACK);
+  const heal = context.sources.at(-1)!;
+  expect(heal.buffer.duration).toBe(3 / 48000);
+  expect(heal.buffer.sampleRate).toBe(48000);
+  const gain = context.gains[0].gain;
+  expect(gain.linearRampToValueAtTime).toHaveBeenCalledWith(0, 0.02);
+  expect(gain.linearRampToValueAtTime).toHaveBeenLastCalledWith(0.28, 0.02 + heal.buffer.duration + 0.12);
+  expect(context.oscillators).toHaveLength(0);
   audio.setEnabled(false);
-  audio.fanfare("heal");
-  expect(context.oscillators).toHaveLength(item.length + heal.length);
+  expect(heal.stop).toHaveBeenCalled();
+  expect(gain.setValueAtTime).toHaveBeenLastCalledWith(0.28, 0);
+  audio.heal();
+  audio.overworld("door");
+  expect(music).toHaveBeenCalledTimes(1);
+  expect(soundEffect).toHaveBeenCalledTimes(2);
 });
 afterEach(() => {
   vi.useRealTimers();

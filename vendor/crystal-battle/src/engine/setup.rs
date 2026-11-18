@@ -666,8 +666,9 @@ impl Engine {
             self.mem.wb(W_TEMP_MON_LEVEL, level);
             self.mem.wb(W_CUR_PARTY_LEVEL, level);
             self.mem.wb(W_BATTLE_MON_LEVEL, level);
-            // PrintPlayerHUD, the level-up jingle: graphics and sound
+            // The cartridge plays the EXP bar completion sound before announcing each level.
             self.copy_name(W_STRING_BUFFER1, W_BATTLE_MON_NICKNAME);
+            self.show(crate::battle::Event::Sound(SFX_HIT_END_OF_EXP_BAR.into()));
             self.text(r::BATTLE_TEXT_STRING_BUFFER1_GREW_TO_LEVEL);
             e += 1;
         }

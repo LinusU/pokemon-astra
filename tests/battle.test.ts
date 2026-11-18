@@ -177,9 +177,12 @@ describe.skipIf(!romAvailable)("complete native battle decisions", () => {
     const seen = new Set<string>();
     for (let step = 0; step < 100; step++) {
       const snap = battle.snapshot();
-      for (const event of snap.events as any[])
+      const events = snap.events as any[];
+      for (const [index, event] of events.entries())
         if (event.Message) {
           const value = event.Message;
+          if (value.GrewToLevel)
+            expect(events[index - 1]).toEqual({ Sound: 0xb6 });
           seen.add(typeof value === "string" ? value : Object.keys(value)[0]);
           const text = battleMessage(
             value,
@@ -242,7 +245,10 @@ describe.skipIf(!romAvailable)("complete native battle decisions", () => {
       const recipients = new Set<string>();
       for (let i = 0; i < 20; i++) {
         const snapshot = battle.snapshot();
-        for (const event of snapshot.events as any[]) {
+        const events = snapshot.events as any[];
+        for (const [index, event] of events.entries()) {
+          if (event.Message?.GrewToLevel?.slot === 1)
+            expect(events[index - 1]).toEqual({ Sound: 0xb6 });
           if (event.Message?.GainedExp) recipients.add(event.Message.GainedExp.mon);
           if (event.ExpBar) {
             sawActiveExpBar = true;

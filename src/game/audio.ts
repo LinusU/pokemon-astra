@@ -12,10 +12,25 @@ export const MUSIC_TRACKS: Record<string, [number, number]> = {
   champion: [0x3a, 0x69c1],
 };
 const MUSIC_VOLUME = 0.28;
-const FANFARES: Record<"heal" | "item", readonly [pitch: number, beats: number][]> = {
-  heal: [[60, 1], [64, 1], [67, 1], [72, 2], [76, 1], [79, 3]],
-  item: [[72, 1], [76, 1], [79, 1], [84, 3]],
-};
+const MUSIC_RATE = 48000;
+// Crystal 1.1's MUSIC_HEAL, used by HealMachineAnim.
+export const HEAL_TRACK = [0x3c, 0x4697] as const;
+// Crystal's sfx_constants.asm, for the corresponding field actions and rewards.
+export const OVERWORLD_SOUNDS = {
+  item: 0x01,
+  potion: 0x04,
+  restorePp: 0x05,
+  interact: 0x08,
+  fly: 0x18,
+  strength: 0x1b,
+  door: 0x1f,
+  purchase: 0x22,
+  exit: 0x23,
+  bump: 0x24,
+  surf: 0x53,
+  badge: 0x9c,
+  flash: 0xa9,
+} as const;
 
 /** One gesture-unlocked audio context, with continuous ROM synthesis and no overlapping tracks. */
 export class GameAudio {
@@ -24,6 +39,7 @@ export class GameAudio {
   private effectsGain?: GainNode;
   private sources = new Set<AudioBufferSourceNode>();
   private effectSources = new Set<AudioBufferSourceNode>();
+  private healingCue?: AudioBufferSourceNode;
   private buffers = new Map<string, AudioBuffer>();
   private timer?: number;
   private next = 0;
@@ -126,7 +142,7 @@ export class GameAudio {
         const data = this.engine.nextMusicChunk(12000);
         if (!data.length)
           throw Error("The cartridge music stream ended unexpectedly");
-        const buffer = ctx.createBuffer(1, data.length, 48000);
+        const buffer = ctx.createBuffer(1, data.length, MUSIC_RATE);
         buffer.copyToChannel(new Float32Array(data), 0);
         const source = ctx.createBufferSource();
         source.buffer = buffer;
@@ -147,19 +163,25 @@ export class GameAudio {
   private stopEffects() {
     for (const source of this.effectSources) source.stop();
     this.effectSources.clear();
+    this.healingCue = undefined;
+    if (this.musicGain && this.context) {
+      const { currentTime } = this.context;
+      this.musicGain.gain.cancelScheduledValues(currentTime);
+      this.musicGain.gain.setValueAtTime(MUSIC_VOLUME, currentTime);
+    }
   }
 
   private get canPlayEffects() {
     return this.enabled && this.context?.state === "running" && !document.hidden;
   }
 
-  private buffer(key: string, decode: () => Float32Array) {
+  private buffer(key: string, decode: () => Float32Array, rate = 47662) {
     const cached = this.buffers.get(key);
     if (cached) return cached;
     try {
       const data = decode();
       if (!data.length) return;
-      const buffer = this.context!.createBuffer(1, data.length, 47662);
+      const buffer = this.context!.createBuffer(1, data.length, rate);
       buffer.copyToChannel(new Float32Array(data), 0);
       if (this.buffers.size >= 64) this.buffers.delete(this.buffers.keys().next().value!);
       this.buffers.set(key, buffer);
@@ -186,6 +208,7 @@ export class GameAudio {
     };
     this.effectSources.add(source);
     source.start(when, 0, duration);
+    return source;
   }
 
   cry(species: number) {
@@ -232,31 +255,33 @@ export class GameAudio {
       this.playEffect(cue.buffer, start + cue.frame * secondsPerFrame, cue.pan, duration);
     }
   }
-  fanfare(kind: keyof typeof FANFARES) {
-    const ctx = this.context;
-    if (!this.enabled || !ctx || ctx.state !== "running") return;
-    const start = ctx.currentTime;
-    let time = start + 0.02;
-    for (const [pitch, beats] of FANFARES[kind]) {
-      const note = ctx.createOscillator();
-      const envelope = ctx.createGain();
-      const end = time + 0.11 * beats;
-      note.type = "square";
-      note.frequency.value = 440 * 2 ** ((pitch - 69) / 12);
-      envelope.gain.setValueAtTime(0.001, time);
-      envelope.gain.linearRampToValueAtTime(0.22, time + 0.008);
-      envelope.gain.exponentialRampToValueAtTime(0.001, end - 0.015);
-      note.connect(envelope).connect(this.effectsGain!);
-      note.start(time);
-      note.stop(end);
-      time = end;
-    }
+  overworld(kind: keyof typeof OVERWORLD_SOUNDS) {
+    this.soundEffect(OVERWORLD_SOUNDS[kind]);
+  }
+
+  heal() {
+    const engine = this.engine;
+    if (!engine || !this.canPlayEffects) return;
+    const buffer = this.buffer("music:heal", () => {
+      const samples = engine.music(...HEAL_TRACK);
+      // The music renderer pads finished songs with silence. Restore the map
+      // theme promptly at the end of this finite tune.
+      let end = samples.length;
+      while (end > 0 && samples[end - 1] === 0) end--;
+      return samples.subarray(0, end);
+    }, MUSIC_RATE);
+    if (!buffer) return;
+    const start = this.context!.currentTime;
+    const time = start + 0.02;
+    if (this.healingCue && this.effectSources.has(this.healingCue))
+      this.healingCue.stop();
+    this.healingCue = this.playEffect(buffer, time);
     const music = this.musicGain!.gain;
     music.cancelScheduledValues(start);
     music.setValueAtTime(music.value, start);
-    music.linearRampToValueAtTime(0.035, start + 0.02);
-    music.setValueAtTime(0.035, time);
-    music.linearRampToValueAtTime(MUSIC_VOLUME, time + 0.12);
+    music.linearRampToValueAtTime(0, time);
+    music.setValueAtTime(0, time + buffer.duration);
+    music.linearRampToValueAtTime(MUSIC_VOLUME, time + buffer.duration + 0.12);
   }
   cue(kind: "notice" | "step" | "confirm") {
     const ctx = this.context;

@@ -50,6 +50,7 @@ let engine: Engine,
   last = performance.now(),
   encounterDistance = 0,
   exitLock = true,
+  bumpLatched = false,
   battle: any,
   battleObject: WorldObject | undefined,
   battleSpecies = 0,
@@ -366,7 +367,7 @@ function starter() {
           save.flags = save.flags.filter(
             (f) => f !== "starter_supplies_pending",
           );
-          sound.fanfare("item");
+          sound.overworld("item");
         }
         flag("partner");
         persist();
@@ -489,6 +490,8 @@ function inspectBarrier(exit: Exit) {
   p.querySelector("#use-field")!.addEventListener("click", () => {
     flag(obstacle.flag);
     persist();
+    if (obstacle.kind === "strength" || obstacle.kind === "surf" || obstacle.kind === "flash")
+      sound.overworld(obstacle.kind);
     message(action[2]);
   });
 }
@@ -499,6 +502,7 @@ function interact() {
   actors.enter(map);
   const barrier = barrierTarget(map, save, isExitOpen);
   if (barrier) {
+    sound.overworld("interact");
     inspectBarrier(barrier);
     return;
   }
@@ -525,6 +529,7 @@ function interact() {
     // A stray confirm while walking should leave movement uninterrupted.
     return;
   }
+  sound.overworld("interact");
   actors.face(o, save.x, save.y);
   if (o.quest) {
     flag("met_" + o.id);
@@ -582,7 +587,7 @@ function interact() {
       );
       return;
     }
-    sound.fanfare("heal");
+    sound.heal();
     save.center = save.map;
     save.party = save.party.map((m) => engine.healPokemon(m));
     persist();
@@ -656,7 +661,7 @@ function finishErrand(o: WorldObject, reward?: Reward) {
   message(o.dialogue, receipt ? () => showReceipt(receipt) : undefined, o.name);
 }
 function showReceipt(receipt: string, next?: () => void) {
-  sound.fanfare("item");
+  sound.overworld("item");
   message(receipt, next, "Received");
 }
 function offerRematch(o: WorldObject, practice: boolean) {
@@ -760,7 +765,7 @@ function shop(selected?: string) {
           save.money -= cost * quantity;
           save.items[key] = (save.items[key] || 0) + quantity;
           persist();
-          sound.fanfare("item");
+          sound.overworld("purchase");
           message(
             `You put ${itemName(key)} × ${quantity} in your Bag.`,
             back,
@@ -1089,6 +1094,7 @@ function view(v: string, pageIndex = 0, missingOnly = false) {
     (b) =>
       (b.onclick = () =>
         depart(b.dataset.travel!, () => {
+          sound.overworld("fly");
           save.map = b.dataset.travel!;
           const door = WORLD[save.map].exits.find((e) =>
             e.to.endsWith("_center"),
@@ -1371,6 +1377,7 @@ function useItem(item: string) {
           save.party[index] = healed;
           save.items[item]--;
           persist();
+          sound.overworld(item === "max_elixer" ? "restorePp" : "potion");
           message(
             item === "max_elixer"
               ? `${engine.species(mon.species).name}’s move PP was restored.`
@@ -1453,6 +1460,7 @@ function showBattle() {
     if (caughtSpecies && !save.caught.includes(caughtSpecies))
       save.caught.push(caughtSpecies);
     const won = ["win", "won", "victory"].includes(s.outcome.toLowerCase());
+    const earnedBadge = won && (battleObject?.reward?.badge ?? 0) > save.badges;
     let receipt = "";
     if (
       battleObject &&
@@ -1503,12 +1511,13 @@ function showBattle() {
       else postBattle(result.may_evolve);
     };
     if (won) {
+      if (earnedBadge) sound.overworld("badge");
       const afterVictory = receipt ? () => showReceipt(receipt, wrapUp) : wrapUp;
       if (victory) message(victory, afterVictory, battleObject?.name);
       else afterVictory();
       return;
     }
-    if (blackout) sound.fanfare("heal");
+    if (blackout) sound.heal();
     message(
       caughtSpecies
         ? `${engine.species(caughtSpecies).name} joined ${result.caught >= 6 ? "your storage" : "your party"}!`
@@ -1650,7 +1659,10 @@ function challengeTrainer(o: WorldObject) {
   );
 }
 function update(dt: number) {
-  if (mode !== "world") return;
+  if (mode !== "world") {
+    bumpLatched = false;
+    return;
+  }
   const currentMap = WORLD[save.map];
   actors.update(currentMap, dt, save);
   if (actors.approaching) {
@@ -1684,7 +1696,10 @@ function update(dt: number) {
     Number(input.held(a) || input.hit(a));
   let dx = moving("right") - moving("left"),
     dy = moving("down") - moving("up");
-  if (!dx && !dy) return;
+  if (!dx && !dy) {
+    bumpLatched = false;
+    return;
+  }
   const len = Math.hypot(dx, dy);
   dx /= len;
   dy /= len;
@@ -1708,13 +1723,22 @@ function update(dt: number) {
     if (!blocked(save.x, ny)) save.y = ny;
   }
   const moved = Math.hypot(save.x - oldX, save.y - oldY);
-  if (moved === 0) return;
+  if (moved === 0) {
+    if (dist > 0 && !bumpLatched) {
+      sound.overworld("bump");
+      bumpLatched = true;
+    }
+    return;
+  }
+  bumpLatched = false;
   const map = WORLD[save.map];
   const exit = exitAt(map, save.x, save.y);
   if (!exit) exitLock = false;
   else if (isExitOpen(exit) && (!exitLock || exit.direction)) {
     exitLock = true;
     depart(exit.to, () => {
+      if (!exit.direction)
+        sound.overworld(exit.entrance === "door" ? "door" : "exit");
       const arrival = crossConnection(map, exit, save.x, save.y, isExitOpen);
       save.map = exit.to;
       save.x = arrival.x;
