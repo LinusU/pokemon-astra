@@ -1,6 +1,8 @@
 import type { BattleMon, BattleSnapshot } from "../engine";
 import { escapeHtml } from "./shell";
 import { battleBagKey, itemInfo, mountBag, type BagItem, type BagState } from "./bag";
+import { playMove } from "./move-animation";
+import { findMoveVisual, type MoveVisual } from "./move-visuals";
 import "./battle.css";
 
 type Side = "Player" | "Enemy";
@@ -490,6 +492,7 @@ export class BattlePresenter {
   private typing = false;
   private message = "";
   private timer = 0;
+  private stopMove?: () => void;
   private disposed = false;
   constructor(private o: Options) {
     this.snapshot = o.snapshot;
@@ -516,6 +519,7 @@ export class BattlePresenter {
         <div class="battle-mon battle-enemy"><img alt=""></div>
         <div class="battle-mon battle-player"><img alt=""></div>
         <div class="battle-fx"></div>
+        <canvas class="battle-move-fx" aria-hidden="true"></canvas>
         <div class="battle-party-effect" hidden></div>
       </div>
       <div class="battle-box">
@@ -769,15 +773,13 @@ export class BattlePresenter {
         this.animate(user, `effect-${family}`, 500);
         return;
       }
-      let name = "",
-        type: number | undefined;
+      let move: ReturnType<Options["move"]> | undefined;
       if (a.anim > 0 && a.anim < 256) {
         try {
-          const move = this.o.move(a.anim);
-          name = move.name;
-          type = move.type;
+          move = this.o.move(a.anim);
         } catch {}
       }
+      const name = move?.name ?? "";
       const self =
         /heal|recover|rest|softboiled|agility|barrier|protect|swords dance|growth|harden|defense curl|amnesia|meditate|focus energy/i.test(
           name,
@@ -792,10 +794,23 @@ export class BattlePresenter {
           e.Message?.DidntAffect ||
           e.Message?.DoesntAffect,
       );
-      this.moveAnimation(user, side, moveEffect(name, type), miss);
+      const visual = findMoveVisual(name);
+      if (visual) this.showMoveVisual(user, visual, miss, !!move?.power, a.param);
+      else this.moveAnimation(user, side, moveEffect(name, move?.type), miss);
       return;
     }
     this.next();
+  }
+  private showMoveVisual(user: Battler, visual: MoveVisual, miss: boolean, hit: boolean, param: number) {
+    const canvas = this.root.querySelector<HTMLCanvasElement>(".battle-move-fx")!;
+    const attacker = this.root.querySelector<HTMLElement>(`.battle-${user}`)!;
+    const defender = this.root.querySelector<HTMLElement>(user === "player" ? ".battle-enemy" : ".battle-player")!;
+    this.stopMove = playMove(canvas, attacker, defender, visual, {
+      speed: this.o.speed, miss, hit, param,
+    }, () => {
+      this.stopMove = undefined;
+      this.next();
+    });
   }
   private moveAnimation(
     user: Battler,
@@ -1185,6 +1200,7 @@ export class BattlePresenter {
   destroy() {
     this.disposed = true;
     clearTimeout(this.timer);
+    this.stopMove?.();
     this.closeBag();
     this.root.remove();
   }

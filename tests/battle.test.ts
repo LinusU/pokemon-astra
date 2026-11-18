@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { battleMessage, moveEffect, battleMonAtSendOut } from "../src/ui/battle";
+import { findMoveVisual } from "../src/ui/move-visuals";
 
 describe("battle presentation", () => {
   const move = (id: number) => ({ name: id === 85 ? "Thunderbolt" : "Tackle" });
@@ -29,6 +30,12 @@ describe("battle presentation", () => {
     expect(moveEffect("Tackle")).toBe("impact");
     expect(moveEffect("Bite", 27)).toBe("bite");
     expect(moveEffect("Metal Claw", 9)).toBe("slash");
+  });
+  it("gives contact moves and thrown objects distinct staging", () => {
+    expect(findMoveVisual("Bite")).toMatchObject({ motif: "jaw", pattern: "hit" });
+    expect(findMoveVisual("Cross Chop")).toMatchObject({ motif: "cross", motion: "leap" });
+    expect(findMoveVisual("Pay Day")).toMatchObject({ motif: "coin", pattern: "arc" });
+    expect(findMoveVisual("Rock Slide")).toMatchObject({ motif: "rock", pattern: "fall" });
   });
 });
 
