@@ -18,7 +18,7 @@ describe("Pokédex field records", () => {
     for (const id of dex.lists.All) expect(dex.habitats.get(id)?.length).toBeGreaterThan(0);
     expect(dex.habitats.get(69)?.[0]).toMatchObject({ map: { id: "route02" }, method: "Tall grass", level: "6–8" });
     expect(dex.habitats.get(144)).toContainEqual(expect.objectContaining({ method: "Guardian", level: "60", note: "Requires Waterfall" }));
-    expect(dex.habitats.get(131)).toContainEqual(expect.objectContaining({ method: "Gift", level: "25" }));
+    expect(dex.habitats.get(131)).toContainEqual(expect.objectContaining({ method: "Field request", level: "25" }));
   });
 
   it("includes fishing levels and the angler unlock at water locations", () => {

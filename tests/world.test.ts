@@ -13,7 +13,7 @@ import { barrierAt, connectionOffset, exitOpen } from "../src/game/navigation";
 
 const maps = Object.values(WORLD);
 const needsSurf = (map: WorldMap) =>
-  ["route22", "route24"].includes(map.id) ||
+  (["route22", "route24"].includes(map.id) || map.objects.some(o => o.field?.afloat)) ||
   map.exits.some((exit) => map.tiles[exit.y][exit.x] === "~");
 const solidTerrain = (map: WorldMap, tile: string) =>
   "#orwBCPTS".includes(tile) || (!needsSurf(map) && tile === "~");
@@ -159,7 +159,7 @@ describe("authored region", () => {
     ])
       expect(items.has(item), item).toBe(true);
   });
-  it("keeps named quest objectives and ordered mechanisms persistent", () => {
+  it("keeps named quest objectives persistent", () => {
     const objects = maps.flatMap((m) => m.objects);
     expect(new Set(objects.map((o) => o.id)).size).toBe(objects.length);
     expect(
@@ -171,27 +171,7 @@ describe("authored region", () => {
     expect(
       objects.find((o) => o.id === "quest_pollinators")?.requires?.types,
     ).toEqual([{ type: "bug", count: 3 }]);
-    for (const id of [
-      "lantern",
-      "undertow",
-      "copperworks",
-      "hourglass",
-      "bamboo",
-      "ember",
-      "frostvault",
-      "echo",
-      "meridian",
-      "starfall",
-      "victory",
-      "aurora",
-    ]) {
-      expect(
-        objects.find((o) => o.id === `${id}_step2`)?.requires?.flags,
-      ).toContain(`${id}_step1`);
-      expect(
-        objects.find((o) => o.id === `${id}_mechanism`)?.requires?.flags,
-      ).toContain(`${id}_step2`);
-    }
+
   });
   it("keeps field shortcuts and story gates locked until their prerequisites", () => {
     const exit = (from: string, to: string) =>
@@ -468,7 +448,7 @@ it("keeps encounters off mandatory roads and grass accessible in every habitat",
   }
 });
 
-it("enforces each dungeon’s stages at its stairs and opens a direct return", () => {
+it("opens a direct return from each completed expedition", () => {
   for (const entry of maps.filter(
     (m) => m.kind === "dungeon" && m.id.endsWith("_1"),
   )) {
@@ -476,12 +456,9 @@ it("enforces each dungeon’s stages at its stairs and opens a direct return", (
     const middle = WORLD[`${id}_2`];
     const final = WORLD[`${id}_3`];
     const objective = final.objects.find((o) => o.id === `${id}_objective`)!;
-    const mechanism = middle.objects.find((o) => o.id === `${id}_mechanism`)!;
+
     const stairs = (from: typeof entry, to: typeof entry) =>
       from.exits.find((e) => e.to === to.id)!;
-    expect(entry.objects.some((o) => o.id === `${id}_step1`)).toBe(true);
-    expect(stairs(entry, middle).requires?.flags).toEqual([`${id}_step1`]);
-    expect(stairs(middle, final).requires?.flags).toEqual([mechanism.setsFlag]);
     expect(stairs(entry, final).requires?.flags).toEqual([objective.setsFlag]);
     expect(stairs(final, entry).requires?.flags).toEqual([objective.setsFlag]);
     expect(stairs(final, middle).requires).toBeUndefined();
@@ -510,11 +487,9 @@ it("paces the Astral League through separate chambers", () => {
   ).toEqual(["champion"]);
 });
 
-it("keeps authored replacements compact and returns around the far shore", () => {
-  for (const m of maps.filter((m) => m.kind === "dungeon")) {
-    expect(m.width).toBeLessThanOrEqual(20);
-    expect(m.height).toBeLessThanOrEqual(16);
-  }
+it("varies the dungeon footprints and returns around the far shore", () => {
+  const rooms = maps.filter(m => m.kind === "dungeon");
+  expect(new Set(rooms.map(m => m.width + "x" + m.height)).size).toBeGreaterThan(12);
   for (const [town, road, direction] of [
     ["copperwick", "route08", "north"],
     ["sunspire", "route10", "west"],

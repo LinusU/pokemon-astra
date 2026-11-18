@@ -289,6 +289,16 @@ export class GameAudio {
     this.soundEffect(OVERWORLD_SOUNDS[kind]);
   }
 
+  bell(pitch: number) {
+    if (!this.canPlayEffects) return;
+    const hz = [262, 392, 523][pitch];
+    const pcm = this.buffer("bell:" + pitch, () => Float32Array.from({ length: 14400 }, (_, i) => {
+      const t = i / 24000;
+      return (Math.sin(t * hz * Math.PI * 2) + 0.3 * Math.sin(t * hz * Math.PI * 5)) * Math.exp(-7 * t) * 0.32;
+    }), 24000);
+    if (pcm) this.playEffect(pcm, this.context!.currentTime);
+  }
+
   heal() {
     const engine = this.engine;
     if (!engine || !this.canPlayEffects) return;

@@ -68,10 +68,12 @@ export function interactionDistance(
     Math.abs(dx * fy - dy * fx) > 0.95
   )
     return Infinity;
+  const afloat = map.tiles[Math.floor(player.y)]?.[Math.floor(player.x)] === "~";
   for (let d = 0.25; d < distance - 0.3; d += 0.2) {
     const x = Math.floor(player.x + (dx / distance) * d);
     const y = Math.floor(player.y + (dy / distance) * d);
     const tile = map.tiles[y]?.[x];
+    if (tile === "~" && afloat) continue;
     if (
       tile === "~" &&
       options.allowWaterTarget &&
@@ -90,8 +92,9 @@ export function interactionDistance(
 }
 
 export function objectVisible(object: WorldObject, flags: ReadonlySet<string>) {
+  if (object.field?.appearsAfter && !flags.has(object.field.appearsAfter)) return false;
   return (
-    (object.kind !== "item" && object.kind !== "legendary") ||
+    (object.kind !== "item" && object.kind !== "legendary" && !object.field?.disappear) ||
     !flags.has(object.setsFlag || object.id)
   );
 }
@@ -270,7 +273,8 @@ export class WorldActors {
         continue;
       const distance = Math.hypot(dx, dy);
       let clear = true;
-      for (let d = 0.25; d < distance; d += 0.25) {
+      const afloat = map.tiles[Math.floor(player.y)]?.[Math.floor(player.x)] === "~";
+  for (let d = 0.25; d < distance; d += 0.25) {
         const x = actor.x + dx * d / distance;
         const y = actor.y + dy * d / distance;
         if (

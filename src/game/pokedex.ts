@@ -58,7 +58,7 @@ export function buildDex(save: Pick<Save, "map" | "visited" | "flags" | "seen" |
       const guardian = object.kind === "legendary" && object.trainer?.team[0];
       const collected = object.setsFlag && save.flags.includes(object.setsFlag);
       if (guardian) {
-        add(guardian.species, "Guardian", String(guardian.level),
+        add(guardian.species, object.request ? "Field request" : "Guardian", String(guardian.level),
           collected ? "Already captured" : guardianHint(object.requires));
       }
       if (object.reward?.species) {

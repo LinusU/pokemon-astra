@@ -1,5 +1,8 @@
+import { openFieldwork } from "./ui/fieldwork";
+import { requestHint, updateChart } from "./world/requests";
 import { gymBattleBackdrop } from "./game/gym-art";
 import { iceLanding, advanceGlide } from "./game/skating";
+import { expeditionState } from "./world/expeditions";
 import { gymState } from "./world/gyms";
 import { awardBadge, badgeMask, fieldHabitats, fieldTeam } from "./game/badges";
 import { fishingPool } from "./game/pokedex";
@@ -31,7 +34,7 @@ import {
   freshSave,
   isValidSave,
   normalizeSavePosition,
-  restoreQuestItems,
+  restoreExpeditions,
   meetsRequirement,
   type Save,
 } from "./game/save";
@@ -153,7 +156,7 @@ document.querySelector("#sound-toggle")?.addEventListener("click", () => {
   else toggleMusic();
 });
 function currentField() {
-  return gymState(WORLD[save.map], save.flags);
+  return expeditionState(gymState(WORLD[save.map], save.flags), save.flags);
 }
 function scene(): MusicScene {
   if (mode === "title") return "title";
@@ -191,7 +194,8 @@ function persist() {
   });
 }
 function restoreSession(data: Save) {
-  save = normalizeSavePosition(restoreQuestItems(data));
+  save = normalizeSavePosition(restoreExpeditions(data));
+  updateChart(save.flags, save.map);
   fieldBagState = {};
   fieldDexState = {};
   fieldCursors = {};
@@ -570,17 +574,8 @@ function interact() {
   }
   sound.overworld("interact");
   actors.face(o, save.x, save.y);
-  if (o.wildlife) {
-    if (!save.seen.includes(o.wildlife)) {
-      save.seen.push(o.wildlife);
-      persist();
-    }
-    cry(o.wildlife);
-    message(o.dialogue, undefined, o.name);
-    return;
-  }
-  if (o.quest) {
-    flag("met_" + o.id);
+  if (o.request && !save.flags.includes("request_" + o.request)) {
+    flag("request_" + o.request);
     persist();
   }
   // Finished errands remain finished even after a party or held item changes.
@@ -597,11 +592,13 @@ function interact() {
       offerRematch(o, practice);
       return;
     }
-    const finished = o.quest ? QUESTS.find((q) => q.id === o.quest) : undefined;
+    const cover = save.flags.find(f => f.startsWith("atlas_cover_"))?.slice(12).replaceAll("_", " ");
+    if (o.quest === "atlas" && cover) {
+      message("The first spread shows the " + cover + ". Your certificate bears the signatures of all three nursery teams.", undefined, o.name);
+      return;
+    }
     message(
-      finished
-        ? `${finished.name} complete. Thank you for your help!`
-        : o.kind === "starter"
+      o.kind === "starter"
           ? "Your partner looks happy! Take Dewpath east to Mossford."
           : o.victoryDialogue ||
             (o.kind === "switch"
@@ -616,10 +613,55 @@ function interact() {
   }
   if (!has(o.requires)) {
     message(
-      o.lockedDialogue || "There is more to do before this opens.",
+      o.quest ? requestHint(o.quest, save.flags, save.caught, id => engine.species(id).types) : o.lockedDialogue || "There is more to do before this opens.",
       undefined,
       o.name,
     );
+    return;
+  }
+  const field = o.field;
+  if (field?.afloat && map.tiles[Math.floor(save.y)]?.[Math.floor(save.x)] !== "~") {
+    message("Lapras waits offshore. Surf into the shallows beside it and call from the water.", undefined, o.name);
+    return;
+  }
+  if (field?.camp) {
+    save.settings.night = !save.settings.night;
+    renderer.setNight(save.settings.night);
+    persist();
+    message(save.settings.night ? "Moonrise. The pool watch has begun." : "Daybreak. Insects stir in the meadow.", undefined, o.name);
+    return;
+  }
+  if (field?.light && (field.light === "night") !== Boolean(save.settings.night)) {
+    message("This watch begins at " + (field.light === "night" ? "moonrise" : "daybreak") + ". Rest at the nearby field tent to change watch.", undefined, o.name);
+    return;
+  }
+  if (field?.approach) {
+    const dx = o.x - Math.floor(save.x), dy = o.y - Math.floor(save.y);
+    if (!(field.approach === "west" ? dx === 1 && dy === 0 && save.facing === "right" : dx === 0 && dy === -1 && save.facing === "up")) {
+      message(field.approachHint!, undefined, o.name);
+      return;
+    }
+  }
+  if (o.id === "frost_plug" && !save.flags.includes("frost_push_2")) {
+    flag(save.flags.includes("frost_push_1") ? "frost_push_2" : "frost_push_1");
+    sound.overworld("strength");
+    persist();
+    message("The blue plug slides one notch east. Follow it along the groove.", undefined, o.name);
+    return;
+  }
+  if (o.wildlife) {
+    if (!save.seen.includes(o.wildlife)) save.seen.push(o.wildlife);
+    cry(o.wildlife);
+    finishErrand(o);
+    return;
+  }
+  if (field?.device) {
+    mode = "menu";
+    openFieldwork(layer, o.name, field.device, choice => {
+      if (field.device === "atlas") flag("atlas_cover_" + choice);
+      const reward = field.device === "promise" ? { ...o.reward, item: choice } : o.reward;
+      finishErrand(o, reward);
+    }, close, pitch => sound.bell(pitch));
     return;
   }
   if (o.kind === "starter" && !save.flags.includes("partner")) {
@@ -707,6 +749,7 @@ function interact() {
 function finishErrand(o: WorldObject, reward?: Reward) {
   const receipt = rewardReceipt(reward);
   flag(o.setsFlag);
+  updateChart(save.flags, save.map);
   applyReward(reward);
   persist();
   message(o.dialogue, receipt ? () => showReceipt(receipt) : undefined, o.name);
@@ -990,19 +1033,12 @@ function view(v: string, pageIndex = 0) {
       if (
         !done &&
         !save.flags.includes("met_" + npc.id) &&
+        !save.flags.includes("request_" + q.id) &&
         !(q.id === "parcel" && save.flags.includes("found_parcel"))
       )
         return [];
-      let clue = npc.lockedDialogue || q.description;
-      if (q.id === "parcel")
-        clue = save.flags.includes("found_parcel")
-          ? "Take the parcel to the Bramble courier."
-          : "Speak to the Mossford courier.";
-      const ready =
-        !done &&
-        (q.id === "parcel"
-          ? save.flags.includes("found_parcel")
-          : has(npc.requires));
+      const clue = requestHint(q.id, save.flags, save.caught, id => engine.species(id).types);
+      const ready = !done && has(npc.requires);
       return {
         done,
         ready,
@@ -1689,7 +1725,9 @@ function blocked(x: number, y: number) {
   const map = currentField();
   return (
     connectedBlocked(map, x, y, save.abilities.includes("surf"), isExitOpen) ||
-    actors.solid(map, x, y)
+    actors.solid(map, x, y) ||
+    map.objects.some(o => o.field?.solid && !save.flags.includes(o.setsFlag!) &&
+      Math.abs(o.x + 0.5 - x) < 0.68 && Math.abs(o.y + 0.5 - y) < 0.68)
   );
 }
 function challengeTrainer(o: WorldObject) {
@@ -1812,6 +1850,7 @@ function update(dt: number) {
         sound.overworld(exit.entrance === "door" ? "door" : "exit");
       const arrival = crossConnection(map, exit, save.x, save.y, isExitOpen);
       save.map = exit.to;
+      updateChart(save.flags, save.map);
       save.x = arrival.x;
       save.y = arrival.y;
       if (exit.entrance === "mat") save.facing = "down";

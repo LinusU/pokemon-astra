@@ -844,3 +844,11 @@ canvas {
 @media (pointer: coarse), (max-width: 650px) {
   .rom-import .drop-hint { display: none; }
 }
+
+.fieldwork .field-keys { display:flex; flex-wrap:wrap; gap:.4rem; margin:.6rem 0 }
+.fieldwork .dig-grid { display:grid; grid-template-columns:repeat(3,1fr) }
+.fieldwork .field-status:empty, .fieldwork .field-display:empty { display:none }
+.fieldwork .instrument-reading, .fieldwork .scope-grid { color:#f1d591; background:#243e42; border:2px solid #b9a073; padding:.55rem; text-align:center }
+.scope-grid { margin:auto; display:grid; width:max-content; grid-template-columns:repeat(5,1.3em); grid-auto-rows:1.2em }
+.scope-grid i { font-style:normal; line-height:1.2; color:#ffe9a7 }
+.fieldwork .field-status { min-height:2em }

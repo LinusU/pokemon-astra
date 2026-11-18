@@ -1,3 +1,5 @@
+import { updateChart } from "../world/requests";
+import { expeditionState } from "../world/expeditions";
 import { gymState } from "../world/gyms";
 import { ABILITIES, WORLD, type Ability, type Requirement } from "../world";
 import { barrierAt, exitOpen } from "./navigation";
@@ -34,7 +36,7 @@ export const freshSave = (): Save => ({
   facing: "up",
   party: [],
   storage: [],
-  flags: ["starter_supplies_pending"],
+  flags: ["starter_supplies_pending", "survey_rooms_v2"],
   abilities: [],
   badges: 0,
   seen: [],
@@ -52,6 +54,27 @@ export function restoreQuestItems(save: Save): Save {
     return save;
   if (save.items.courier_parcel === 1) return save;
   return { ...save, items: { ...save.items, courier_parcel: 1 } };
+}
+/** Credit earlier expeditions and relocate a player whose room was redrawn. */
+export function restoreExpeditions(input: Save): Save {
+  const save = restoreQuestItems(input);
+  if (save.flags.includes("survey_rooms_v2")) return save;
+  const credits: Record<string, string[]> = {
+    found_parcel: ["parcel_wrapped"],
+    bridge_lowered: ["bamboo_nesting", "bamboo_burrow"],
+    pokemon_freed: ["ember_kit_safe", "ember_slug_safe", "mine_clear"],
+    ranger_report: ["bamboo_nesting", "bamboo_burrow"],
+    vale_defeated: ["meridian_evidence", "keycard"],
+    research_seal: ["aurora_day_record", "aurora_night_record"],
+    quest_lighthouse_complete: ["lighthouse_lapras_safe"],
+    quest_bamboo_friend_complete: ["farfetchd_lane", "farfetchd_home"],
+    quest_hearth_complete: ["hearth_baked"],
+  };
+  const flags = [...new Set([...save.flags, ...save.flags.flatMap(f => credits[f] ?? []), "survey_rooms_v2"])];
+  updateChart(flags, save.map);
+  const map = WORLD[save.map];
+  const arrival = map.kind === "dungeon" ? map.exits[0] : undefined;
+  return { ...save, flags, ...(arrival && { x: arrival.x + 0.5, y: arrival.y + 0.5 }) };
 }
 const integer = (x: unknown, min: number, max: number): x is number =>
   typeof x === "number" && Number.isInteger(x) && x >= min && x <= max;
@@ -190,13 +213,12 @@ export function meetsRequirement(
 
 /** Move a valid save out of an obstructed position, e.g. after a map update. */
 export function normalizeSavePosition(save: Save): Save {
-  const map = gymState(WORLD[save.map], save.flags);
+  const map = expeditionState(gymState(WORLD[save.map], save.flags), save.flags);
   const safe = (x: number, y: number) =>
     !map.objects.some(
       (o) =>
-        ["person", "trainer", "leader", "healer", "shop", "starter"].includes(
-          o.kind,
-        ) &&
+        (["person", "trainer", "leader", "healer", "shop", "starter"].includes(o.kind) ||
+          (o.field?.solid && !save.flags.includes(o.setsFlag!))) &&
         Math.abs(o.x + 0.5 - x) < 0.6 &&
         Math.abs(o.y + 0.5 - y) < 0.6,
     ) &&

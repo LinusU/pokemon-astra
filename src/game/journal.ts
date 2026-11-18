@@ -1,3 +1,4 @@
+import { expeditions } from "../world/expeditions";
 import {
   WORLD,
   type Exit,
@@ -17,9 +18,7 @@ type Chapter = { title: string; steps: string[] };
 function dungeon(id: string, title: string): Chapter {
   return {
     title,
-    steps: ["step1", "step2", "mechanism", "objective"].map(
-      (step) => id + "_" + step,
-    ),
+    steps: [...expeditions[id].steps, id + "_objective"],
   };
 }
 function gym(n: number, title: string, ...steps: string[]): Chapter {

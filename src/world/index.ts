@@ -1,5 +1,8 @@
+import { populateRequests } from "./requests";
 import { composeGeography, dimensions } from "./geography";
 import { localTrail, opposite, routes, settlements } from "./atlas";
+import { expeditions, expeditionCrew, finalNeeds, type Fieldwork } from "./expeditions";
+import { dungeonPlans } from "./dungeon-plans";
 import { gyms } from "./gyms";
 import { populateHabitats } from "./habitats";
 
@@ -71,12 +74,14 @@ export interface WorldObject {
   trainer?: Trainer;
   repeatable?: boolean;
   quest?: string;
+  request?: string;
   facing?: "up" | "down" | "left" | "right";
   sprite?: string;
   roam?: number;
   sightRange?: number;
   /** A wild resident that can be observed for the Pokédex. */
   wildlife?: number;
+  field?: Fieldwork;
 }
 export type BarrierKind = Exclude<Ability, "fly"> | "warden" | "shutter";
 export interface ExitBarrier {
@@ -274,113 +279,8 @@ const routeData = Object.keys(routes).sort().map(n => {
 routeData.forEach(([n, name, , , palette]) =>
   map(`route${n}`, `Route ${n} · ${name}`, "route", palette),
 );
-const dungeonData: [string, string, string, string, string, string][] = [
-  [
-    "lantern",
-    "Lantern Wood",
-    "autumn",
-    "wood trail marker",
-    "survey_rope",
-    "surveyor",
-  ],
-  [
-    "undertow",
-    "Undertow Cave",
-    "coast",
-    "tidal sluice",
-    "low_tide",
-    "fog_signal",
-  ],
-  [
-    "copperworks",
-    "Copperworks",
-    "industrial",
-    "power relay",
-    "relay_on",
-    "power_restored",
-  ],
-  [
-    "hourglass",
-    "Hourglass Ruins",
-    "desert",
-    "rotating runestone",
-    "stone_aligned",
-    "lens_restored",
-  ],
-  [
-    "bamboo",
-    "Bamboo Sanctuary",
-    "wetland",
-    "bridge winch",
-    "bridge_lowered",
-    "ranger_report",
-  ],
-  [
-    "ember",
-    "Ember Mine",
-    "volcanic",
-    "boulder winch",
-    "mine_clear",
-    "pokemon_freed",
-  ],
-  [
-    "frostvault",
-    "Frostvault Cavern",
-    "snow",
-    "thaw valve",
-    "ice_thawed",
-    "pass_open",
-  ],
-  [
-    "echo",
-    "Echo Bell Tower",
-    "violet",
-    "memory bell",
-    "bell_rung",
-    "revelation",
-  ],
-  [
-    "meridian",
-    "Meridian HQ",
-    "industrial",
-    "keycard terminal",
-    "keycard",
-    "vale_defeated",
-  ],
-  [
-    "starfall",
-    "Starfall Observatory",
-    "night",
-    "constellation switch",
-    "stars_aligned",
-    "last_lens",
-  ],
-  [
-    "victory",
-    "Victory Ascent",
-    "mountain",
-    "summit mechanism",
-    "summit_open",
-    "ascent_complete",
-  ],
-  [
-    "aurora",
-    "Aurora Sanctuary",
-    "night",
-    "research seal",
-    "research_seal",
-    "aurora_restored",
-  ],
-];
-dungeonData.forEach(([id, name, palette]) => {
-  for (let i = 1; i <= 3; i++)
-    map(
-      `${id}_${i}`,
-      `${name} · ${["Entrance", "Depths", "Inner chamber"][i - 1]}`,
-      "dungeon",
-      palette,
-    );
-});
+for (const [id, site] of Object.entries(expeditions))
+  dungeonPlans[id].forEach((room, i) => map(id + "_" + (i + 1), site.name + " · " + room.name, "dungeon", site.palette));
 const leaders: [string, string, string, TeamMember[]][] = [
   [
     "Fern",
@@ -492,7 +392,7 @@ const serviceVisitors: Record<string, [[string, string], [string, string]]> = {
   bramble: [
     [
       "Survey volunteer",
-      "The surveyor is somewhere past the north trail. The floor switches in Lantern Wood light the way.",
+      "The surveyor is somewhere past the north trail. Look for pale moths on the paired lantern blooms.",
     ],
     [
       "Woodland guide",
@@ -552,7 +452,7 @@ const serviceVisitors: Record<string, [[string, string], [string, string]]> = {
   rimepeak: [
     [
       "Pass hiker",
-      "Use a Center before you head into Frostvault. Trainers and wild Pokémon share the lower passages.",
+      "Use a Center before you head into Frostvault. The spa crew left a sketch of the ice plug at the snow shed.",
     ],
     [
       "Mountain guide",
@@ -632,7 +532,7 @@ for (const [town, title, host, dialogue] of [
     "bramble",
     "Lantern Lodge",
     "Trail warden",
-    "If you’re looking for the surveyor, take the Lantern Approach north. People who get turned around in the woods leave a trail of lamps.",
+    "If you’re looking for the surveyor, take the Lantern Approach north. The moth scouts say paired blossoms mark the way to the hollow oak.",
   ],
   [
     "tideglass",
@@ -656,7 +556,7 @@ for (const [town, title, host, dialogue] of [
     "rimepeak",
     "Pass Shelter",
     "Shelter keeper",
-    "The snow herb from Frostvault travels well. The healer who uses it lives by the bridge in Mossford.",
+    "Steep fresh silverleaf in the village spa before traveling. The healer who uses it lives by the bridge in Mossford.",
   ],
   [
     "aster",
@@ -761,34 +661,22 @@ WORLD.bellweather.exits.find((e) => e.to === "meridian_1")!.lockedDialogue =
   "The records office is closed to visitors. The keeper in Echo Bell Tower can tell you what Meridian is hiding.";
 WORLD.crown.exits.find((e) => e.to === "victory_1")!.lockedDialogue =
   "The ascent wardens need all eight badges and confirmation that the Celestial Engine has shut down.";
-for (const [id, name, , mechanism, intermediate, final] of dungeonData) {
-  connect(`${id}_1`, `${id}_2`, "Into the depths", "Entrance");
-  connect(`${id}_2`, `${id}_3`, "Inner chamber", "Depths", {
-    flags: [intermediate],
-  });
-  obj(`${id}_2`, {
-    id: `${id}_mechanism`,
-    kind: "switch",
-    name: mechanism,
-    dialogue: `You operate the ${mechanism}. A passage opens deeper into ${name}.`,
-    setsFlag: intermediate,
-  });
-  obj(`${id}_3`, {
-    id: `${id}_objective`,
-    kind: "switch",
-    name: final.replaceAll("_", " "),
-    dialogue: `You complete the ${name} objective. The beacon's light grows steadier.`,
-    setsFlag: final,
-  });
-  // Both ends of the return passage stay locked until the objective is done.
-  connect(
-    `${id}_3`,
-    `${id}_1`,
-    "Return shortcut",
-    "Inner chamber",
-    { flags: [final] },
-    { flags: [final] },
-  );
+for (const [id, site] of Object.entries(expeditions)) {
+  const [entry, middle, final] = [1, 2, 3].map(i => id + "_" + i);
+  connect(entry, middle, "", "", site.gates?.[0]);
+  connect(middle, final, "", "", site.gates?.[1]);
+  const finished = { flags: [site.finish] };
+  connect(final, entry, site.shortcut, site.shortcut, finished, finished);
+  obj(entry, { id: id + "_trail_clue", kind: "sign", name: site.clue[0], dialogue: site.clue[1] });
+  obj(entry, expeditionCrew(id));
+  for (const actor of site.actors) {
+    const room = dungeonPlans[id].findIndex(r => r.marks.includes(actor.id));
+    if (room < 0) throw Error("Missing room for " + actor.id);
+    obj(id + "_" + (room + 1), actor);
+  }
+  obj(final, { id: id + "_objective", kind: id === "lantern" || id === "bamboo" ? "person" : "switch",
+    name: site.name, dialogue: "", setsFlag: site.finish,
+    requires: finalNeeds[id] ? { flags: finalNeeds[id] } : undefined, lockedDialogue: site.clue[1] });
 }
 leaders.forEach(([name, , , team], i) => {
   const id = `gym${i + 1}`;
@@ -1047,7 +935,7 @@ obj("reedhaven", {
   kind: "person",
   name: "Ranger",
   dialogue:
-    "The bamboo bridges are down. Please reach the sanctuary and bring back the ranger report.",
+    "Check the nest and mudflat blind in Bamboo Sanctuary. Our ranger needs both field observations for the reserve report.",
 });
 obj("bellweather", {
   id: "meridian_director",
@@ -1186,186 +1074,7 @@ connect(
     flags: ["champion"],
   },
 );
-const quests: [string, string, string, string, string, string, Requirement?][] =
-  [
-    [
-      "parcel",
-      "Lost Parcel",
-      "mossford",
-      "Courier",
-      "Please deliver this parcel to Bramble.",
-      "Great Balls",
-    ],
-    [
-      "hearth",
-      "A Warm Hearth",
-      "dewdrop",
-      "Elder",
-      "A Growlithe or Vulpix would warm this hearth.",
-      "Fire Stone",
-    ],
-    [
-      "pollinators",
-      "Orchard Pollinators",
-      "mossford",
-      "Orchard keeper",
-      "Our orchard needs three kinds of Bug Pokémon.",
-      "Leaf Stone",
-    ],
-    [
-      "angler",
-      "Tideglass Angler",
-      "tideglass",
-      "Angler",
-      "Show me the variety of Water Pokémon in your travels.",
-      "Water Stone",
-    ],
-    [
-      "lighthouse",
-      "Lighthouse Lens",
-      "tideglass",
-      "Lighthouse keeper",
-      "Return over the water once you can Surf.",
-      "Lapras",
-    ],
-    [
-      "collector",
-      "Copper Collector",
-      "copperwick",
-      "Collector",
-      "Find three machine parts around the region.",
-      "Thunder Stone",
-    ],
-    [
-      "fossil",
-      "Fossil Memory",
-      "route23",
-      "Excavator",
-      "Old Quarry still holds ancient fossils.",
-      "Omanyte or Kabuto",
-    ],
-    [
-      "oasis",
-      "Oasis Offering",
-      "sunspire",
-      "Glassworker",
-      "Restore the markers in Hourglass Ruins.",
-      "Moon Stone and Sun Stone",
-      { flags: ["lens_restored"] },
-    ],
-    [
-      "census",
-      "Ranger’s Census",
-      "reedhaven",
-      "Ranger",
-      "Record thirty species for the reserve.",
-      "Exp Share",
-      { caught: 30 },
-    ],
-    [
-      "bamboo_friend",
-      "Bamboo Friend",
-      "bamboo_3",
-      "Ranger",
-      "A Farfetch’d is stranded beyond the grove.",
-      "Rare lure",
-      { ability: "cut" },
-    ],
-    [
-      "furnace",
-      "Furnace Delivery",
-      "cinderfall",
-      "Artisan",
-      "Bring the ore from Ember Mine to my furnace.",
-      "Metal Coat and Link Cable",
-      { flags: ["pokemon_freed"] },
-    ],
-    [
-      "medicine",
-      "Mountain Medicine",
-      "mossford",
-      "Herbalist",
-      "A snow herb from Frostvault will help my patients.",
-      "Friendship charm",
-      { flags: ["pass_open"] },
-    ],
-    [
-      "echoes",
-      "Echoes of the Past",
-      "echo_3",
-      "Historian",
-      "The bells have revealed a forgotten chamber.",
-      "Unown",
-      { ability: "flash" },
-    ],
-    [
-      "promise",
-      "A Rival’s Promise",
-      "aster",
-      "Robin",
-      "Our journey has changed both of us. Let’s make a promise to protect Astra.",
-      "Eevee",
-      { flags: ["champion"] },
-    ],
-    [
-      "chart",
-      "Stargazer’s Chart",
-      "aster",
-      "Stargazer",
-      "The eight beacon keepers are the key to my chart.",
-      "Master Ball",
-      { badges: 8 },
-    ],
-    [
-      "atlas",
-      "Living Atlas",
-      "aurora_3",
-      "Researcher",
-      "Complete the Pokédex and tell me what you learned.",
-      "Aurora certificate",
-      { caught: 251 },
-    ],
-  ];
-const questRewards: Record<string, Reward> = {
-  parcel: { item: "great_ball", amount: 5 },
-  hearth: { item: "fire_stone" },
-  pollinators: { item: "leaf_stone" },
-  angler: { item: "water_stone" },
-  lighthouse: { species: 131, level: 25 },
-  collector: { item: "thunder_stone" },
-  fossil: { species: 138, level: 20 },
-  oasis: { items: [{ item: "moon_stone" }, { item: "sun_stone" }] },
-  census: { item: "exp_share" },
-  bamboo_friend: { item: "rare_lure" },
-  furnace: { items: [{ item: "metal_coat" }, { item: "link_cable" }] },
-  medicine: { item: "friendship_charm" },
-  echoes: { species: 201, level: 25 },
-  promise: { species: 133, level: 30 },
-  chart: { item: "master_ball" },
-  atlas: { item: "aurora_certificate" },
-};
-quests.forEach(([id, name, where, npc, description, reward, prerequisite]) => {
-  const flag = `quest_${id}_complete`;
-  QUESTS.push({
-    id,
-    name,
-    description,
-    prerequisite,
-    completedFlag: flag,
-    reward,
-  });
-  obj(where, {
-    id: `quest_${id}`,
-    kind: "person",
-    name: npc,
-    dialogue: `${description} ${prerequisite ? "Thank you for your help!" : "Here is something for your journey."}`,
-    requires: prerequisite,
-    lockedDialogue: description,
-    setsFlag: flag,
-    reward: questRewards[id],
-    quest: id,
-  });
-});
+populateRequests(WORLD, QUESTS);
 const legendary: [string, string, number, Requirement][] = [
   ["frostvault_3", "Articuno", 144, { ability: "waterfall" }],
   ["copperworks_3", "Zapdos", 145, { flags: ["champion"] }],
@@ -1390,7 +1099,7 @@ const guardianAdvice: Record<number, string> = {
   245: "The moonwater shrine needs a fully restored current. Return after the League challenge.",
   249: "An eddy covers the deep tunnel. Neve’s badge teaches Whirlpool, which can calm it.",
   250: "The top bell sounds only after the League recognizes the work of the eight keepers.",
-  251: "The grove is quiet. Complete the research seal and restore the sanctuary beacon to call Celebi.",
+  251: "The grove is quiet. Record both sanctuary watches and restore the nursery to call Celebi.",
 };
 legendary.forEach(([where, name, species, requires]) =>
   obj(where, {
@@ -1410,126 +1119,6 @@ legendary.forEach(([where, name, species, requires]) =>
   }),
 );
 
-// Side objectives are explicit, persisted interactions. NPCs explain what is
-// missing until the requirement is met; collecting an objective never consumes
-// a unique Pokémon or permanently blocks a quest.
-const questById = (id: string) =>
-  Object.values(WORLD)
-    .flatMap((m) => m.objects)
-    .find((o) => o.id === `quest_${id}`)!;
-function questRequirement(id: string, requires: Requirement, hint: string) {
-  const o = questById(id);
-  o.requires = requires;
-  o.lockedDialogue = hint;
-  const q = QUESTS.find((q) => q.id === id)!;
-  q.prerequisite = requires;
-}
-function pickup(
-  where: string,
-  id: string,
-  name: string,
-  dialogue: string,
-  requires?: Requirement,
-) {
-  obj(where, {
-    id: `pickup_${id}`,
-    kind: "item",
-    name,
-    dialogue,
-    requires,
-    setsFlag: `found_${id}`,
-  });
-}
-// The courier starts the quest and the recipient finishes it.
-const parcel = questById("parcel");
-parcel.dialogue =
-  "Heading to Bramble? Please take this delivery to the courier there. Follow Orchard Lane east.";
-parcel.victoryDialogue =
-  "The parcel is safely in your pack. Follow Orchard Lane east to Bramble and find the courier there.";
-parcel.setsFlag = "found_parcel";
-parcel.reward = { item: "courier_parcel" };
-parcel.quest = undefined;
-obj("bramble", {
-  id: "parcel_recipient",
-  kind: "person",
-  name: "Bramble courier",
-  dialogue:
-    "My delivery from Mossford! Thank you for bringing it. Please take these Great Balls.",
-  requires: { flags: ["found_parcel"], items: ["courier_parcel"] },
-  lockedDialogue: "I am waiting for a delivery from Mossford.",
-  setsFlag: "quest_parcel_complete",
-  reward: { takeItem: "courier_parcel", item: "great_ball", amount: 5 },
-  quest: "parcel",
-});
-questRequirement(
-  "hearth",
-  { species: [58, 37] },
-  "Bring a Growlithe or Vulpix to warm the hearth.",
-);
-questRequirement(
-  "pollinators",
-  { types: [{ type: "bug", count: 3 }] },
-  "Show me three different Bug species to help the orchard.",
-);
-questRequirement(
-  "angler",
-  { types: [{ type: "water", count: 3 }] },
-  "Show me three different Water species and I will share a fishing reward.",
-);
-questRequirement(
-  "lighthouse",
-  { ability: "surf" },
-  "Return after earning Surf and I will introduce you to Lapras.",
-);
-for (const [where, id] of [
-  ["route06", "part_a"],
-  ["route07", "part_b"],
-  ["copperworks_2", "part_c"],
-] as const)
-  pickup(where, id, "Machine part", "You found a Meridian machine part.");
-questRequirement(
-  "collector",
-  { flags: ["found_part_a", "found_part_b", "found_part_c"] },
-  "Find the three machine parts near Canal Road, Switchyard and Copperworks.",
-);
-pickup(
-  "route23",
-  "fossil",
-  "Ancient fossil",
-  "You carefully excavate a fossil.",
-);
-questRequirement(
-  "fossil",
-  { flags: ["found_fossil"] },
-  "Excavate the fossil nearby and I can revive it.",
-);
-pickup(
-  "frostvault_2",
-  "snow_herb",
-  "Snow herb",
-  "You gathered the snow herb for Mossford.",
-);
-questRequirement(
-  "medicine",
-  { flags: ["found_snow_herb"] },
-  "Please bring me a snow herb from Frostvault.",
-);
-pickup(
-  "ember_2",
-  "mine_ore",
-  "Mine ore",
-  "You collected ore for the Cinderfall artisan.",
-);
-questRequirement(
-  "furnace",
-  { flags: ["found_mine_ore", "pokemon_freed"] },
-  "Bring mine ore and make sure the captive Pokémon are safe.",
-);
-questRequirement(
-  "promise",
-  { flags: ["rival_1_won", "rival_2_won", "rival_3_won", "rival_4_won"] },
-  "Let us finish our friendly battles across Astra first.",
-);
 const rivals: [string, string, number, number, Requirement?][] = [
   ["route02", "rival_1", 12, 16],
   ["route06", "rival_2", 22, 17, { badges: 2 }],
@@ -1555,45 +1144,6 @@ rivals.forEach(([where, id, level, bird, requires]) =>
     },
   }),
 );
-
-// Each dungeon's mechanism names its actual steps and enforces their order.
-const dungeonSteps: Record<string, [string, string]> = {
-  lantern: ["Read the first leaf trail", "Tie the survey rope"],
-  undertow: ["Drain the high sluice", "Open the low sluice"],
-  copperworks: ["Isolate the live circuit", "Connect the return relay"],
-  hourglass: ["Turn the sun stone east", "Turn the moon stone west"],
-  bamboo: ["Release the bridge latch", "Turn the bridge winch"],
-  ember: ["Brace the tunnel", "Move the ore boulder"],
-  frostvault: ["Light the warming brazier", "Open the thaw valve"],
-  echo: ["Ring the low bell", "Ring the high bell"],
-  meridian: ["Recover the staff keycard", "Disable the security circuit"],
-  starfall: ["Align the northern star", "Align the southern star"],
-  victory: ["Clear the summit rocks", "Raise the climbing bridge"],
-  aurora: ["Read the research inscription", "Place the restored beacon"],
-};
-for (const [id] of dungeonData) {
-  const m = WORLD[`${id}_2`],
-    mechanism = m.objects.find((o) => o.id === `${id}_mechanism`)!;
-  const [first, second] = dungeonSteps[id];
-  obj(`${id}_1`, {
-    id: `${id}_step1`,
-    kind: "switch",
-    name: first,
-    dialogue: `${first}. The way into the next room opens.`,
-    setsFlag: `${id}_step1`,
-  });
-  obj(m.id, {
-    id: `${id}_step2`,
-    kind: "switch",
-    name: second,
-    dialogue: `${second}. The mechanism at the far exit responds.`,
-    requires: { flags: [`${id}_step1`] },
-    lockedDialogue: `First ${first.toLowerCase()} in the previous room.`,
-    setsFlag: `${id}_step2`,
-  });
-  mechanism.requires = { flags: [`${id}_step2`] };
-  mechanism.lockedDialogue = `First: ${second.toLowerCase()}.`;
-}
 
 const townFlavor: Record<string, string> = {
   dewdrop:
@@ -1679,28 +1229,6 @@ for (let i = 0; i < 20; i++) {
     });
   }
 }
-dungeonData.forEach(([id, name], i) => {
-  const m = WORLD[`${id}_1`],
-    [x, y] = freePosition(m),
-    level = Math.min(55, 9 + i * 4),
-    species = habitats[Math.min(i * 2, 24)].encounters[0]?.species ?? 19;
-  obj(m.id, {
-    id: `${id}_guardian_trainer`,
-    kind: "trainer",
-    name: "Surveyor",
-    x,
-    y,
-    dialogue: `I am studying ${name}. Let’s compare what we have learned!`,
-    setsFlag: `${id}_guardian_trainer_won`,
-    trainer: {
-      id: `${id}_guardian_trainer`,
-      name: "Surveyor",
-      team: [{ species, level }],
-      reward: level * 40,
-    },
-  });
-});
-
 // Evolution supplies can be found in the world as well as bought at later marts.
 const evolutionSupplies: [string, string, string, Requirement?][] = [
   ["route02", "fire_stone", "Fire Stone"],
@@ -1718,7 +1246,7 @@ const evolutionSupplies: [string, string, string, Requirement?][] = [
 ];
 evolutionSupplies.forEach(([where, item, name], i) => {
   const m = WORLD[where],
-    [x, y] = freePosition(m);
+    [x, y] = m.kind === "dungeon" ? [0, 0] : freePosition(m);
   obj(where, {
     id: `evolution_supply_${i}`,
     kind: "item",
@@ -1753,7 +1281,7 @@ const dungeonStory: Record<string, { name: string; dialogue: string }> = {
   undertow: {
     name: "Fog signal",
     dialogue:
-      "The sluices settle and the lighthouse lens catches the sun. A clear signal sweeps the harbor. Marina discovers a Meridian intake pipe drawing water away from the cave and asks you to follow it inland.",
+      "You clear the horn mouth. Air rushes through the exposed pipe and the foghorn sounds across the quay. A clear signal sweeps the harbor. Marina discovers a Meridian intake pipe drawing water away from the cave and asks you to follow it inland.",
   },
   copperworks: {
     name: "Power regulator",
@@ -1763,17 +1291,17 @@ const dungeonStory: Record<string, { name: string; dialogue: string }> = {
   hourglass: {
     name: "Ancient beacon lens",
     dialogue:
-      "The runestones align and reveal the buried lens. Its inscription says the beacons guide living migrations, not merely electricity. Sable asks you to carry that warning to the Reedhaven rangers.",
+      "The shaft of light falls across the buried lens. Its inscription says the beacons guide living migrations, not merely electricity. Sable asks you to carry that warning to the Reedhaven rangers.",
   },
   bamboo: {
     name: "Ranger report",
     dialogue:
-      "Across the repaired bridge, the ranger shares a disturbing census: Pokémon are leaving drained habitats. The report identifies a Meridian shipment bound for Ember Mine. The ranger asks you to stop it.",
+      "The ranger lays your nest and burrow sketches over last year’s shoreline. Both sites used to be underwater at high tide. The census agrees: Pokémon are leaving drained habitats. The report identifies a Meridian shipment bound for Ember Mine. The ranger asks you to stop it.",
   },
   ember: {
     name: "Captive Pokémon",
     dialogue:
-      "You release the Pokémon from their transport cages. The miner says Meridian wanted their heat to feed the Engine. Flint promises to shelter them and restore the city’s beacon.",
+      "Both wagons stand empty. You strike the two passengers from the manifest. The miner says Meridian wanted their heat to feed the Engine. Flint promises to shelter them and restore the city’s beacon.",
   },
   frostvault: {
     name: "Icebound pass",
@@ -1798,15 +1326,15 @@ const dungeonStory: Record<string, { name: string; dialogue: string }> = {
   victory: {
     name: "Summit gate",
     dialogue:
-      "The ascent’s ancient locks open together. The path to the Astral League is clear. Rest at the center, then meet the four specialists and Champion Mira when you are ready.",
+      "You tie your line beside the names of the trainers who climbed before you. The path to the Astral League is clear. Rest at the center, then meet the four specialists and Champion Mira when you are ready.",
   },
   aurora: {
     name: "Restored sanctuary",
     dialogue:
-      "The last research seal opens to a living grove. The restored current moves through its trees in a gentle cycle. The researchers can continue their work, and Celebi’s sanctuary is open to respectful visitors.",
+      "The researchers lay your day and night entries side by side. Both halves of the migration are back. The restored current moves through its trees in a gentle cycle. The researchers can continue their work, and Celebi’s sanctuary is open to respectful visitors.",
   },
 };
-for (const [id] of dungeonData) {
+for (const id of Object.keys(expeditions)) {
   const o = WORLD[`${id}_3`].objects.find((o) => o.id === `${id}_objective`)!;
   Object.assign(o, dungeonStory[id]);
 }
@@ -1908,7 +1436,7 @@ const townVoices: Record<string, [string, string][]> = {
     ],
     [
       "Bridge keeper",
-      "The bamboo bridge is raised. A winch in the sanctuary can lower it again.",
+      "Our nesting platforms used to sit at the waterline. Take a field note in each blind and the ranger can work out where the water went.",
     ],
   ],
   cinderfall: [
@@ -1975,43 +1503,6 @@ for (const [id] of townData)
       y,
     });
   });
-const questText: Record<string, string> = {
-  parcel:
-    "Speak to the Mossford courier, then deliver the parcel to the courier in Bramble for Great Balls.",
-  hearth:
-    "Show a Growlithe or Vulpix in your party to the Dewdrop elder for a Fire Stone.",
-  pollinators:
-    "Register three different Bug species, then speak with the orchard keeper in Mossford for a Leaf Stone.",
-  angler:
-    "Register three different Water species, then visit the Tideglass angler for a Water Stone.",
-  lighthouse:
-    "Earn Surf and return to the Tideglass lighthouse keeper to meet Lapras.",
-  collector:
-    "Find machine parts on Routes 06 and 07 and in Copperworks, then take them to the Copperwick collector for a Thunder Stone.",
-  fossil:
-    "Find the fossil in Old Quarry on Route 23 and speak to the excavator there to revive Omanyte.",
-  oasis:
-    "Restore the Hourglass Ruins lens, then speak to the Sunspire glassworker for Moon and Sun Stones.",
-  census:
-    "Register 30 species and report to the Reedhaven ranger for an Exp Share.",
-  bamboo_friend:
-    "Earn Cut and reach the ranger in Bamboo Sanctuary’s inner chamber for a rare lure.",
-  furnace:
-    "Collect ore in Ember Mine, free the captive Pokémon, then visit the Cinderfall artisan for a Metal Coat and Link Cable.",
-  medicine:
-    "Collect the snow herb in Frostvault and take it to the Mossford herbalist for a friendship charm.",
-  echoes:
-    "Earn Flash and reach the historian in the Echo Bell Tower inner chamber to meet Unown.",
-  promise:
-    "Defeat Robin on Routes 02, 06, 12 and 18, then speak to Robin in Aster for Eevee.",
-  chart:
-    "Earn all eight badges and show the Aster stargazer for a Master Ball.",
-  atlas:
-    "Register all 251 species and visit the researcher in Aurora Sanctuary for the Aurora certificate.",
-};
-QUESTS.forEach((q) => {
-  q.description = questText[q.id] ?? q.description;
-});
 for (const [, id] of rivals) {
   const o = Object.values(WORLD)
     .flatMap((m) => m.objects)
