@@ -127,6 +127,12 @@
   width: 40%;
   height: 60%;
 }
+.battle-player img {
+  /* Crop the flat bottom row at the dialogue box, including during a switch. */
+  top: auto;
+  bottom: -2px;
+  transform-origin: center calc(100% - 2px);
+}
 .battle-box {
   position: relative;
   box-sizing: border-box;
@@ -235,11 +241,98 @@
 .battle-mon.faint {
   animation: battle-faint 0.65s forwards;
 }
-.battle-mon.withdraw {
-  animation: battle-withdraw 0.45s forwards;
+.battle-enemy.withdraw {
+  animation: battle-withdraw calc(450ms * var(--battle-speed, 1)) forwards;
 }
-.battle-mon.appear {
-  animation: battle-appear 0.5s;
+.battle-enemy.appear {
+  animation: battle-appear calc(500ms * var(--battle-speed, 1));
+}
+.battle-player.appear {
+  --switch-duration: calc(500ms * var(--battle-speed, 1));
+}
+.battle-player.withdraw {
+  --switch-duration: calc(450ms * var(--battle-speed, 1));
+}
+.battle-player.appear img {
+  animation: player-send-out var(--switch-duration) ease-out both;
+}
+.battle-player.withdraw img {
+  animation: player-recall var(--switch-duration) ease-in both;
+}
+.battle-player:is(.appear, .withdraw)::before,
+.battle-player:is(.appear, .withdraw)::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+}
+.battle-player:is(.appear, .withdraw)::before {
+  /* A burst of square particles radiates from the sprite's base. */
+  left: 50%;
+  bottom: 4px;
+  font-size: clamp(2px, 0.85cqw, 6px);
+  width: 1em;
+  height: 1em;
+  background: #fff6ca;
+  box-shadow:
+    -15em -5em #ffe49b, -10em -11em #fff6ca, -4em -8em #e97965,
+    2em -15em #fff6ca, 7em -10em #ffe49b, 13em -8em #e97965,
+    16em -3em #fff6ca;
+  animation: player-switch-sparks var(--switch-duration) ease-out both;
+}
+.battle-player:is(.appear, .withdraw)::after {
+  left: 10%;
+  right: 10%;
+  bottom: 1px;
+  height: 16%;
+  border: 2px solid #fff6ca;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px #e97965, inset 0 0 0 1px #e97965;
+  animation: player-switch-ring var(--switch-duration) ease-out both;
+}
+.battle-player.withdraw::before,
+.battle-player.withdraw::after {
+  animation-direction: reverse;
+}
+@keyframes player-send-out {
+  0% { transform: scale(0.08, 0.12); filter: brightness(0) invert(1); opacity: 0; }
+  22% { transform: scale(0.28, 0.58); filter: brightness(0) invert(1); opacity: 1; }
+  65% { transform: scale(1.04, 1.05); filter: none; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes player-recall {
+  0% { transform: scale(1); opacity: 1; }
+  60% { transform: scale(0.45, 0.75); filter: brightness(0) invert(1); }
+  84% { opacity: 1; }
+  100% { transform: scale(0.06); filter: brightness(0) invert(1); opacity: 0; }
+}
+@keyframes player-switch-sparks {
+  0% { transform: scale(0.12); opacity: 0; }
+  20% { opacity: 1; }
+  60% { opacity: 0.85; }
+  100% { transform: scale(1.15); opacity: 0; }
+}
+@keyframes player-switch-ring {
+  0% { transform: scale(0.08); opacity: 0; }
+  22% { opacity: 1; }
+  75%, 100% { transform: scale(1); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .battle-player.appear img {
+    animation-name: player-switch-fade;
+  }
+  .battle-player.withdraw img {
+    animation-name: player-switch-fade;
+    animation-direction: reverse;
+  }
+  .battle-player:is(.appear, .withdraw)::before,
+  .battle-player:is(.appear, .withdraw)::after {
+    display: none;
+  }
+}
+@keyframes player-switch-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 .battle-scene.capture .battle-enemy img {
   opacity: 0;
@@ -521,8 +614,6 @@
 }
 
 .battle-mon.faint { animation-duration: calc(650ms * var(--battle-speed, 1)); }
-.battle-mon.withdraw { animation-duration: calc(450ms * var(--battle-speed, 1)); }
-.battle-mon.appear { animation-duration: calc(500ms * var(--battle-speed, 1)); }
 .battle-scene.capture.throwing .battle-enemy:after,
 .battle-scene.capture.throwing .battle-enemy img { animation-duration: calc(450ms * var(--battle-speed, 1)); }
 
