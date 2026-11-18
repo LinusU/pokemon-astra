@@ -19,6 +19,7 @@ import { MEDICINE, isMedicine, useMedicine } from "./game/medicine";
 import { GameAudio } from "./game/audio";
 import { battleTheme, trainerIntroMusic, victoryTheme, type MusicScene } from "./game/music";
 import { BattlePresenter } from "./ui/battle";
+import { playEvolution } from "./ui/evolution";
 import { get, set, download } from "./game/storage";
 import {
   freshSave,
@@ -147,6 +148,7 @@ function scene(): MusicScene {
   if (mode === "title") return "title";
   if (mode === "ceremony") return "hallOfFame";
   if (mode === "evolution") return "evolution";
+  if (mode === "evolution-result") return "silent";
   if (mode === "battle" || mode === "encounter")
     return battleMusic ?? battleTheme(battleObject, !!save.settings.night);
   if ((mode === "dialogue" || mode === "menu") && interactionMusic) return interactionMusic;
@@ -1569,28 +1571,32 @@ function evolvePartyMember(index: number, species: number, next: () => void, con
   const evolved = engine.evolvePokemon(current, species);
   const name = current.nickname || engine.species(current.species).name;
   mode = "evolution";
-  const p = panel(
-    layer,
-    "Evolution",
-    `<div class="party-summary" role="status"><img class="party-portrait" src="${sprite(current.species)}" alt=""><span>${escapeHtml(name)} is evolving…</span></div>`,
-  );
-  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches)
-    p.querySelector("img")?.animate(
-      [{ opacity: 1 }, { opacity: 0.55, transform: "scale(0.9)" }, { opacity: 1 }],
-      { duration: 900, iterations: Infinity },
-    );
   sound.refreshMusic();
   if (current.hp > 0 && (current.status & 0x27) === 0) cry(current.species);
 
-  window.setTimeout(() => {
-    save.party[index] = evolved;
-    consume?.();
-    if (!save.seen.includes(species)) save.seen.push(species);
-    if (!save.caught.includes(species)) save.caught.push(species);
-    persist();
-    message(`${name} evolved into ${engine.species(species).name}!`, next, undefined, "silent");
-    sound.overworld("evolved");
-  }, 3600);
+  void playEvolution(layer, {
+    from: sprite(current.species),
+    to: sprite(species),
+    name,
+    evolvedName: engine.species(species).name,
+    reveal: () => {
+      save.party[index] = evolved;
+      consume?.();
+      if (!save.seen.includes(species)) save.seen.push(species);
+      if (!save.caught.includes(species)) save.caught.push(species);
+      persist();
+      mode = "evolution-result";
+      sound.refreshMusic();
+      cry(species);
+    },
+    ready: () => sound.overworld("evolved"),
+    next: () => {
+      layer.replaceChildren();
+      mode = "world";
+      next();
+      sound.refreshMusic();
+    },
+  });
 }
 function postBattle(evolvable: number[]) {
   const tasks: (() => void)[] = [];
@@ -1817,7 +1823,10 @@ function frame(now: number) {
     layer.querySelector<HTMLButtonElement>("#cancel")?.click();
   } else if (mode === "menu" && input.hit("menu")) close();
   else if (mode === "battle" && input.hit("b")) battlePresenter?.back();
-  else if (!["world", "loading", "dialogue"].includes(mode)) {
+  else if (mode === "evolution-result") {
+    if (input.hit("a") || input.hit("b"))
+      layer.querySelector<HTMLButtonElement>(".evolution-continue")?.click();
+  } else if (!["world", "loading", "dialogue", "evolution"].includes(mode)) {
     menuInput.update(layer, input, now, mode === "battle");
   }
   if (wasWorld) update(dt);

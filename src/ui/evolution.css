@@ -1,0 +1,303 @@
+.evolution-scene {
+  --charge-time: 1850ms;
+  --morph-time: 1500ms;
+  --reveal-time: 850ms;
+  --sprite-size: 112px;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  isolation: isolate;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  container-type: size;
+  overflow: hidden;
+  color: #f7efd5;
+  background:
+    radial-gradient(ellipse at 50% 58%, #23495d 0%, transparent 57%),
+    linear-gradient(155deg, #172740, #10192c 58%, #141a2b);
+  font: 400 clamp(20px, 4vw, 32px) / 1 "VT323", monospace;
+}
+
+.evolution-field {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  isolation: isolate;
+  background-image:
+    radial-gradient(circle at 18% 33%, #b3ffdd 0 1px, transparent 2px),
+    radial-gradient(circle at 32% 17%, #b3ffdd99 0 1px, transparent 2px),
+    radial-gradient(circle at 67% 25%, #ece2ad 0 1px, transparent 2px),
+    radial-gradient(circle at 86% 43%, #b3ffdd99 0 1px, transparent 2px),
+    radial-gradient(circle at 74% 61%, #ece2ad99 0 1px, transparent 2px),
+    radial-gradient(circle at 24% 64%, #b3ffdd99 0 1px, transparent 2px);
+}
+
+@container (min-width: 540px) and (min-height: 390px) {
+  .evolution-field { --sprite-size: 168px; }
+}
+
+@container (min-width: 740px) and (min-height: 530px) {
+  .evolution-field { --sprite-size: 224px; }
+}
+
+.evolution-aurora {
+  position: absolute;
+  inset: 4% -18% 21%;
+  background:
+    radial-gradient(ellipse at 34% 0%, #79fac700, #79fac700 38%, #7effd583 49%, #42c9bd40 54%, transparent 67%),
+    radial-gradient(ellipse at 69% 1%, #a193ef00, #a193ef00 36%, #9d8dff91 47%, #bd7cf049 54%, transparent 67%);
+  mask-image: linear-gradient(transparent, #000 24%, #000 75%, transparent);
+  transform: rotate(-14deg) skewX(-18deg);
+  opacity: 0.43;
+}
+
+.evolution-platform {
+  position: absolute;
+  top: calc(50% + var(--sprite-size) / 2);
+  width: calc(var(--sprite-size) * 1.6);
+  height: calc(var(--sprite-size) * 0.26);
+  transform: translateY(-40%);
+  border-radius: 50%;
+  border: 1px solid #a6ebd575;
+  background: radial-gradient(ellipse, #8af9db6b, #59c4c739 42%, #172c42 75%);
+  box-shadow: 0 0 24px #72f0d052, inset 0 0 0 4px #aeffdf1a;
+}
+
+.evolution-halo,
+.evolution-ring {
+  position: absolute;
+  width: calc(var(--sprite-size) * 1.8);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  opacity: 0;
+}
+
+.evolution-halo {
+  background: radial-gradient(circle, #ecffdb 4%, #b1ffdf94 23%, #77ffdb32 50%, transparent 71%);
+}
+
+.evolution-ring {
+  border: 2px solid #d6ffe7;
+  box-shadow: 0 0 14px #a1ffd4, inset 0 0 12px #a1ffd4;
+}
+
+.evolution-sparks {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.evolution-sparks i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: rotate(var(--angle));
+}
+
+.evolution-sparks b {
+  display: block;
+  width: 7px;
+  height: 7px;
+  color: #bef9df;
+  background: currentColor;
+  box-shadow: 0 0 10px currentColor;
+  opacity: 0;
+}
+
+.evolution-sparks i:nth-child(3n) b {
+  color: #ffe3a5;
+  width: 5px;
+  height: 5px;
+}
+
+.evolution-sprite {
+  grid-area: 1 / 1;
+  position: relative;
+  width: var(--sprite-size);
+  height: var(--sprite-size);
+  image-rendering: pixelated;
+  transform-origin: center bottom;
+  filter: brightness(1) invert(0) drop-shadow(0 4px 5px #102536);
+}
+
+.evolution-before,
+.evolution-after {
+  visibility: hidden;
+}
+
+[data-phase="intro"] .evolution-before,
+[data-phase="charge"] .evolution-before,
+[data-phase="morph"] .evolution-before,
+[data-phase="morph"] .evolution-after,
+[data-phase="reveal"] .evolution-after,
+[data-phase="complete"] .evolution-after {
+  visibility: visible;
+}
+
+[data-phase="charge"] .evolution-before {
+  animation: evolution-charge var(--charge-time) ease-in-out both;
+}
+
+[data-phase="charge"] .evolution-aurora {
+  animation: evolution-aurora var(--charge-time) ease-out both;
+}
+
+[data-phase="charge"] .evolution-halo {
+  animation: evolution-gather var(--charge-time) ease-out both;
+}
+
+[data-phase="charge"] .evolution-sparks b {
+  animation: evolution-drift calc(var(--charge-time) - var(--delay)) var(--delay) ease-in both;
+}
+
+[data-phase="morph"] .evolution-aurora,
+[data-phase="reveal"] .evolution-aurora,
+[data-phase="complete"] .evolution-aurora {
+  opacity: 0.8;
+  transform: rotate(-6deg) skewX(-12deg);
+}
+
+[data-phase="morph"] .evolution-halo {
+  opacity: 0.8;
+}
+
+[data-phase="morph"] .evolution-before {
+  animation: evolution-silhouette-out var(--morph-time) both;
+}
+
+[data-phase="morph"] .evolution-after {
+  animation: evolution-silhouette-in var(--morph-time) both;
+}
+
+[data-phase="reveal"] .evolution-after {
+  animation: evolution-land var(--reveal-time) both;
+}
+
+[data-phase="reveal"] .evolution-halo {
+  animation: evolution-afterglow var(--reveal-time) ease-out both;
+}
+
+[data-phase="reveal"] .evolution-ring {
+  animation: evolution-ripple var(--reveal-time) ease-out both;
+}
+
+[data-phase="reveal"] .evolution-sparks b {
+  animation: evolution-scatter calc(var(--reveal-time) - var(--delay) / 2) calc(var(--delay) / 2) ease-out both;
+}
+
+.evolution-caption {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 14px;
+  margin: 0 4% 3%;
+  padding: 0.35em 0.55em;
+  border: 3px double #7dac9d;
+  background: #142938;
+  box-shadow: 0 4px #0c1723;
+}
+
+.evolution-caption p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.evolution-continue {
+  flex: none;
+  padding: 0.18em 0.45em;
+  color: #162c2b;
+  background: #bde9ce;
+  border: 2px solid #def6d7;
+}
+
+.evolution-continue:disabled {
+  visibility: hidden;
+}
+
+.evolution-continue:hover {
+  background: #e0f6ce;
+}
+
+@container (max-width: 440px) {
+  .evolution-caption { flex-wrap: wrap; }
+  .evolution-caption p { flex-basis: 100%; }
+  .evolution-continue { margin-left: auto; }
+}
+
+@keyframes evolution-charge {
+  0%, 15% { transform: translateY(0); }
+  66% {
+    transform: translateY(-12%);
+    filter: brightness(1) invert(0) drop-shadow(0 4px 5px #102536);
+  }
+  100% {
+    transform: translateY(-18%) scale(1.02);
+    filter: brightness(0) invert(1) drop-shadow(0 0 9px #abffe5);
+  }
+}
+
+@keyframes evolution-aurora {
+  to { opacity: 0.8; transform: rotate(-6deg) skewX(-12deg); }
+}
+
+@keyframes evolution-gather {
+  0%, 15% { opacity: 0; transform: scale(0.3); }
+  100% { opacity: 0.8; transform: scale(1); }
+}
+
+@keyframes evolution-drift {
+  from { transform: translateX(calc(var(--sprite-size) * var(--distance))) rotate(45deg); }
+  25%, 65% { opacity: 0.95; }
+  to { transform: translateX(8px) rotate(135deg); }
+}
+
+@keyframes evolution-silhouette-out {
+  from, to {
+    transform: translateY(-18%) scale(1.02);
+    filter: brightness(0) invert(1) drop-shadow(0 0 9px #abffe5);
+  }
+  0%, 15%, 46%, 56% { opacity: 1; }
+  26%, 37%, 68%, 100% { opacity: 0; }
+}
+
+@keyframes evolution-silhouette-in {
+  0%, 73% {
+    transform: translateY(-18%) scale(1.02);
+    filter: brightness(0) invert(1) drop-shadow(0 0 9px #abffe5);
+  }
+  0%, 15%, 46%, 56% { opacity: 0; }
+  26%, 37%, 68%, 100% { opacity: 1; }
+  100% { transform: translateY(-18%) scale(1.06); }
+}
+
+@keyframes evolution-land {
+  from { transform: translateY(-18%) scale(1.06); }
+  62% { transform: translateY(0) scale(1.02, 0.97); }
+  82% { transform: translateY(-2%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes evolution-afterglow {
+  from { opacity: 0.8; }
+  24% { opacity: 0.95; }
+  to { opacity: 0; transform: scale(1.4); }
+}
+
+@keyframes evolution-ripple {
+  from { opacity: 0.85; transform: scale(0.45); }
+  to { opacity: 0; transform: scale(1.45); }
+}
+
+@keyframes evolution-scatter {
+  from { opacity: 0.95; transform: translateX(18px) rotate(45deg); }
+  to { opacity: 0; transform: translateX(calc(var(--sprite-size) * var(--distance))) rotate(135deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .evolution-scene[data-phase] .evolution-field * {
+    animation: none;
+  }
+}
