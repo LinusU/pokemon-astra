@@ -190,6 +190,68 @@ describe.skipIf(!romAvailable)("real native battle events", () => {
 });
 
 describe.skipIf(!romAvailable)("complete native battle decisions", () => {
+  it.each([
+    {
+      name: "wild EXP below the next threshold",
+      species: 58, level: 6, opponent: { species: 19, level: 3 }, trainer: false,
+      total: 294, endLevel: 6, progress: 15,
+      events: [{ ExpBar: { slot: 0, gained: 24, from: 0, to: 15 } }],
+    },
+    {
+      name: "wild EXP crossing two levels with EXP left over",
+      species: 1, level: 6, opponent: { species: 10, level: 20 }, trainer: false,
+      total: 330, endLevel: 8, progress: 15,
+      events: [
+        { ExpBar: { slot: 0, gained: 151, from: 0, to: 100 } }, 7,
+        { ExpBar: { slot: 0, gained: 151, from: 0, to: 100 } }, 8,
+        { ExpBar: { slot: 0, gained: 151, from: 0, to: 15 } },
+      ],
+    },
+    {
+      name: "regular trainer EXP above the catch-up range",
+      species: 58, level: 12, opponent: { species: 10, level: 5 }, trainer: true,
+      total: 2215, endLevel: 12, progress: 9,
+      events: [{ ExpBar: { slot: 0, gained: 55, from: 0, to: 9 } }],
+    },
+    {
+      name: "trainer catch-up EXP landing on a level threshold",
+      species: 58, level: 5, opponent: { species: 10, level: 5 }, trainer: true,
+      total: 428, endLevel: 7, progress: 0,
+      events: [
+        { ExpBar: { slot: 0, gained: 272, from: 0, to: 100 } }, 6,
+        { ExpBar: { slot: 0, gained: 272, from: 0, to: 100 } }, 7,
+      ],
+    },
+  ])("saves and animates $name", async ({
+    species, level, opponent, trainer, total, endLevel, progress, events,
+  }) => {
+    const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});
+    const engine = new Engine(instance.exports as never, readFileSync("pokecrystal11.gbc"));
+    const mon = engine.makePokemon(species, level);
+    // Keep the battle to one hit so these assertions isolate the EXP award.
+    mon.moves = [53, 0, 0, 0];
+    mon.pp = [15, 0, 0, 0];
+    mon.stats[4] = 500;
+    const battle = engine.startBattle({
+      party: [mon],
+      opponent: trainer ? { party: [engine.makePokemon(opponent.species, opponent.level)] } : opponent,
+      seed: 5,
+    });
+    const move = battle.snapshot().legal.findIndex((action: any) => action.Move?.slot === 0);
+    const snapshot = battle.act(move);
+    expect(snapshot.result?.party[0]).toMatchObject({ exp: total, level: endLevel });
+    expect(snapshot.exp_progress[0]).toBe(progress);
+    expect(snapshot.events).toContainEqual({
+      Message: { GainedExp: { mon: mon.nickname, exp: total - mon.exp, boosted: false } },
+    });
+    const playback: unknown[] = [];
+    for (const event of snapshot.events as any[]) {
+      if (event.ExpBar) playback.push(event);
+      if (event.Message?.GrewToLevel) playback.push(event.Message.GrewToLevel.level);
+    }
+    expect(playback).toEqual(events);
+  });
+
   it("emits a reserve item HP animation with the native party slot and spends one Potion", async () => {
     const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});
     const engine = new Engine(instance.exports as never, readFileSync("pokecrystal11.gbc"));

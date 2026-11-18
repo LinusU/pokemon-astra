@@ -592,13 +592,10 @@ export class BattlePresenter {
       const message = event.Message;
       const kind =
         typeof message === "string" ? message : Object.keys(message)[0];
-      const growth = message.GrewToLevel ?? message.PartyGrewToLevel;
+      const growth = message.GrewToLevel;
       if (growth?.slot === this.shownSlots.player) {
         this.shown.player.level = growth.level;
-        const finalLevel = this.snapshot.state.player.party?.[growth.slot]?.level;
-        this.expProgress = growth.level === finalLevel
-          ? this.expAtSendOut(growth.slot, this.queue)
-          : 0;
+        this.expProgress = growth.level >= 100 ? 100 : 0;
         this.paint();
       }
       if (kind === "BallBlocked" || kind === "BallDontBeAThief") this.clearCapture();

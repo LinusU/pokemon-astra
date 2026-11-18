@@ -600,8 +600,8 @@ impl Engine {
         self.mem.wb(H_PRODUCT + 2, a);
     }
 
-    /// `AnimateExpBar`: the memory side. The active mon's `wTempMon` gets the new
-    /// experience and `wBattleMonLevel` follows the levels the bar passes.
+    /// `AnimateExpBar`: fill the active mon's bar for each level crossed, then
+    /// show the remaining progress on the new level's bar.
     fn animate_exp_bar(&mut self) {
         if self.mem.rb(W_CUR_BATTLE_MON) != self.mem.rb(W_CUR_PARTY_MON) {
             return;
@@ -621,14 +621,8 @@ impl Engine {
         let total_exp = u32::from_be_bytes([0, self.mem.rb(exp), self.mem.rb(exp + 1), self.mem.rb(exp + 2)]);
         let gained = u16::from_be_bytes([p2, p3]);
         let species = self.mem.rb(W_TEMP_MON_SPECIES);
-        let progress = |total| self.data.experience_progress(species, e, total);
         let slot = self.mem.rb(W_CUR_PARTY_MON);
-        self.show(crate::battle::Event::ExpBar {
-            slot,
-            gained,
-            from: progress(total_exp),
-            to: progress(total_exp + u32::from(gained)),
-        });
+        let mut from = self.data.experience_progress(species, e, total_exp);
         let (v, carry) = self.mem.rb(W_EXPERIENCE_GAINED + 2).overflowing_add(self.mem.rb(exp + 2));
         self.mem.wb(exp + 2, v);
         let (v, carry) = adc(self.mem.rb(W_EXPERIENCE_GAINED + 1), self.mem.rb(exp + 1), carry);
@@ -662,6 +656,7 @@ impl Engine {
             if e >= MAX_LEVEL || e == d {
                 break;
             }
+            self.show(crate::battle::Event::ExpBar { slot, gained, from, to: 100 });
             let level = e + 1;
             self.mem.wb(W_TEMP_MON_LEVEL, level);
             self.mem.wb(W_CUR_PARTY_LEVEL, level);
@@ -671,6 +666,14 @@ impl Engine {
             self.show(crate::battle::Event::Sound(SFX_HIT_END_OF_EXP_BAR.into()));
             self.text(r::BATTLE_TEXT_STRING_BUFFER1_GREW_TO_LEVEL);
             e += 1;
+            from = 0;
+        }
+        if e < MAX_LEVEL {
+            let final_exp = u32::from_be_bytes([0, self.mem.rb(exp), self.mem.rb(exp + 1), self.mem.rb(exp + 2)]);
+            let to = self.data.experience_progress(species, e, final_exp);
+            if from != to {
+                self.show(crate::battle::Event::ExpBar { slot, gained, from, to });
+            }
         }
         // .FinishExpBar: restores hProduct + 2..3 around the bar's HRAM scratch work.
         self.mem.wb(H_PRODUCT + 2, p2);

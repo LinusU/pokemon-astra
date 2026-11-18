@@ -48,7 +48,8 @@ pub enum Event {
     SlideOut(Side),
     /// The enemy trainer slides back onto the screen (after the battle).
     TrainerSlidesIn,
-    /// The active mon's progress toward the next level, as percentages.
+    /// One segment of the active mon's EXP animation, as percentages within
+    /// a level. `gained` is the total EXP awarded for this gain.
     ExpBar { slot: u8, gained: u16, from: u8, to: u8 },
     /// The stats box of party mon `slot` (after a level-up).
     StatsBox { slot: u8 },
