@@ -268,11 +268,14 @@ export class WorldActors {
         lateral > 0.6
       )
         continue;
+      const distance = Math.hypot(dx, dy);
       let clear = true;
-      for (let d = 0.5; d < forward - 0.35; d += 0.25) {
+      for (let d = 0.25; d < distance; d += 0.25) {
+        const x = actor.x + dx * d / distance;
+        const y = actor.y + dy * d / distance;
         if (
-          terrainBlocked(map, actor.x + fx * d, actor.y + fy * d, false, 0.1) ||
-          this.solid(map, actor.x + fx * d, actor.y + fy * d, object.id)
+          terrainBlocked(map, x, y) ||
+          this.solid(map, x, y, object.id)
         ) {
           clear = false;
           break;

@@ -4,6 +4,7 @@ import {
   connectedBlocked,
   connectionAt,
   crossConnection,
+  exitAt,
   exitOpen,
 } from "../src/game/navigation";
 import { WORLD } from "../src/world";
@@ -119,19 +120,23 @@ describe("field barriers", () => {
     ).toBe(false);
   });
 
-  it("lands on the approach beside each building door or mat", () => {
+  it("allows both mat tiles to exit to the same outdoor approach", () => {
     for (const map of Object.values(WORLD)) {
       for (const exit of map.exits.filter((e) => e.entrance === "mat")) {
         const town = WORLD[exit.to];
         const door = town.exits.find((e) => e.to === map.id)!;
-        const exterior = crossConnection(map, exit, 0, 0);
         const interior = crossConnection(town, door, 0, 0);
-        expect(exterior.y).toBe(door.y + 1.5);
+        expect(exit.width, map.id).toBe(2);
         expect(interior.y).toBe(exit.y - 0.5);
-        expect(
-          connectedBlocked(town, exterior.x, exterior.y, false, () => true),
-          town.id,
-        ).toBe(false);
+        for (const x of [exit.x + 0.5, exit.x + 1.5]) {
+          const y = exit.y + 0.5;
+          expect(exitAt(map, x, y), map.id).toBe(exit);
+          expect(connectedBlocked(map, x, y, false, () => true), map.id).toBe(false);
+          expect(connectedBlocked(map, x, y - 1, false, () => true), map.id).toBe(false);
+          const exterior = crossConnection(map, exit, x, y);
+          expect(exterior).toEqual({ x: door.x + 0.5, y: door.y + 1.5 });
+          expect(connectedBlocked(town, exterior.x, exterior.y, false, () => true), town.id).toBe(false);
+        }
         expect(
           connectedBlocked(map, interior.x, interior.y, false, () => true),
           map.id,

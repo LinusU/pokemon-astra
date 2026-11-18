@@ -4,7 +4,7 @@ import { WorldActors, interactionTarget } from "./game/actors";
 import {
   barrierTarget,
   exitOpen,
-  connectionAt,
+  exitAt,
   connectedBlocked,
   crossConnection,
 } from "./game/navigation";
@@ -1700,14 +1700,7 @@ function update(dt: number) {
   const moved = Math.hypot(save.x - oldX, save.y - oldY);
   if (moved === 0) return;
   const map = WORLD[save.map];
-  const exit =
-    connectionAt(map, save.x, save.y) ||
-    map.exits.find(
-      (e) =>
-        !e.direction &&
-        Math.floor(save.x) === e.x &&
-        Math.floor(save.y) === e.y,
-    );
+  const exit = exitAt(map, save.x, save.y);
   if (!exit) exitLock = false;
   else if (isExitOpen(exit) && (!exitLock || exit.direction)) {
     exitLock = true;

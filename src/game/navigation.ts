@@ -14,7 +14,8 @@ export function exitOpen(
 
 export function barrierTiles(exit: Exit) {
   if (!exit.barrier) return [];
-  if (!exit.direction) return [{ x: exit.x, y: exit.y }];
+  if (!exit.direction)
+    return Array.from({ length: exit.width ?? 1 }, (_, i) => ({ x: exit.x + i, y: exit.y }));
   const vertical = exit.direction === "north" || exit.direction === "south";
   const span = exit.span ?? 1;
   return Array.from({ length: 2 * span + 1 }, (_, i) => ({
@@ -33,7 +34,8 @@ export function barrierAt(map: WorldMap, x: number, y: number) {
       return dy === 0 && dx <= span;
     if (exit.direction === "east" || exit.direction === "west")
       return dx === 0 && dy <= span;
-    return dx === 0 && dy === 0;
+    const tileX = Math.floor(x);
+    return dy === 0 && tileX >= exit.x && tileX < exit.x + (exit.width ?? 1);
   });
 }
 
@@ -106,6 +108,14 @@ export function connectionAt(
           : x - exit.x) - 0.5,
       ) <
         (exit.span ?? 1) + 0.5,
+  );
+}
+
+export function exitAt(map: WorldMap, x: number, y: number) {
+  const tileX = Math.floor(x), tileY = Math.floor(y);
+  return connectionAt(map, x, y) ?? map.exits.find((exit) =>
+    !exit.direction && exit.y === tileY &&
+    tileX >= exit.x && tileX < exit.x + (exit.width ?? 1),
   );
 }
 

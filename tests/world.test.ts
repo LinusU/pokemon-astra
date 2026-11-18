@@ -401,6 +401,7 @@ describe("opening composition", () => {
       m.objects.filter((o) => o.kind === "trainer"),
     );
     expect(new Set(trainers.map((o) => o.facing)).size).toBeGreaterThan(1);
+    expect(new Set(trainers.map((o) => o.sightRange)).size).toBeGreaterThan(1);
     expect(trainers.every((o) => o.sightRange && o.facing)).toBe(true);
   });
 });

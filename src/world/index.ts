@@ -84,6 +84,8 @@ export interface Exit {
   direction?: Direction;
   span?: number;
   entrance?: "door" | "cave" | "stairs" | "mat";
+  /** Horizontal tile count for a non-directional exit, anchored at x. */
+  width?: number;
   barrier?: ExitBarrier;
   x: number;
   y: number;
@@ -2190,25 +2192,6 @@ for (const [n, , a, b] of routeData) {
   }
 }
 
-composeGeography(WORLD);
-
-const facings = ["down", "left", "up", "right"] as const;
-for (const m of Object.values(WORLD)) {
-  m.objects.forEach((o, i) => {
-    if (["person", "healer", "shop", "starter"].includes(o.kind)) {
-      o.facing ??= facings[(i + m.id.length) % facings.length];
-      if (o.kind === "person" && o.id.startsWith("resident_")) o.roam = 1;
-    }
-    if (o.kind === "trainer") {
-      o.facing ??= facings[(i + m.id.length) % facings.length];
-      o.sightRange ??=
-        o.id.includes("_optional_") || o.id.endsWith("_guardian_trainer")
-          ? 2
-          : 3;
-    }
-  });
-}
-
 for (const m of Object.values(WORLD))
   for (const e of m.exits) {
     if (e.direction) continue;
@@ -2222,7 +2205,20 @@ for (const m of Object.values(WORLD))
           : m.kind === "dungeon" || dest.kind === "dungeon"
             ? "cave"
             : "door";
+    if (e.entrance === "mat") e.width = 2;
   }
+
+composeGeography(WORLD);
+
+const facings = ["down", "left", "up", "right"] as const;
+for (const m of Object.values(WORLD)) {
+  m.objects.forEach((o, i) => {
+    if (["person", "healer", "shop", "starter"].includes(o.kind)) {
+      o.facing ??= facings[(i + m.id.length) % facings.length];
+      if (o.kind === "person" && o.id.startsWith("resident_")) o.roam = 1;
+    }
+  });
+}
 for (const m of Object.values(WORLD)) {
   for (const e of m.exits) {
     if (!e.requires) continue;
@@ -2241,15 +2237,8 @@ for (const m of Object.values(WORLD)) {
     };
   }
 }
-// Directions describe a person's pose or a trainer's actual line of sight.
+// Poses for story characters.
 for (const [mapId, id, facing] of [
-  ["route01", "trainer_route01", "down"],
-  ["route01", "route01_optional_0", "down"],
-  ["route01", "route01_optional_1", "up"],
-  ["route02", "trainer_route02", "down"],
-  ["route02", "route02_optional_0", "up"],
-  ["route02", "route02_optional_1", "down"],
-  ["route02", "rival_1", "left"],
   ["dewdrop", "robin_start", "down"],
   ["mossford", "quest_parcel", "left"],
 ] as const) {

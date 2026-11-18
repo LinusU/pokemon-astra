@@ -98,6 +98,16 @@ describe("living overworld actors", () => {
     );
     expect(actors.states.scout.notice).toBe(true);
   });
+  it("uses the trainer's configured range on the same clear lane", () => {
+    const scout = { ...trainer, sightRange: 2 };
+    const m = map([scout]);
+    const actors = new WorldActors();
+    actors.enter(m);
+    const player = { x: 6.5, y: 3.5 };
+    expect(actors.spotTrainer(m, player, () => true)).toBeUndefined();
+    scout.sightRange = 4;
+    expect(actors.spotTrainer(m, player, () => true)).toBe(scout);
+  });
   it("shows a notice before walking up, stops short of the player, then challenges", () => {
     const m = map([trainer]),
       actors = new WorldActors(),

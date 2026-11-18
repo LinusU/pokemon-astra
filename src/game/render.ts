@@ -1034,16 +1034,17 @@ export class Renderer {
           ctx.fillRect(px + 3, py + 3 + step * 3, 10, 1);
       } else if (e.entrance === "mat") {
         const [floor, highlight, trim] = this.room(m);
+        const width = (e.width ?? 1) * 16;
         ctx.fillStyle = trim;
-        ctx.fillRect(px + 1, py - 4, 14, 17);
+        ctx.fillRect(px + 1, py - 4, width - 2, 17);
         ctx.fillStyle = floor;
-        ctx.fillRect(px + 3, py - 2, 10, 13);
+        ctx.fillRect(px + 3, py - 2, width - 6, 13);
         ctx.fillStyle = highlight;
-        ctx.fillRect(px + 3, py - 1, 10, 1);
-        ctx.fillRect(px + 3, py + 9, 10, 1);
-        for (let i = 3; i <= 13; i += 2) ctx.fillRect(px + i, py - 5, 1, 1);
+        ctx.fillRect(px + 3, py - 1, width - 6, 1);
+        ctx.fillRect(px + 3, py + 9, width - 6, 1);
+        for (let i = 3; i <= width - 3; i += 2) ctx.fillRect(px + i, py - 5, 1, 1);
         ctx.fillStyle = "#473e3b";
-        ctx.fillRect(px, py + 13, 16, 3);
+        ctx.fillRect(px, py + 13, width, 3);
       }
       if (m.tiles[e.y]?.[e.x] === "d") {
         const label = e.to.endsWith("_center")

@@ -129,7 +129,11 @@ function finish(map: WorldMap, plan: Layout) {
   const { grid } = plan;
   for (const exit of map.exits) {
     if (!exit.direction) {
-      if (grid[exit.y][exit.x] !== "d") grid[exit.y][exit.x] = ".";
+      for (let x = exit.x; x < exit.x + (exit.width ?? 1); x++) {
+        if (grid[exit.y][x] !== "d") grid[exit.y][x] = ".";
+        if (exit.entrance === "mat" && !walkableWithoutSurf(grid[exit.y - 1][x]))
+          grid[exit.y - 1][x] = ".";
+      }
       continue;
     }
     const vertical = exit.direction === "north" || exit.direction === "south";
@@ -140,6 +144,49 @@ function finish(map: WorldMap, plan: Layout) {
     }
   }
   map.tiles = grid.map((row) => row.join(""));
+}
+
+const sightDirections = [
+  ["down", 0, 1], ["left", -1, 0], ["up", 0, -1], ["right", 1, 0],
+] as const;
+
+function aimTrainers(map: WorldMap) {
+  const occupied = new Set(
+    map.objects
+      .filter((object) => ["person", "trainer", "leader", "healer", "shop", "starter"].includes(object.kind))
+      .map(({ x, y }) => y * map.width + x),
+  );
+  for (const trainer of map.objects) {
+    if (trainer.kind !== "trainer") continue;
+    const maxRange = trainer.sightRange ?? (
+      trainer.id.includes("_optional_") ? 3 : map.kind === "dungeon" ? 4 : 5
+    );
+    let bestScore = -1;
+    let bestRange = 0;
+    let bestFacing = trainer.facing;
+    for (const [facing, dx, dy] of sightDirections) {
+      if (trainer.facing && trainer.facing !== facing) continue;
+      let range = 0;
+      let pathTiles = 0;
+      for (let step = 1; step <= maxRange; step++) {
+        const x = trainer.x + dx * step;
+        const y = trainer.y + dy * step;
+        const tile = map.tiles[y]?.[x];
+        if (!walkableWithoutSurf(tile) || occupied.has(y * map.width + x)) break;
+        range = step;
+        if (tile === "." || tile === "=") pathTiles++;
+      }
+      // Face along a clear walking route when possible. Side-path trainers have a shorter reach.
+      const score = pathTiles * 2 + range;
+      if (score > bestScore) {
+        bestScore = score;
+        bestRange = range;
+        bestFacing = facing;
+      }
+    }
+    trainer.facing ??= bestFacing;
+    trainer.sightRange ??= bestRange;
+  }
 }
 
 function placeObjects(
@@ -2206,4 +2253,6 @@ export function composeGeography(world: Region) {
   }
   for (const [id, spec] of Object.entries(dungeons))
     dungeonLayout(world, id, spec);
+  for (const map of Object.values(world))
+    if (map.kind === "route" || map.kind === "dungeon") aimTrainers(map);
 }
