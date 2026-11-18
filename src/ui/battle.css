@@ -160,10 +160,6 @@
 .battle-choosing .battle-controls {
   flex-basis: 62%;
 }
-.battle-controls:has([data-target]),
-.battle-choosing .battle-controls:has([data-index]:nth-child(5)) {
-  grid-template-columns: 1fr;
-}
 .battle-controls:empty {
   display: none;
 }
@@ -553,7 +549,7 @@
   overflow: hidden;
 }
 .battle-moves .battle-controls,
-.battle-controls:has([data-group]) {
+.battle-controls:has([data-group="FIGHT"]) {
   align-content: stretch;
   grid-template-rows: repeat(2, minmax(0, 1fr));
   overflow: hidden;
@@ -569,4 +565,17 @@
 }
 .battle-empty-move {
   color: #899781;
+}
+
+.battle-learning .battle-box {
+  flex-basis: 50%;
+}
+.battle-learning .battle-controls {
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+}
+.battle-learning .battle-controls button {
+  font-size: min(4.7cqw, 24px);
+}
+.battle-learning .battle-keep {
+  grid-area: 3 / 1 / 4 / -1;
 }

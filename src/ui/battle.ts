@@ -540,7 +540,7 @@ export class BattlePresenter {
     this.queue = [...snapshot.events] as Event[];
     this.clearCapture();
     this.choosing = false;
-    this.root.classList.remove("battle-choosing", "battle-moves");
+    this.root.classList.remove("battle-choosing", "battle-moves", "battle-learning");
     this.root.querySelector(".battle-controls")!.innerHTML = "";
     this.next();
   }
@@ -1050,23 +1050,6 @@ export class BattlePresenter {
         currentPp != null ? `PP ${currentPp & 63}${maxPp ? `/${maxPp}` : ""}` : undefined,
       ].filter(Boolean).join(" · ");
     };
-    const label = (v: any) => {
-      const k = key(v),
-        x = typeof v === "string" ? {} : v[k];
-      if (k === "LearnMove")
-        return x.slot === null
-          ? "Keep current moves"
-          : `Forget ${this.o.move(learningMon.moves[x.slot]).name}`;
-
-      return (
-        (
-          { Fight: "Fight", Run: "Run", Cancel: "Back" } as Record<
-            string,
-            string
-          >
-        )[k] || "Continue"
-      );
-    };
     const standard = s.site === "BattleMenu";
     this.root.classList.toggle("battle-choosing", !standard || this.category !== "");
     const copy = this.root.querySelector(".battle-copy")!;
@@ -1084,12 +1067,21 @@ export class BattlePresenter {
         : "Choose a move.";
     }
     const moveMenu = this.category === "FIGHT" || s.site === "MoveSelection" || this.bagTarget !== undefined;
-    this.root.classList.toggle("battle-moves", moveMenu);
+    const learning = s.site === "LearnMove";
+    this.root.classList.toggle("battle-moves", moveMenu || learning);
+    this.root.classList.toggle("battle-learning", learning);
     let entries: string[];
     if (standard && !this.category) {
       entries = ["FIGHT", "BAG", "PARTY", "RUN"].map((g) =>
         `<button data-group="${g}" aria-label="${g === "PARTY" ? "Pokémon" : g}"${g === "BAG" || g === "PARTY" || actions.some((a) => group(a) === g) ? "" : " disabled"}>${g === "PARTY" ? "POKÉMON" : g}</button>`,
       );
+    } else if (learning) {
+      const keep = actions.findIndex(a => a.LearnMove?.slot === null);
+      entries = [`<button class="battle-keep" data-index="${keep}">Keep current moves</button>`];
+      learningMon.moves.forEach((id, slot) => {
+        const index = actions.findIndex(a => a.LearnMove?.slot === slot);
+        entries.push(`<button data-index="${index}"${index < 0 ? " disabled" : ""}>Forget ${escapeHtml(this.o.move(id).name)}</button>`);
+      });
     } else if (moveMenu) {
       const target = this.bagTarget;
       const mon = target === undefined ? active : s.state.player.party![target];
@@ -1109,13 +1101,14 @@ export class BattlePresenter {
         entries.push('<button data-group="PARTY">Switch Pokémon</button>');
     } else {
       entries = actions.map((action, i) =>
-        `<button data-index="${i}">${escapeHtml(label(action))}</button>`);
+        `<button data-index="${i}">${key(action) === "Cancel" ? "Back" : "Continue"}</button>`);
     }
     controls.innerHTML = entries.join("");
     if (controls.querySelector("[data-move-detail]")) {
-      controls.querySelectorAll<HTMLButtonElement>("button").forEach((button) => {
+      controls.querySelectorAll<HTMLButtonElement>("[data-move-detail]").forEach((button) => {
         button.onfocus = () => {
-          copy.textContent = button.dataset.moveDetail || "Choose a move.";
+          const prefix = this.bagTarget === undefined ? "" : "Restore PP · ";
+          copy.textContent = prefix + button.dataset.moveDetail;
         };
       });
     }

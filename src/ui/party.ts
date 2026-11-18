@@ -24,7 +24,6 @@ type PartyOptions = {
   title: string;
   rows: PartyRow[];
   confirm: string;
-  cancel?: string;
   initialSlot?: number;
   onSelect: (slot: number) => void;
   onBack?: () => void;
@@ -52,8 +51,8 @@ export function mountParty(host: HTMLElement, options: PartyOptions) {
   });
   screen.innerHTML = `<header><h2>${escapeHtml(options.title)}</h2><span aria-label="${options.rows.length} of 6 Pokémon">${options.rows.length} / 6</span></header>
     <ol class="party-slots">${rows.join("")}</ol>
-    <footer>${options.rows.some(row => !row.disabled) ? `<span><kbd>A</kbd> ${escapeHtml(options.confirm)}</span>` : '<span>No Pokémon available</span>'}
-    ${options.onBack ? `<button type="button" id="back" tabindex="-1"><kbd>B</kbd> ${escapeHtml(options.cancel ?? "Back")}</button>` : ""}</footer>`;
+    <footer>${options.rows.some(row => !row.disabled) ? `<span><kbd>A</kbd> ${escapeHtml(options.confirm)}</span>` : '<span>No eligible Pokémon</span>'}
+    ${options.onBack ? `<button type="button" id="back" tabindex="-1"><kbd>B</kbd> Back</button>` : ""}</footer>`;
   host.append(screen);
   const buttons = screen.querySelectorAll<HTMLButtonElement>("[data-slot]");
   for (const button of buttons) button.onclick = () => options.onSelect(Number(button.dataset.slot));
@@ -62,5 +61,4 @@ export function mountParty(host: HTMLElement, options: PartyOptions) {
   const selected = screen.querySelector<HTMLButtonElement>(`[data-slot="${options.initialSlot ?? 0}"]:enabled`)
     ?? screen.querySelector<HTMLButtonElement>("[data-slot]:enabled") ?? back;
   selected?.focus({ preventScroll: true });
-  return screen;
 }
