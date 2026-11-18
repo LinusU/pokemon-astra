@@ -351,9 +351,6 @@ impl GameData {
 
     /// Total experience required for a species to reach this level.
     pub fn experience_at_level(&self, species: u8, level: u8) -> u32 {
-        if level <= 1 {
-            return 0;
-        }
         let rate = self.growth_rate(self.species(species).growth_rate);
         let n = i32::from(level);
         let quadratic = i32::from(rate.quadratic & 0x7f)
@@ -367,7 +364,7 @@ impl GameData {
         if level >= crate::defs::MAX_LEVEL {
             return 100;
         }
-        let bottom = self.experience_at_level(species, level);
+        let bottom = if level <= 1 { 0 } else { self.experience_at_level(species, level) };
         let top = self.experience_at_level(species, level + 1);
         let span = top.saturating_sub(bottom).max(1);
         (total.saturating_sub(bottom).min(span) * 100 / span) as u8

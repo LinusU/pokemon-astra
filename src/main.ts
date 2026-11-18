@@ -72,10 +72,19 @@ function sprite(id: number, back = false) {
         c = document.createElement("canvas");
       c.width = 56;
       c.height = 56;
+      let bottom = pixels.height;
+      if (back) {
+        // Some back sprites end in transparent rows. Align the last visible row.
+        for (let alpha = pixels.data.length - 1; alpha >= 3; alpha -= 4) {
+          if (pixels.data[alpha] === 0) continue;
+          bottom = Math.floor(alpha / (pixels.width * 4)) + 1;
+          break;
+        }
+      }
       c.getContext("2d")!.putImageData(
         pixels,
         Math.floor((56 - pixels.width) / 2),
-        56 - pixels.height,
+        56 - bottom,
       );
       spriteCache.set(key, c.toDataURL());
     } catch {
