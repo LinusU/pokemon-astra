@@ -55,7 +55,8 @@ export class MenuInput {
     battle: boolean,
   ) {
     const bag = bagController(layer);
-    const scroller =
+    const party = layer.querySelector<HTMLElement>(".party-slots");
+    const scroller = party ??
       layer.querySelector<HTMLElement>(
         battle ? ".battle-controls" : ".panel",
       ) ?? layer;
@@ -73,7 +74,7 @@ export class MenuInput {
     if (!pressed && !held) this.repeating = undefined;
     const direction =
       pressed ??
-      ((!battle || bag) && held && now >= this.repeatAt
+      ((!battle || bag || party) && held && now >= this.repeatAt
         ? this.repeating
         : undefined);
     if (pressed) {
@@ -138,7 +139,7 @@ export class MenuInput {
       next.bounds.bottom > viewport.top - 18;
     if (next && (visible(next) || (vertical && nearby) || battle)) {
       focus(next);
-    } else if (!battle && vertical) {
+    } else if (!battle && !party && vertical) {
       const step = Math.max(24, scroller.clientHeight * 0.24);
       scroller.scrollTop += direction === "down" ? step : -step;
     } else if (current && !focused) {

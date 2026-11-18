@@ -1,10 +1,13 @@
-import type { BattleMon, BattleSnapshot } from "../engine";
+import type { BattleMon, BattleSnapshot, Pokemon } from "../engine";
 import type { CaptureSoundState } from "../engine/battle-sound";
+import { battleStatus, mountParty } from "./party";
 import { escapeHtml } from "./shell";
 import { battleBagKey, itemInfo, mountBag, type BagItem, type BagState } from "./bag";
 import { playMove } from "./move-animation";
 import { findMoveVisual, healingSparkle, nativeConditionVisual, type MoveVisual } from "./move-visuals";
 import "./battle.css";
+
+export { battleStatus } from "./party";
 
 type Side = "Player" | "Enemy";
 type Event = Record<string, any>;
@@ -27,7 +30,7 @@ type Options = {
   sound?: (id: number) => void;
   animationSound?: (id: number, param: number, species: number, enemy: boolean, duration: number, capture?: CaptureSoundState) => void;
   itemName: (id: number) => string;
-  party: () => { species: number; moves: number[]; nickname?: string }[];
+  party: () => Pokemon[];
   speed: number;
   finish: (snapshot: BattleSnapshot) => void;
   error: (error: unknown) => void;
@@ -38,14 +41,6 @@ const typeNames: Record<number, string> = {
   5: "Rock", 7: "Bug", 8: "Ghost", 9: "Steel", 20: "Fire", 21: "Water",
   22: "Grass", 23: "Electric", 24: "Psychic", 25: "Ice", 26: "Dragon", 27: "Dark",
 };
-
-export function battleStatus(status: number): [string, string] | undefined {
-  if (status & 7) return ["SLP", "Asleep"];
-  if (status & 8) return ["PSN", "Poisoned"];
-  if (status & 16) return ["BRN", "Burned"];
-  if (status & 32) return ["FRZ", "Frozen"];
-  if (status & 64) return ["PAR", "Paralyzed"];
-}
 
 const nativeTemplates: Record<string, [string, string[]]> = {
   WildAppeared: ["Wild … appeared!", ["mon"]],
@@ -895,12 +890,14 @@ export class BattlePresenter {
       return;
     }
     if (this.bagTarget !== undefined) {
+      const previous = this.bagTarget;
       this.bagTarget = undefined;
-      this.menu();
+      this.menu("", previous);
       return;
     }
     if (this.bagItem !== undefined) {
       this.bagItem = undefined;
+      this.root.querySelector(".party-screen")?.remove();
       this.openBag();
       return;
     }
@@ -979,7 +976,43 @@ export class BattlePresenter {
       },
     });
   }
-  private menu(previousGroup = "") {
+  private showParty(initialSlot?: number) {
+    const { state, legal, site } = this.snapshot;
+    const actions = legal as {
+      Switch?: { slot: number };
+      ForcedSwitch?: { slot: number };
+      OfferSwitch?: { slot: number | null };
+      Item?: ItemAction;
+    }[];
+    const item = this.bagItem;
+    const rows = this.o.party().map((saved, slot) => {
+      const active = slot === state.player.active_slot;
+      const mon = active ? state.player.active : state.player.party?.[slot];
+      const action = actions.findIndex(a => item !== undefined
+        ? a.Item?.id === item && a.Item.target === slot
+        : (a.Switch ?? a.ForcedSwitch ?? a.OfferSwitch)?.slot === slot);
+      return {
+        name: this.memberName(slot), sprite: this.o.sprite(saved.species),
+        level: mon?.level ?? saved.level, status: mon?.status ?? saved.status,
+        hp: mon?.hp ?? saved.hp, maxHp: mon?.max_hp ?? saved.stats[0],
+        note: active ? "In battle" : undefined, disabled: action < 0, action,
+      };
+    });
+    mountParty(this.root, {
+      title: item !== undefined ? this.o.itemName(item) : "Switch Pokémon",
+      rows, initialSlot, confirm: item !== undefined ? "Use item" : "Send out",
+      onBack: site === "ForcedSwitch" ? undefined : () => this.back(),
+      onSelect: slot => {
+        const index = rows[slot].action;
+        if (actions[index].Item?.move_slot != null) {
+          this.bagTarget = slot;
+          this.menu();
+        } else this.act(index);
+      },
+    });
+  }
+  private menu(previousGroup = "", initialSlot?: number) {
+    this.root.querySelector(".party-screen")?.remove();
     this.choosing = true;
     const s = this.snapshot,
       actions = s.legal as any[],
@@ -999,12 +1032,13 @@ export class BattlePresenter {
       .map((x) => x.Message?.AskForgetMove)
       .find(Boolean);
     const learningMon = s.state.player.party?.[s.learning_slot ?? s.state.player.active_slot] ?? active;
-    const member = (slot: number) => {
-      const mon = s.state.player.party?.[slot];
-      if (!mon) return this.memberName(slot);
-      const status = battleStatus(mon.status);
-      return `${this.memberName(slot)} · Lv${mon.level} · ${mon.hp}/${mon.max_hp} HP${status ? ` · ${status[0]}` : ""}`;
-    };
+    const controls = this.root.querySelector<HTMLElement>(".battle-controls")!;
+    if (this.category === "PARTY" || s.site === "ForcedSwitch" ||
+        (this.bagItem !== undefined && this.bagTarget === undefined)) {
+      controls.replaceChildren();
+      this.showParty(initialSlot);
+      return;
+    }
     const describeMove = (id: number, currentPp?: number) => {
       const move = this.o.move(id);
       const maxPp = move.pp != null && currentPp != null
@@ -1019,22 +1053,11 @@ export class BattlePresenter {
     const label = (v: any) => {
       const k = key(v),
         x = typeof v === "string" ? {} : v[k];
-      if (k === "Move") return this.o.move(active.moves[x.slot]).name;
-      if (k === "Switch" || k === "ForcedSwitch")
-        return member(x.slot);
-      if (k === "Item") {
-        const target = x.target == null ? this.o.itemName(x.id) : member(x.target);
-        const targetMove = x.move_slot == null || x.target == null
-          ? undefined
-          : s.state.player.party?.[x.target]?.moves[x.move_slot];
-        return targetMove ? this.o.move(targetMove).name : target;
-      }
       if (k === "LearnMove")
         return x.slot === null
           ? "Keep current moves"
           : `Forget ${this.o.move(learningMon.moves[x.slot]).name}`;
-      if (k === "OfferSwitch")
-        return x.keep ? "Keep battling" : member(x.slot);
+
       return (
         (
           { Fight: "Fight", Run: "Run", Cancel: "Back" } as Record<
@@ -1049,28 +1072,23 @@ export class BattlePresenter {
     const copy = this.root.querySelector(".battle-copy")!;
     if (learn) {
       copy.textContent = `${learn.mon} wants to learn ${this.o.move(learn.mv).name}.\n${describeMove(learn.mv)}`;
-    } else if (s.site === "ForcedSwitch") {
-      copy.textContent = "Which Pokémon will battle next?";
     } else if (s.site === "OfferSwitch") {
       const enemy = this.o.species(s.state.enemy.active.species);
       const types = [...new Set(enemy.types)].map((type) => typeNames[type]).filter(Boolean);
       copy.textContent = `${this.o.trainerName || "The opposing trainer"} is sending out ${enemy.name}.${types.length ? `\n${types.join(" / ")}` : ""}`;
     } else if (this.bagTarget !== undefined) {
       copy.textContent = `Restore PP for which move on ${this.memberName(this.bagTarget)}?`;
-    } else if (this.bagItem !== undefined) {
-      copy.textContent = `Use ${this.o.itemName(this.bagItem)} on which Pokémon?`;
     } else {
       copy.textContent = standard
         ? `What will ${this.memberName(s.state.player.active_slot)} do?`
         : "Choose a move.";
     }
-    const controls = this.root.querySelector<HTMLElement>(".battle-controls")!;
     const moveMenu = this.category === "FIGHT" || s.site === "MoveSelection" || this.bagTarget !== undefined;
     this.root.classList.toggle("battle-moves", moveMenu);
     let entries: string[];
     if (standard && !this.category) {
       entries = ["FIGHT", "BAG", "PARTY", "RUN"].map((g) =>
-        `<button data-group="${g}" aria-label="${g === "PARTY" ? "Pokémon" : g}"${g === "BAG" || actions.some((a) => group(a) === g) ? "" : " disabled"}>${g === "PARTY" ? "POKÉMON" : g}</button>`,
+        `<button data-group="${g}" aria-label="${g === "PARTY" ? "Pokémon" : g}"${g === "BAG" || g === "PARTY" || actions.some((a) => group(a) === g) ? "" : " disabled"}>${g === "PARTY" ? "POKÉMON" : g}</button>`,
       );
     } else if (moveMenu) {
       const target = this.bagTarget;
@@ -1084,20 +1102,15 @@ export class BattlePresenter {
         const detail = describeMove(id, mon.pp[slot]);
         return `<button data-index="${index}" data-move-detail="${escapeHtml(detail)}"${index < 0 ? " disabled" : ""}>${escapeHtml(this.o.move(id).name)}</button>`;
       });
-    } else if (standard && this.bagItem !== undefined && this.bagTarget === undefined) {
-      const targets = new Set<number>(actions.flatMap((a) => a.Item?.id === this.bagItem && a.Item.target != null ? [a.Item.target] : []));
-      entries = Array.from(targets, (slot) => `<button data-target="${slot}">${escapeHtml(member(slot))}</button>`);
+    } else if (s.site === "OfferSwitch") {
+      const keep = actions.findIndex(a => a.OfferSwitch?.keep);
+      entries = [`<button data-index="${keep}">Keep battling</button>`];
+      if (actions.some(a => a.OfferSwitch?.slot != null))
+        entries.push('<button data-group="PARTY">Switch Pokémon</button>');
     } else {
-      entries = actions
-        .map((a, i) => ({ a, i }))
-        .filter(({ a }) => !standard || (this.bagItem !== undefined ? a.Item?.id === this.bagItem && a.Item.target === this.bagTarget : group(a) === this.category))
-        .map(({ a, i }) => {
-          const detail = a.Move ? describeMove(active.moves[a.Move.slot], active.pp[a.Move.slot]) : "";
-          return `<button data-index="${i}"${detail ? ` data-move-detail="${escapeHtml(detail)}"` : ""}>${escapeHtml(label(a))}</button>`;
-        });
+      entries = actions.map((action, i) =>
+        `<button data-index="${i}">${escapeHtml(label(action))}</button>`);
     }
-    if (standard && this.category && !moveMenu)
-      entries.push('<button data-back aria-label="Back">Back</button>');
     controls.innerHTML = entries.join("");
     if (controls.querySelector("[data-move-detail]")) {
       controls.querySelectorAll<HTMLButtonElement>("button").forEach((button) => {
@@ -1111,20 +1124,9 @@ export class BattlePresenter {
       ? actions.findIndex((a) => a.Move?.slot === last.slot)
       : -1;
     controls.scrollTop = 0;
-    const selected = controls.querySelector<HTMLButtonElement>(`[data-group="${previousGroup}"], [data-index="${preferred}"]:not(:disabled)`)
+    const selected = controls.querySelector<HTMLButtonElement>(`[data-group="${previousGroup}"], [data-index="${preferred}"]:enabled`)
       ?? controls.querySelector<HTMLButtonElement>("button:not(:disabled)");
     selected?.focus({ preventScroll: true });
-    controls.querySelectorAll<HTMLButtonElement>("[data-target]").forEach((button) => {
-      button.onclick = () => {
-        const target = Number(button.dataset.target);
-        const action = actions.findIndex((a) => a.Item?.id === this.bagItem && a.Item.target === target && a.Item.move_slot == null);
-        if (action >= 0) this.act(action);
-        else {
-          this.bagTarget = target;
-          this.menu();
-        }
-      };
-    });
     controls.querySelectorAll<HTMLButtonElement>("[data-group]").forEach(
       (b) =>
         (b.onclick = () => {
@@ -1143,12 +1145,10 @@ export class BattlePresenter {
     controls
       .querySelectorAll<HTMLButtonElement>("[data-index]")
       .forEach((b) => (b.onclick = () => this.act(Number(b.dataset.index))));
-    controls
-      .querySelector<HTMLButtonElement>("[data-back]")
-      ?.addEventListener("click", () => this.back());
   }
   private act(index: number) {
     if (this.waiting || !this.choosing || index < 0) return;
+    this.root.querySelector(".party-screen")?.remove();
     this.root.querySelector(".battle-controls")!.innerHTML = "";
     try {
       const move = (this.snapshot.legal[index] as { Move?: { slot: number } })?.Move;

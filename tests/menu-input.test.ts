@@ -7,6 +7,7 @@ function panel(
   height = 120,
   battle = false,
   journey = false,
+  party = false,
 ) {
   const ownerDocument = { activeElement: null as unknown };
   const rect = (left: number, top: number, right: number, bottom: number) => ({
@@ -43,7 +44,7 @@ function panel(
     firstElementChild: {},
     ownerDocument,
     querySelector: (selector: string) =>
-      selector === "[data-bag]" ? null : scroller,
+      selector === "[data-bag]" || (selector === ".party-slots" && !party) ? null : scroller,
   } as unknown as HTMLElement;
   const menu = new MenuInput();
   const update = (now: number, pressed?: Action, held = pressed) =>
@@ -95,6 +96,22 @@ describe("menu input", () => {
     expect(ownerDocument.activeElement).toBe(buttons[0]);
     update(30, "a");
     expect(buttons[0].click).toHaveBeenCalledOnce();
+  });
+
+  it("repeats down the battle roster and stops at its last available slot", () => {
+    const { update, buttons, scroller, ownerDocument } = panel(
+      [[0, 2, 190, 18], [0, 42, 190, 18], [0, 102, 190, 18]],
+      120, true, false, true,
+    );
+    update(0);
+    update(10, "down");
+    expect(ownerDocument.activeElement).toBe(buttons[1]);
+    update(320, undefined, "down");
+    expect(ownerDocument.activeElement).toBe(buttons[2]);
+    update(430, undefined, "down");
+    expect(scroller.scrollTop).toBe(0);
+    update(440, "a");
+    expect(buttons[2].click).toHaveBeenCalledOnce();
   });
 
   it("scrolls text before reaching Back and repeats only while a direction is held", () => {

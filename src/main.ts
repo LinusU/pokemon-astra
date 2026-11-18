@@ -11,6 +11,7 @@ import {
 import { directions, bearings } from "./game/journal";
 import { drawFieldMap } from "./ui/field-map";
 import { mountBag, itemInfo, type BagState } from "./ui/bag";
+import { battleStatus, mountParty } from "./ui/party";
 import { MenuInput } from "./ui/menu-input";
 import { MEDICINE, isMedicine, useMedicine } from "./game/medicine";
 import { GameAudio } from "./game/audio";
@@ -909,16 +910,8 @@ function view(v: string, pageIndex = 0, missingOnly = false) {
   let title = "",
     body = "";
   if (v === "party") {
-    title = "Your party";
-    body = save.party.length
-      ? save.party
-          .map(
-            (m, i) =>
-              `<button data-switch="${i}"><img class="mini-sprite" alt="" src="${sprite(m.species)}"> ${escapeHtml(engine.species(m.species).name)} · Lv ${m.level}<br><span class="small">${i === 0 ? "Lead · " : ""}HP ${m.hp} / ${m.stats[0]}</span></button>`,
-          )
-          .join("")
-      : "<p>Your party is empty. Visit Alder in the lab.</p>";
-    body = `<p class="small">Select a Pokémon to inspect its moves or change your lead.</p><div class="list">${body}</div>`;
+    showFieldParty(pageIndex);
+    return;
   } else if (v === "bag") {
     layer.replaceChildren();
     mountBag(layer, {
@@ -1075,12 +1068,6 @@ function view(v: string, pageIndex = 0, missingOnly = false) {
       directions(save, has).marker,
     );
   p.querySelector("#back")!.addEventListener("click", menu);
-  p.querySelectorAll<HTMLButtonElement>("[data-switch]").forEach(
-    (b) =>
-      (b.onclick = () => {
-        partyDetails(Number(b.dataset.switch));
-      }),
-  );
   p.querySelectorAll<HTMLButtonElement>("[data-deposit]").forEach(
     (b) =>
       (b.onclick = () => {
@@ -1182,26 +1169,28 @@ const heldItems: Record<string, number> = {
   kings_rock: 82,
   up_grade: 172,
 };
+function fieldPartyRows() {
+  return save.party.map(mon => ({
+    name: mon.nickname || engine.species(mon.species).name,
+    sprite: sprite(mon.species), level: mon.level, status: mon.status,
+    hp: mon.hp, maxHp: mon.stats[0],
+  }));
+}
+function showFieldParty(initialSlot: number) {
+  layer.replaceChildren();
+  mountParty(layer, {
+    title: "Your party", initialSlot, confirm: "Summary",
+    rows: fieldPartyRows().map((row, slot) => ({ ...row, note: slot === 0 ? "Lead" : undefined })),
+    onSelect: partyDetails, onBack: menu,
+  });
+}
 function partyDetails(index: number) {
   const mon = save.party[index];
   const name = engine.species(mon.species).name;
   const held = Object.keys(heldItems).find(
     (key) => heldItems[key] === mon.item,
   );
-  const status =
-    mon.hp === 0
-      ? "Fainted"
-      : mon.status & 7
-        ? "Asleep"
-        : mon.status & 8
-          ? "Poisoned"
-          : mon.status & 16
-            ? "Burned"
-            : mon.status & 32
-              ? "Frozen"
-              : mon.status & 64
-                ? "Paralyzed"
-                : "Healthy";
+  const status = mon.hp === 0 ? "Fainted" : battleStatus(mon.status)?.[1] ?? "Healthy";
   const evolutions = engine.evolutionData(mon.species).evolutions.map((e) => {
     const stones: Record<number, string> = {
       8: "Moon Stone",
@@ -1257,7 +1246,7 @@ function partyDetails(index: number) {
     persist();
     partyDetails(index);
   });
-  p.querySelector("#back")!.addEventListener("click", () => view("party"));
+  p.querySelector("#back")!.addEventListener("click", () => view("party", index));
 }
 function rivalSpecies(o: WorldObject, slot: number, original: number) {
   if (!o.id.startsWith("rival_") || slot !== o.trainer!.team.length - 1)
@@ -1355,66 +1344,58 @@ function useItem(item: string) {
     return { healed, evo, eligible };
   });
   mode = "menu";
-  const p = panel(
-    layer,
-    itemName(item),
-    `<p>${heldItems[item] ? "Give to" : "Use on"} which Pokémon?</p><div class="list target-list">${
-      save.party
-        .map(
-          (mon, i) =>
-            `<button data-target="${i}" ${targets[i].eligible ? "" : "disabled"}><img class="mini-sprite" alt="" src="${sprite(mon.species)}"><span>${escapeHtml(engine.species(mon.species).name)}<br><small>Lv ${mon.level} · HP ${mon.hp}/${mon.stats[0]}</small></span><small>${targets[i].eligible ? "" : heldItems[item] ? "Holding item" : "No effect"}</small></button>`,
-        )
-        .join("") || "<p>You haven’t chosen a partner yet.</p>"
-    }</div><button class="secondary" id="back">Back to Bag</button>`,
-  );
-  p.querySelector("#back")!.addEventListener("click", () => view("bag"));
-  p.querySelectorAll<HTMLButtonElement>("[data-target]").forEach(
-    (b) =>
-      (b.onclick = () => {
-        const index = Number(b.dataset.target),
-          mon = save.party[index];
-        const { healed, evo, eligible } = targets[index];
-        if (!eligible) return;
-        if (item === "friendship_charm") {
-          mon.happiness = Math.min(255, mon.happiness + 80);
-          save.items[item]--;
-          persist();
-          message(
-            `${engine.species(mon.species).name} feels much closer to you.`,
-            () => view("bag"),
-          );
-          return;
-        }
-        if (heldItems[item]) {
-          mon.item = heldItems[item];
-          save.items[item]--;
-          persist();
-          message(
-            `${engine.species(mon.species).name} is holding ${itemName(item)}.`,
-            () => view("bag"),
-          );
-          return;
-        }
-        if (healed) {
-          save.party[index] = healed;
-          save.items[item]--;
-          persist();
-          sound.overworld(item === "max_elixer" ? "restorePp" : "potion");
-          message(
-            item === "max_elixer"
-              ? `${engine.species(mon.species).name}’s move PP was restored.`
-              : `${engine.species(mon.species).name} recovered with the ${itemName(item)}. HP ${healed.hp}/${healed.stats[0]}.`,
-            () => view("bag"),
-          );
-          return;
-        }
-        if (!evo) return;
-        evolvePartyMember(index, evo.species, () => view("bag"), () => {
-          if (evo.method === 3 && evo.parameter !== 255) save.party[index].item = 0;
-          save.items[item]--;
-        });
-      }),
-  );
+  layer.replaceChildren();
+  mountParty(layer, {
+    title: itemName(item),
+    rows: fieldPartyRows().map((row, i) => ({
+      ...row, disabled: !targets[i].eligible,
+      note: targets[i].eligible ? undefined : heldItems[item] ? "Holding item" : "No effect",
+    })),
+    confirm: heldItems[item] ? "Give item" : "Use item", onBack: () => view("bag"),
+    onSelect: index => {
+      const mon = save.party[index];
+      const { healed, evo, eligible } = targets[index];
+      if (!eligible) return;
+      if (item === "friendship_charm") {
+        mon.happiness = Math.min(255, mon.happiness + 80);
+        save.items[item]--;
+        persist();
+        message(
+          `${engine.species(mon.species).name} feels much closer to you.`,
+          () => view("bag"),
+        );
+        return;
+      }
+      if (heldItems[item]) {
+        mon.item = heldItems[item];
+        save.items[item]--;
+        persist();
+        message(
+          `${engine.species(mon.species).name} is holding ${itemName(item)}.`,
+          () => view("bag"),
+        );
+        return;
+      }
+      if (healed) {
+        save.party[index] = healed;
+        save.items[item]--;
+        persist();
+        sound.overworld(item === "max_elixer" ? "restorePp" : "potion");
+        message(
+          item === "max_elixer"
+            ? `${engine.species(mon.species).name}’s move PP was restored.`
+            : `${engine.species(mon.species).name} recovered with the ${itemName(item)}. HP ${healed.hp}/${healed.stats[0]}.`,
+          () => view("bag"),
+        );
+        return;
+      }
+      if (!evo) return;
+      evolvePartyMember(index, evo.species, () => view("bag"), () => {
+        if (evo.method === 3 && evo.parameter !== 255) save.party[index].item = 0;
+        save.items[item]--;
+      });
+    },
+  });
 }
 function startBattle(species: number, level: number, o?: WorldObject) {
   try {
