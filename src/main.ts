@@ -1815,7 +1815,7 @@ if ("serviceWorker" in navigator) {
       status.textContent = "Update ready · reload to play";
     });
     void navigator.serviceWorker
-      .register("/sw.js", { updateViaCache: "none" })
+      .register("./sw.js", { updateViaCache: "none" })
       .then(async (registration) => {
         if (hadController) void registration.update().catch(() => {});
         await navigator.serviceWorker.ready;

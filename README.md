@@ -1,5 +1,7 @@
 # Pokémon Astra
 
+[Play Pokémon Astra](https://linusu.com/pokemon-astra/).
+
 A browser-native Pokémon adventure in the original Astra region, using the Crystal battle engine and assets decoded from the player's own cartridge. The campaign runs from the choice of partner in Dewdrop through eight gyms, the Astral League and the Aurora Sanctuary. All three starters have cleared the League in seeded native battle simulations.
 
 ## Play locally
