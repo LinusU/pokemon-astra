@@ -1,16 +1,6 @@
 import type { Engine } from "../engine";
 import type { CaptureSoundState } from "../engine/battle-sound";
-
-export const MUSIC_TRACKS: Record<string, [number, number]> = {
-  town: [0x3a, 0x72d3],
-  route: [0x3c, 0x4386],
-  cave: [0x3a, 0x62be],
-  center: [0x3b, 0x55c6],
-  wild: [0x3d, 0x5dc5],
-  trainer: [0x3d, 0x6096],
-  gym: [0x3a, 0x650d],
-  champion: [0x3a, 0x69c1],
-};
+import { MUSIC_TRACKS, type MusicScene } from "./music";
 const MUSIC_VOLUME = 0.28;
 const MUSIC_RATE = 48000;
 // Crystal 1.1's MUSIC_HEAL, used by HealMachineAnim.
@@ -29,6 +19,7 @@ export const OVERWORLD_SOUNDS = {
   bump: 0x24,
   surf: 0x53,
   badge: 0x9c,
+  evolved: 0xa4,
   flash: 0xa9,
 } as const;
 
@@ -43,12 +34,13 @@ export class GameAudio {
   private buffers = new Map<string, AudioBuffer>();
   private timer?: number;
   private next = 0;
-  private current = "";
+  private current?: MusicScene;
+  private trackEnded = false;
   private engine?: Engine;
   enabled = true;
   failed = false;
   constructor(
-    private scene: () => string,
+    private scene: () => MusicScene,
     private changed: () => void = () => {},
   ) {
     document.addEventListener("visibilitychange", () => {
@@ -68,7 +60,7 @@ export class GameAudio {
     if (this.engine !== engine || !enabled) this.stopEffects();
     this.engine = engine;
     this.enabled = enabled;
-    this.current = "";
+    this.current = undefined;
     this.changed();
   }
   get playing() {
@@ -105,6 +97,9 @@ export class GameAudio {
     }
     this.changed();
   }
+  refreshMusic() {
+    this.pump();
+  }
   private stopScheduled() {
     if (this.timer !== undefined) window.clearTimeout(this.timer);
     this.timer = undefined;
@@ -132,16 +127,19 @@ export class GameAudio {
       const scene = this.scene();
       if (scene !== this.current) {
         this.stopScheduled();
-        this.engine.startMusic(...(MUSIC_TRACKS[scene] || MUSIC_TRACKS.town));
+        this.trackEnded = scene === "silent";
+        if (!this.trackEnded) this.engine.startMusicTrack(MUSIC_TRACKS[scene]);
         this.current = scene;
         this.next = ctx.currentTime + 0.025;
       }
       // Never attempt to catch up by scheduling audio in the past after a slow frame.
       this.next = Math.max(this.next, ctx.currentTime + 0.012);
-      while (this.next < ctx.currentTime + 0.55) {
+      while (!this.trackEnded && this.next < ctx.currentTime + 0.55) {
         const data = this.engine.nextMusicChunk(12000);
-        if (!data.length)
-          throw Error("The cartridge music stream ended unexpectedly");
+        if (!data.length) {
+          this.trackEnded = true;
+          break;
+        }
         const buffer = ctx.createBuffer(1, data.length, MUSIC_RATE);
         buffer.copyToChannel(new Float32Array(data), 0);
         const source = ctx.createBufferSource();
@@ -282,31 +280,5 @@ export class GameAudio {
     music.linearRampToValueAtTime(0, time);
     music.setValueAtTime(0, time + buffer.duration);
     music.linearRampToValueAtTime(MUSIC_VOLUME, time + buffer.duration + 0.12);
-  }
-  cue(kind: "notice" | "step" | "confirm") {
-    const ctx = this.context;
-    if (!this.enabled || !ctx || ctx.state !== "running") return;
-    const oscillator = ctx.createOscillator(),
-      gain = ctx.createGain();
-    oscillator.type = kind === "step" ? "triangle" : "square";
-    const time = ctx.currentTime,
-      duration = kind === "notice" ? 0.22 : 0.06;
-    oscillator.frequency.setValueAtTime(
-      kind === "notice"
-        ? 740
-        : kind === "step"
-            ? 140
-            : 880,
-      time,
-    );
-    oscillator.frequency.exponentialRampToValueAtTime(
-      kind === "notice" ? 1108 : 300,
-      time + duration,
-    );
-    gain.gain.setValueAtTime(kind === "step" ? 0.018 : 0.05, time);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
-    oscillator.connect(gain).connect(this.effectsGain!);
-    oscillator.start(time);
-    oscillator.stop(time + duration);
   }
 }

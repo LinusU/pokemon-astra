@@ -557,6 +557,16 @@ export class Engine {
       this.wasm.dealloc(p, this.rom.length);
     }
   }
+  musicAddress(id: number): [number, number] {
+    if (!Number.isInteger(id) || id < 0 || id >= 0x67)
+      throw Error("Unsupported music track");
+    // Crystal 1.1's Music table at 3a:506e.
+    const offset = 0x3a * 0x4000 + 0x106e + id * 3;
+    return [this.rom[offset], this.rom[offset + 1] | (this.rom[offset + 2] << 8)];
+  }
+  startMusicTrack(id: number): void {
+    this.startMusic(...this.musicAddress(id));
+  }
   nextMusicChunk(count = 48000): Float32Array {
     const p = this.wasm.music_next(count);
     const bytes = new Uint8Array(

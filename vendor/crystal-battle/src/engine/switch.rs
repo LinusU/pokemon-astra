@@ -723,6 +723,13 @@ impl Engine {
         if self.check_player_party_for_fit_mon() == 0 {
             return Ok(());
         }
+        if self.battle_mode() == WILD_BATTLE
+            && (self.is_any_mon_holding_exp_share().0 != 0
+                || self.mem.rw(W_PAY_DAY_MONEY) != 0
+                || self.mem.rb(W_BATTLE_PARTICIPANTS_NOT_FAINTED) != 0)
+        {
+            self.show(crate::battle::Event::Music(crate::battle::event::MusicCue::Victory));
+        }
         let r0 = self.mem.rb(W_BATTLE_RESULT) & BATTLERESULT_BITMASK;
         self.mem.wb(W_BATTLE_RESULT, r0);
         let base_len = W_ENEMY_MON_END - W_ENEMY_MON_BASE_STATS;

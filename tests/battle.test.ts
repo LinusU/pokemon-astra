@@ -103,6 +103,9 @@ describe.skipIf(!romAvailable)("real native battle events", () => {
       caught: true,
       wobbles: 3,
     });
+    const captureMusic = caught.findIndex((e) => e.Music === "Capture");
+    expect(captureMusic).toBeGreaterThan(caught.findIndex((e) => e.BallWobbles));
+    expect(caught[captureMusic + 1]).toHaveProperty("Message.Caught");
   });
   it("delivers separate native charge and strike events for Dig", async () => {
     const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});
@@ -127,6 +130,9 @@ describe.skipIf(!romAvailable)("real native battle events", () => {
     expect(animation).toBeGreaterThanOrEqual(0);
     expect(events[animation + 1]).toEqual({ Sound: 173 });
     expect(events[animation + 2]).toHaveProperty("HpBar.target", "Enemy");
+    const victory = events.findIndex((event) => event.Music === "Victory");
+    expect(victory).toBeGreaterThan(events.findIndex((event) => event.Faint === "Enemy"));
+    expect(events[victory + 1]).toHaveProperty("Message.GainedExp");
   });
 });
 
@@ -175,9 +181,16 @@ describe.skipIf(!romAvailable)("complete native battle decisions", () => {
     const span = engine.makePokemon(1, 7).exp - engine.makePokemon(1, 6).exp;
     expect(battle.snapshot().exp_progress[1]).toBe(Math.floor((span - 1) * 100 / span));
     const seen = new Set<string>();
+    let victoryCues = 0;
     for (let step = 0; step < 100; step++) {
       const snap = battle.snapshot();
       const events = snap.events as any[];
+      for (const [index, event] of events.entries()) {
+        if (event.Music === "Victory") {
+          victoryCues++;
+          expect(events[index + 1]).toHaveProperty("Message.EnemyWasDefeated");
+        }
+      }
       for (const [index, event] of events.entries())
         if (event.Message) {
           const value = event.Message;
@@ -216,6 +229,7 @@ describe.skipIf(!romAvailable)("complete native battle decisions", () => {
     expect(seen.has("EnemyMonFainted")).toBe(true);
     expect(seen.has("GrewToLevel")).toBe(true);
     expect(seen.has("AskForgetMove")).toBe(true);
+    expect(victoryCues).toBe(1);
   });
 
   it("awards reserve EXP only to an actual Exp. Share holder", async () => {

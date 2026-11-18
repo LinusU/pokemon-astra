@@ -1462,6 +1462,9 @@ impl Engine {
         self.mem.wb(W_LOW_HEALTH_ALARM, 0);
         self.mem.wb(W_BATTLE_LOW_HEALTH_ALARM, 1);
         self.mem.wb(W_BATTLE_ENDED, 1);
+        if self.link_mode() == 0 {
+            self.show(crate::battle::Event::Music(crate::battle::event::MusicCue::Victory));
+        }
         self.text(r::BATTLE_TEXT_ENEMY_WAS_DEFEATED);
         if self.link_mode() != 0 {
             return;

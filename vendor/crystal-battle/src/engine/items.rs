@@ -1038,6 +1038,7 @@ impl Engine {
             self.text(r::TEXT_GOTCHA_MON_WAS_CAUGHT);
             return Ok(self.poke_ball_return_from_capture());
         }
+        self.show(crate::battle::Event::Music(crate::battle::event::MusicCue::Capture));
         self.text(r::TEXT_GOTCHA_MON_WAS_CAUGHT);
         // CheckCaughtMon / SetSeenAndCaughtMon
         let index = species.wrapping_sub(1);

@@ -14,6 +14,12 @@ pub enum HpBarTarget {
     Party(u8),
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MusicCue {
+    Victory,
+    Capture,
+}
+
 /// Something the battle showed.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum Event {
@@ -32,6 +38,8 @@ pub enum Event {
     SendOut { side: Side, slot: u8, mon: super::state::BattleMon },
     /// A sound effect (`SFX_*`) the battle plays outside animations and text.
     Sound(u16),
+    /// The battle switched to result music. The caller selects the regional theme.
+    Music(MusicCue),
     /// The cry of a species (a mon fainting, a wild mon appearing, …).
     Cry(u8),
     /// The active mon on `side` faints: its picture slides down.

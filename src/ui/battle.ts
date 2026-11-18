@@ -23,6 +23,7 @@ type Options = {
   species: (id: number) => { name: string; types?: number[] };
   move: (id: number) => { name: string; type?: number; pp?: number; power?: number };
   cry: (id: number) => void;
+  music?: (cue: "Victory" | "Capture") => void;
   sound?: (id: number) => void;
   animationSound?: (id: number, param: number, species: number, enemy: boolean, duration: number, capture?: CaptureSoundState) => void;
   itemName: (id: number) => string;
@@ -583,6 +584,11 @@ export class BattlePresenter {
       if (this.shown.player.hp > 0) this.conceal("player", false);
       this.paint();
       this.menu();
+      return;
+    }
+    if (event.Music === "Victory" || event.Music === "Capture") {
+      this.o.music?.(event.Music);
+      this.next();
       return;
     }
     if (event.Message) {

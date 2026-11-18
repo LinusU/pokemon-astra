@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { GameAudio, HEAL_TRACK } from "../src/game/audio";
+import { MUSIC_TRACKS, battleTheme, trainerIntroMusic, victoryTheme, type MusicScene } from "../src/game/music";
 import type { Engine } from "../src/engine";
 let context: FakeContext;
 class FakeNode {
@@ -74,7 +75,7 @@ it("plays the cartridge heal tune and restores the map music at the end", async 
   const soundEffect = vi.fn(() => new Float32Array(2400));
   const audio = new GameAudio(() => "center");
   audio.attach({
-    startMusic() {},
+    startMusicTrack() {},
     nextMusicChunk: () => new Float32Array(12000),
     music, soundEffect,
   } as unknown as Engine);
@@ -105,7 +106,7 @@ afterEach(() => {
 });
 it("starts music after a gesture with sound enabled by default", async () => {
   const engine = {
-    startMusic: vi.fn(),
+    startMusicTrack: vi.fn(),
     nextMusicChunk: vi.fn(() => new Float32Array(12000)),
   };
   const audio = new GameAudio(() => "town");
@@ -114,17 +115,17 @@ it("starts music after a gesture with sound enabled by default", async () => {
   await audio.unlock();
   expect(context.resume).toHaveBeenCalled();
   expect(audio.playing).toBe(true);
-  expect(engine.startMusic).toHaveBeenCalledTimes(1);
+  expect(engine.startMusicTrack).toHaveBeenCalledTimes(1);
   expect(context.sources.length).toBe(3);
   context.currentTime = 0.5;
   await vi.advanceTimersByTimeAsync(120);
-  expect(engine.startMusic).toHaveBeenCalledTimes(1);
+  expect(engine.startMusicTrack).toHaveBeenCalledTimes(1);
   expect(context.sources.length).toBeGreaterThan(3);
 });
 it("stops queued town audio when a battle track begins", async () => {
-  let scene = "town";
+  let scene: MusicScene = "town";
   const engine = {
-    startMusic: vi.fn(),
+    startMusicTrack: vi.fn(),
     nextMusicChunk: () => new Float32Array(12000),
   };
   const audio = new GameAudio(() => scene);
@@ -133,15 +134,69 @@ it("stops queued town audio when a battle track begins", async () => {
   const old = [...context.sources];
   scene = "wild";
   await vi.advanceTimersByTimeAsync(120);
-  expect(engine.startMusic).toHaveBeenCalledTimes(2);
+  expect(engine.startMusicTrack).toHaveBeenCalledTimes(2);
   expect(old.every((source) => source.stop.mock.calls.length === 1)).toBe(true);
+});
+it("switches between the encounter, battle, victory, evolution and map tracks", async () => {
+  let scene: MusicScene = "route";
+  const engine = {
+    startMusicTrack: vi.fn(),
+    nextMusicChunk: () => new Float32Array(12000),
+  };
+  const audio = new GameAudio(() => scene);
+  audio.attach(engine as unknown as Engine);
+  await audio.unlock();
+  const tracks = ["rivalIntro", "rivalBattle", "trainerVictory", "evolution", "silent", "route"] as const;
+  for (const phase of tracks) {
+    const previous = context.sources.filter((source) => !source.stop.mock.calls.length);
+    scene = phase;
+    audio.refreshMusic();
+    expect(previous.every((source) => source.stop.mock.calls.length === 1)).toBe(true);
+  }
+  expect(engine.startMusicTrack.mock.calls.flat()).toEqual(
+    ["route", ...tracks].filter((phase) => phase !== "silent").map((phase) => MUSIC_TRACKS[phase as MusicScene]),
+  );
+});
+it("finishes a finite song and picks up the next scene without an audio error", async () => {
+  let scene: MusicScene = "capture";
+  const engine = {
+    startMusicTrack: vi.fn(),
+    nextMusicChunk: vi.fn(() => new Float32Array(12000))
+      .mockReturnValueOnce(new Float32Array(1000))
+      .mockReturnValueOnce(new Float32Array()),
+  };
+  const audio = new GameAudio(() => scene);
+  audio.attach(engine as unknown as Engine);
+  await audio.unlock();
+  expect(audio.playing).toBe(true);
+  expect(engine.nextMusicChunk).toHaveBeenCalledTimes(2);
+  await vi.advanceTimersByTimeAsync(120);
+  expect(engine.nextMusicChunk).toHaveBeenCalledTimes(2);
+  scene = "town";
+  await vi.advanceTimersByTimeAsync(120);
+  expect(engine.startMusicTrack).toHaveBeenLastCalledWith(MUSIC_TRACKS.town);
+  expect(audio.playing).toBe(true);
+});
+it("uses distinct scoring for trainer roles and night encounters", () => {
+  const trainer = {
+    id: "rematch_rival_1", kind: "trainer" as const, name: "Robin",
+    trainer: { id: "rival_1", name: "Robin", team: [] },
+  };
+  expect(trainerIntroMusic(trainer)).toBe("rivalIntro");
+  expect(battleTheme(trainer, true)).toBe("rivalBattle");
+  expect(victoryTheme(trainer)).toBe("trainerVictory");
+  const gym = { ...trainer, id: "leader_1", kind: "leader" as const, trainer: { ...trainer.trainer, id: "leader_1" } };
+  expect(battleTheme(gym, false)).toBe("gymBattle");
+  expect(victoryTheme(gym)).toBe("gymVictory");
+  expect(battleTheme(undefined, true)).toBe("wildNight");
+  expect(victoryTheme()).toBe("wildVictory");
 });
 it("schedules cartridge sounds on the animation clock and retriggers repeated sounds", async () => {
   const soundEffect = vi.fn(() => new Float32Array(24000));
   const cry = vi.fn(() => new Float32Array(24000));
   const audio = new GameAudio(() => "wild");
   audio.attach({
-    startMusic() {},
+    startMusicTrack() {},
     nextMusicChunk: () => new Float32Array(12000),
     soundEffect, cry,
     battleSound: () => ({
@@ -170,13 +225,13 @@ it("schedules cartridge sounds on the animation clock and retriggers repeated so
 });
 it("honors saved mute and resumes explicitly without creating more audio contexts", async () => {
   const engine = {
-    startMusic: vi.fn(),
+    startMusicTrack: vi.fn(),
     nextMusicChunk: () => new Float32Array(12000),
   };
   const audio = new GameAudio(() => "town");
   audio.attach(engine as unknown as Engine, false);
   await audio.unlock();
-  expect(engine.startMusic).not.toHaveBeenCalled();
+  expect(engine.startMusicTrack).not.toHaveBeenCalled();
   audio.setEnabled(true);
   await Promise.resolve();
   expect(audio.playing).toBe(true);

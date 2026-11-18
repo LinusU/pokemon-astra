@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
 import { Engine } from "../src/engine";
 import { HEAL_TRACK, OVERWORLD_SOUNDS } from "../src/game/audio";
+import { MUSIC_TRACKS } from "../src/game/music";
 const available =
   existsSync("pokecrystal11.gbc") && existsSync("public/astra_native.wasm");
 describe.skipIf(!available)("Crystal ROM native bridge", () => {
@@ -89,6 +90,16 @@ describe.skipIf(!available)("Crystal ROM native bridge", () => {
     const samples = engine.music(...HEAL_TRACK);
     expect(samples.some((sample) => Math.abs(sample) > 0.03)).toBe(true);
     expect(samples.length).toBeLessThan(48000 * 10);
+  });
+  it("streams every configured music track from Crystal's pointer table", async () => {
+    const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});
+    const engine = new Engine(instance.exports as never, readFileSync("pokecrystal11.gbc"));
+    for (const [scene, track] of Object.entries(MUSIC_TRACKS)) {
+      if (track === 0) continue;
+      engine.startMusicTrack(track);
+      const samples = engine.nextMusicChunk(96000);
+      expect(samples.some((sample) => Math.abs(sample) > 0.03), scene).toBe(true);
+    }
   });
   it("follows timed repeats, parameter branches, and actor cries", async () => {
     const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});

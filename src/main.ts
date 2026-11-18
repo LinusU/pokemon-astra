@@ -14,6 +14,7 @@ import { mountBag, itemInfo, type BagState } from "./ui/bag";
 import { MenuInput } from "./ui/menu-input";
 import { MEDICINE, isMedicine, useMedicine } from "./game/medicine";
 import { GameAudio } from "./game/audio";
+import { battleTheme, trainerIntroMusic, victoryTheme, type MusicScene } from "./game/music";
 import { BattlePresenter } from "./ui/battle";
 import { get, set, download } from "./game/storage";
 import {
@@ -53,6 +54,9 @@ let engine: Engine,
   bumpLatched = false,
   battle: any,
   battleObject: WorldObject | undefined,
+  approachingTrainer: WorldObject | undefined,
+  battleMusic: MusicScene | undefined,
+  interactionMusic: MusicScene | undefined,
   battleSpecies = 0,
   lastAutosave = 0,
   encounterTarget = 6;
@@ -136,14 +140,18 @@ document.querySelector("#sound-toggle")?.addEventListener("click", () => {
   if (sound.enabled && !sound.playing) void sound.unlock();
   else toggleMusic();
 });
-function scene() {
+function scene(): MusicScene {
+  if (mode === "title") return "title";
+  if (mode === "ceremony") return "hallOfFame";
+  if (mode === "evolution") return "evolution";
   if (mode === "battle" || mode === "encounter")
-    return battleObject?.trainer && battleObject.kind !== "legendary"
-      ? battleObject.name === "Champion Mira"
-        ? "champion"
-        : "trainer"
-      : "wild";
+    return battleMusic ?? battleTheme(battleObject, !!save.settings.night);
+  if ((mode === "dialogue" || mode === "menu") && interactionMusic) return interactionMusic;
+  if (mode === "world" && approachingTrainer && actors.approaching)
+    return trainerIntroMusic(approachingTrainer);
   const map = WORLD[save.map];
+  if (map?.tiles[Math.floor(save.y)]?.[Math.floor(save.x)] === "~" && save.abilities.includes("surf"))
+    return "surf";
   return map?.kind === "gym"
     ? "gym"
     : map?.id.endsWith("_center")
@@ -173,10 +181,13 @@ function restoreSession(data: Save) {
   encounterTarget = 6;
   lastAutosave = save.steps;
   exitLock = true;
+  approachingTrainer = undefined;
+  battleMusic = undefined;
+  interactionMusic = undefined;
   renderer.setNight(!!save.settings.night);
   sound.attach(engine, save.settings.music !== false);
 }
-function message(text: string, callback?: () => void, speaker?: string) {
+function message(text: string, callback?: () => void, speaker?: string, music?: MusicScene) {
   // Keep short thoughts together and prefer a sentence break between pages.
   const pages: string[] = [];
   let page = "";
@@ -197,10 +208,12 @@ function message(text: string, callback?: () => void, speaker?: string) {
   if (page) pages.push(page);
   function show() {
     mode = "dialogue";
+    interactionMusic = music;
     const next = pages.shift() || "";
     dialogueCallback = pages.length ? show : callback;
     layer.innerHTML = `<div class="dialogue" role="status">${speaker ? `<strong class="speaker">${escapeHtml(speaker)}</strong>` : ""}${escapeHtml(next)}<span class="advance">A ▸</span></div>`;
     layer.querySelector(".dialogue")?.addEventListener("click", advance);
+    sound.refreshMusic();
   }
   show();
 }
@@ -208,9 +221,11 @@ function advance() {
   if (mode !== "dialogue") return;
   layer.innerHTML = "";
   mode = "world";
+  interactionMusic = undefined;
   const cb = dialogueCallback;
   dialogueCallback = undefined;
   cb?.();
+  sound.refreshMusic();
 }
 function welcome(error = "") {
   mode = "welcome";
@@ -616,6 +631,8 @@ function interact() {
     }
     if (o.id === "league_0") {
       mode = "menu";
+      interactionMusic = trainerIntroMusic(o);
+      sound.refreshMusic();
       const p = panel(
         layer,
         "Enter the Astral League?",
@@ -633,6 +650,7 @@ function interact() {
       () =>
         startBattle(o.trainer!.team[0].species, o.trainer!.team[0].level, o),
       o.name,
+      trainerIntroMusic(o),
     );
     return;
   }
@@ -660,9 +678,9 @@ function finishErrand(o: WorldObject, reward?: Reward) {
   persist();
   message(o.dialogue, receipt ? () => showReceipt(receipt) : undefined, o.name);
 }
-function showReceipt(receipt: string, next?: () => void) {
+function showReceipt(receipt: string, next?: () => void, music?: MusicScene) {
   sound.overworld("item");
-  message(receipt, next, "Received");
+  message(receipt, next, "Received", music);
 }
 function offerRematch(o: WorldObject, practice: boolean) {
   const trainer = o.trainer!;
@@ -685,6 +703,8 @@ function offerRematch(o: WorldObject, practice: boolean) {
         ),
       }));
   mode = "menu";
+  interactionMusic = trainerIntroMusic(o);
+  sound.refreshMusic();
   const p = panel(
     layer,
     practice ? o.name : `${o.name}’s rematch`,
@@ -803,8 +823,10 @@ function shop(selected?: string) {
 }
 function close() {
   mode = "world";
+  interactionMusic = undefined;
   layer.innerHTML = "";
   persist();
+  sound.refreshMusic();
 }
 function duringLeagueChallenge() {
   return (
@@ -1387,23 +1409,18 @@ function useItem(item: string) {
           return;
         }
         if (!evo) return;
-        save.party[index] = engine.evolvePokemon(mon, evo.species);
-        if (evo.method === 3 && evo.parameter !== 255)
-          save.party[index].item = 0;
-        save.items[item]--;
-        if (!save.seen.includes(evo.species)) save.seen.push(evo.species);
-        if (!save.caught.includes(evo.species)) save.caught.push(evo.species);
-        persist();
-        message(
-          `${engine.species(mon.species).name} evolved into ${engine.species(evo.species).name}!`,
-          () => view("bag"),
-        );
+        evolvePartyMember(index, evo.species, () => view("bag"), () => {
+          if (evo.method === 3 && evo.parameter !== 255) save.party[index].item = 0;
+          save.items[item]--;
+        });
       }),
   );
 }
 function startBattle(species: number, level: number, o?: WorldObject) {
   try {
     battleObject = o;
+    battleMusic = undefined;
+    interactionMusic = undefined;
     battleSpecies = species;
     if (!save.seen.includes(species)) save.seen.push(species);
     const opponent =
@@ -1430,6 +1447,7 @@ function startBattle(species: number, level: number, o?: WorldObject) {
       caught: save.caught,
     });
     mode = "encounter";
+    sound.refreshMusic();
     layer.innerHTML =
       '<div class="encounter-transition" aria-hidden="true"></div>';
     window.setTimeout(showBattle, 620);
@@ -1512,8 +1530,8 @@ function showBattle() {
     };
     if (won) {
       if (earnedBadge) sound.overworld("badge");
-      const afterVictory = receipt ? () => showReceipt(receipt, wrapUp) : wrapUp;
-      if (victory) message(victory, afterVictory, battleObject?.name);
+      const afterVictory = receipt ? () => showReceipt(receipt, wrapUp, battleMusic) : wrapUp;
+      if (victory) message(victory, afterVictory, battleObject?.name, battleMusic);
       else afterVictory();
       return;
     }
@@ -1528,7 +1546,9 @@ function showBattle() {
             : s.outcome.toLowerCase().includes("enemy")
               ? "The wild Pokémon fled."
               : "Got away safely!",
-      receipt ? () => showReceipt(receipt, wrapUp) : wrapUp,
+      receipt ? () => showReceipt(receipt, wrapUp, battleMusic) : wrapUp,
+      undefined,
+      battleMusic,
     );
     return;
   }
@@ -1551,6 +1571,10 @@ function showBattle() {
     species: (id) => engine.species(id),
     move: (id) => engine.move(id),
     cry,
+    music: (cue) => {
+      battleMusic = cue === "Capture" ? "capture" : victoryTheme(battleObject);
+      sound.refreshMusic();
+    },
     sound: (id) => sound.soundEffect(id),
     animationSound: (...args) => sound.battleAnimation(...args),
     itemName: (id) =>
@@ -1577,6 +1601,7 @@ function showBattle() {
 }
 function hallOfFame(done: () => void) {
   mode = "ceremony";
+  sound.refreshMusic();
   const p = panel(
     layer,
     "Hall of Fame",
@@ -1584,6 +1609,34 @@ function hallOfFame(done: () => void) {
     "champion-record",
   );
   p.querySelector("#continue")!.addEventListener("click", done);
+}
+function evolvePartyMember(index: number, species: number, next: () => void, consume?: () => void) {
+  const current = save.party[index];
+  const evolved = engine.evolvePokemon(current, species);
+  const name = current.nickname || engine.species(current.species).name;
+  mode = "evolution";
+  const p = panel(
+    layer,
+    "Evolution",
+    `<div class="party-summary" role="status"><img class="party-portrait" src="${sprite(current.species)}" alt=""><span>${escapeHtml(name)} is evolving…</span></div>`,
+  );
+  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+    p.querySelector("img")?.animate(
+      [{ opacity: 1 }, { opacity: 0.55, transform: "scale(0.9)" }, { opacity: 1 }],
+      { duration: 900, iterations: Infinity },
+    );
+  sound.refreshMusic();
+  if (current.hp > 0 && (current.status & 0x27) === 0) cry(current.species);
+
+  window.setTimeout(() => {
+    save.party[index] = evolved;
+    consume?.();
+    if (!save.seen.includes(species)) save.seen.push(species);
+    if (!save.caught.includes(species)) save.caught.push(species);
+    persist();
+    message(`${name} evolved into ${engine.species(species).name}!`, next, undefined, "silent");
+    sound.overworld("evolved");
+  }, 3600);
 }
 function postBattle(evolvable: number[]) {
   const tasks: (() => void)[] = [];
@@ -1613,18 +1666,9 @@ function postBattle(evolvable: number[]) {
             `<p>${escapeHtml(engine.species(current.species).name)} is ready to evolve into ${escapeHtml(engine.species(evolution.species).name)}!</p><div class="buttons"><button id="evolve">Evolve</button><button class="secondary" id="later">Not now</button></div>`,
           );
           mode = "menu";
-          p.querySelector("#evolve")!.addEventListener("click", () => {
-            save.party[index] = engine.evolvePokemon(
-              current,
-              evolution.species,
-            );
-            if (!save.seen.includes(evolution.species))
-              save.seen.push(evolution.species);
-            if (!save.caught.includes(evolution.species))
-              save.caught.push(evolution.species);
-            persist();
-            next();
-          });
+          p.querySelector("#evolve")!.addEventListener("click", () =>
+            evolvePartyMember(index, evolution.species, next),
+          );
           p.querySelector("#later")!.addEventListener("click", next);
         });
     }
@@ -1656,6 +1700,7 @@ function challengeTrainer(o: WorldObject) {
     o.dialogue,
     () => startBattle(o.trainer!.team[0].species, o.trainer!.team[0].level, o),
     o.name,
+    trainerIntroMusic(o),
   );
 }
 function update(dt: number) {
@@ -1668,6 +1713,10 @@ function update(dt: number) {
   if (actors.approaching) {
     const challenger = actors.approach(currentMap, dt, save);
     if (challenger) challengeTrainer(challenger);
+    if (!actors.approaching) {
+      approachingTrainer = undefined;
+      sound.refreshMusic();
+    }
     return;
   }
   if (save.party.some((mon) => mon.hp > 0)) {
@@ -1680,7 +1729,8 @@ function update(dt: number) {
         has(o.requires),
     );
     if (noticed) {
-      sound.cue("notice");
+      approachingTrainer = noticed;
+      sound.refreshMusic();
       return;
     }
   }
