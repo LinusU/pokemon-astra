@@ -314,10 +314,10 @@ export function battleMessage(
       return "a move";
     }
   };
+  // Native battle messages use one-based stat name IDs, starting with Attack.
   const statName = (stat: number) =>
     [
       "stat",
-      "HP",
       "Attack",
       "Defense",
       "Speed",
@@ -325,6 +325,7 @@ export function battleMessage(
       "Special Defense",
       "accuracy",
       "evasion",
+      "Ability",
     ][stat] || "stat";
   const templates: Record<string, () => string> = {
     IgnoredOrdersSleeping: () => `${n} ignored orders and fell asleep!`,

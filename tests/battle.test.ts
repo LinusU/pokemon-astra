@@ -96,6 +96,24 @@ describe.skipIf(!romAvailable)("real native battle events", () => {
     expect.fail("The trainer never sent out their second Pokémon");
   });
 
+  it("reports Defense when wild Jigglypuff uses Defense Curl", async () => {
+    const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});
+    const engine = new Engine(instance.exports as never, readFileSync("pokecrystal11.gbc"));
+    const battle = engine.startBattle({
+      party: [engine.makePokemon(129, 6)],
+      opponent: { species: 39, level: 5 },
+      seed: 1,
+    });
+    const move = battle.snapshot().legal.findIndex((action: any) => action.Move?.slot === 0);
+    const events = battle.act(move).events as any[];
+    expect(events.find((event) => event.Message?.UsedMove?.user.side === "Enemy"))
+      .toHaveProperty("Message.UsedMove.mv", 111);
+    const message = events.find((event) => event.Message?.StatRose)?.Message;
+    expect(battleMessage(message, (id) => engine.move(id), () => "Potion")).toBe(
+      "JIGGLYPUFF's Defense rose!",
+    );
+  });
+
   it("supplies ordered move, status, HP, and capture events", async () => {
     const { instance } = await WebAssembly.instantiate(
       readFileSync("public/astra_native.wasm"),
@@ -373,8 +391,8 @@ it("uses only subsequent HP events for a replacement Pokémon", () => {
 it("names the specific stat and sharp change from native events", () => {
   const move = () => ({ name: "Tackle" });
   const item = () => "Potion";
-  expect(battleMessage({ StatFell: { target: { name: "Pidgey" }, stat: 4, sharply: true } }, move, item)).toBe("Pidgey's Speed fell sharply!");
-  expect(battleMessage({ StatRose: { user: { name: "Pidgey" }, stat: 2, sharply: false } }, move, item)).toBe("Pidgey's Attack rose!");
+  expect(battleMessage({ StatFell: { target: { name: "Pidgey" }, stat: 3, sharply: true } }, move, item)).toBe("Pidgey's Speed fell sharply!");
+  expect(battleMessage({ StatRose: { user: { name: "Pidgey" }, stat: 1, sharply: false } }, move, item)).toBe("Pidgey's Attack rose!");
 });
 
 it("includes the authored trainer reward in the native prize message", () => {
