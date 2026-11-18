@@ -20,9 +20,9 @@ const shoreAces = [29, 36, 42];
 type Survey = Pick<Save, "badges" | "abilities">;
 
 function shoreOf(id: string) {
-  if (/route0[89]|^hourglass_|^leader_4$/.test(id)) return 4;
-  if (/route1[23]|^ember_|^rival_3$|^leader_5$/.test(id)) return 5;
-  if (/route1[45]|^frostvault_|^leader_6$/.test(id)) return 6;
+  if (/route0[89]|^hourglass_|^leader_4$|^gym4_/.test(id)) return 4;
+  if (/route1[23]|^ember_|^rival_3$|^leader_5$|^gym5_/.test(id)) return 5;
+  if (/route1[45]|^frostvault_|^leader_6$|^gym6_/.test(id)) return 6;
 }
 
 /** Keep a completed survey at the tier in which its keeper was challenged. */

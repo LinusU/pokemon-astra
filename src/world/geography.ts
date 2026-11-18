@@ -1,5 +1,6 @@
 import type { Exit, WorldMap } from "./index";
 
+import { gyms } from "./gyms";
 import { routes, settlements, surveyTrail, type Point } from "./atlas";
 type Patch = [
   x: number,
@@ -16,7 +17,7 @@ export const dimensions = (id: string, kind: WorldMap["kind"]): Point => {
     return [site.width, site.height];
   }
   if (kind === "dungeon") return [20, 16];
-  if (kind === "gym") return [22, 18];
+  if (kind === "gym") return [gyms[id].plan[0].length, gyms[id].plan.length];
   if (id.startsWith("league")) return [24, 16];
   if (id === "lab") return [13, 10];
   if (id.endsWith("_center")) return [12, 9];
@@ -1440,78 +1441,30 @@ function dungeonLayout(world: Region, id: string, spec: DungeonPlan) {
   }
 }
 
-const gymTerrain: Patch[][] = [
-  [
-    [3, 3, 5, 5, "#"],
-    [14, 3, 5, 5, "#"],
-    [3, 11, 5, 3, "P"],
-    [14, 11, 5, 3, "P"],
-  ],
-  [
-    [1, 4, 7, 9, "~"],
-    [14, 4, 7, 9, "~"],
-    [3, 8, 6, 2, "="],
-    [13, 8, 6, 2, "="],
-  ],
-  [
-    [3, 3, 5, 2, "C"],
-    [14, 3, 5, 2, "C"],
-    [3, 8, 4, 2, "C"],
-    [15, 8, 4, 2, "C"],
-    [9, 13, 4, 1, "C"],
-  ],
-  [
-    [3, 3, 6, 3, "#"],
-    [13, 3, 6, 3, "#"],
-    [5, 9, 4, 2, "#"],
-    [12, 9, 4, 2, "#"],
-  ],
-  [
-    [2, 4, 4, 9, "C"],
-    [16, 4, 4, 9, "C"],
-    [9, 7, 4, 4, "#"],
-  ],
-  [
-    [2, 4, 8, 3, "~"],
-    [12, 9, 8, 3, "~"],
-    [5, 7, 3, 2, "="],
-    [15, 7, 3, 2, "="],
-  ],
-  [
-    [2, 3, 6, 3, "T"],
-    [14, 3, 6, 3, "T"],
-    [3, 11, 5, 2, "P"],
-    [14, 11, 5, 2, "P"],
-  ],
-  [
-    [4, 2, 3, 3, "S"],
-    [15, 2, 3, 3, "S"],
-    [4, 10, 3, 3, "S"],
-    [15, 10, 3, 3, "S"],
-    [9, 7, 4, 3, "C"],
-  ],
-];
-
 function gymLayout(world: Region, map: WorldMap) {
-  const n = Number(map.id.slice(3));
-  const plan = floorPlan(map, ".");
-  gymTerrain[n - 1].forEach(plan.patch);
-  const [door] = map.exits;
-  relocateExit(world, map, door, [11, map.height - 1]);
-  placeObjects(
-    map,
-    plan,
-    {
-      [`leader_${n}`]: [11, 3],
-      [`gym${n}_clue`]: [11, 14],
-      [`gym${n}_puzzle1`]: n % 2 ? [16, 7] : [7, 9],
-      [`gym${n}_puzzle2`]: n % 2 ? [6, 7] : [16, 7],
-      [`gym${n}_puzzle3`]: [11, 11],
-      [`gym${n}_puzzle4`]: [11, 5],
-    },
-    [11, 6],
-  );
-  finish(map, plan);
+  const gym = gyms[map.id];
+  const anchors = new Map<string, Point>();
+  map.tiles = gym.plan.map((row, y) => {
+    if (row.length !== map.width) throw Error(`Uneven row ${y} in ${map.id}`);
+    return Array.from(row, (tile, x) => {
+      if (tile === "@") {
+        relocateExit(world, map, map.exits[0], [x, y]);
+        return ".";
+      }
+      const id = tile === "L" ? "leader_" + map.id.slice(3) :
+        /^[1-9]$/.test(tile) ? map.id + "_" + tile : gym.landmarks?.[tile]?.id;
+      if (id) {
+        anchors.set(id, [x, y]);
+        return ".";
+      }
+      return gym.passages?.[tile]?.floor ?? tile;
+    }).join("");
+  });
+  for (const object of map.objects) {
+    const point = anchors.get(object.id);
+    if (!point) throw Error(`Missing ${object.id} in ${map.id}`);
+    [object.x, object.y] = point;
+  }
 }
 
 const leagueTerrain: Record<string, Patch[]> = {

@@ -1,3 +1,4 @@
+import { gymState } from "../world/gyms";
 import { ABILITIES, WORLD, type Ability, type Requirement } from "../world";
 import { barrierAt, exitOpen } from "./navigation";
 import type { Pokemon } from "../engine";
@@ -189,7 +190,7 @@ export function meetsRequirement(
 
 /** Move a valid save out of an obstructed position, e.g. after a map update. */
 export function normalizeSavePosition(save: Save): Save {
-  const map = WORLD[save.map];
+  const map = gymState(WORLD[save.map], save.flags);
   const safe = (x: number, y: number) =>
     !map.objects.some(
       (o) =>

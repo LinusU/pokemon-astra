@@ -1,3 +1,5 @@
+import { iceLanding, advanceGlide } from "./game/skating";
+import { gymState } from "./world/gyms";
 import { awardBadge, badgeMask, fieldHabitats, fieldTeam } from "./game/badges";
 import { fishingPool } from "./game/pokedex";
 import { Input } from "./game/input";
@@ -51,6 +53,7 @@ const input = new Input(),
   renderer = new Renderer(canvas),
   menuInput = new MenuInput(),
   actors = new WorldActors();
+let glide: { x: number; y: number } | undefined;
 let battlePresenter: BattlePresenter | undefined;
 let engine: Engine,
   save = freshSave(),
@@ -148,6 +151,9 @@ document.querySelector("#sound-toggle")?.addEventListener("click", () => {
   if (sound.enabled && !sound.playing) void sound.unlock();
   else toggleMusic();
 });
+function currentField() {
+  return gymState(WORLD[save.map], save.flags);
+}
 function scene(): MusicScene {
   if (mode === "title") return "title";
   if (mode === "ceremony") return "hallOfFame";
@@ -158,7 +164,7 @@ function scene(): MusicScene {
   if ((mode === "dialogue" || mode === "menu") && interactionMusic) return interactionMusic;
   if (mode === "world" && approachingTrainer && actors.approaching)
     return trainerIntroMusic(approachingTrainer);
-  const map = WORLD[save.map];
+  const map = currentField();
   if (map?.tiles[Math.floor(save.y)]?.[Math.floor(save.x)] === "~" && save.abilities.includes("surf"))
     return "surf";
   return map?.kind === "gym"
@@ -190,6 +196,7 @@ function restoreSession(data: Save) {
   fieldCursors = {};
   journeySelection = "party";
   actors.reset();
+  glide = undefined;
   encounterDistance = 0;
   encounterTarget = 6;
   lastAutosave = save.steps;
@@ -282,6 +289,7 @@ async function start(bytes: Uint8Array) {
   engine = await initEngine(bytes);
   renderer.setEngine(engine);
   actors.reset();
+  glide = undefined;
   const existing = await get<Save>("save");
   if (isValidSave(existing)) {
     restoreSession(existing);
@@ -526,7 +534,7 @@ function inspectBarrier(exit: Exit) {
   });
 }
 function interact() {
-  const map = WORLD[save.map],
+  const map = currentField(),
     dx = save.facing === "left" ? -1 : save.facing === "right" ? 1 : 0,
     dy = save.facing === "up" ? -1 : save.facing === "down" ? 1 : 0;
   actors.enter(map);
@@ -1017,7 +1025,7 @@ function view(v: string, pageIndex = 0) {
       <div class="atlas-readout"><button data-turn="-1" aria-label="Previous place">◀</button><div aria-live="polite"><strong data-place></strong><small data-links></small></div><button data-turn="1" aria-label="Next place">▶</button></div>
       <button class="atlas-fly" data-travel="" hidden>Fly here</button>`;
   } else if (v === "local-map") {
-    const map = WORLD[save.map],
+    const map = currentField(),
       goal = directions(save, has);
     title = map.name;
     body = `<div class="map-layout"><canvas class="field-map" aria-label="Local terrain map with your position and next destination"></canvas><div><div class="map-key small">● You &nbsp; <b>■</b> Objective &nbsp; ▪ Exit</div><div class="objective"><strong>${escapeHtml(goal.title)}</strong><br>${escapeHtml(goal.hint)}</div>${goal.fly ? `<button data-travel="${goal.fly}">Fly to ${escapeHtml(WORLD[goal.fly].name)}</button>` : ""}</div></div><h3>Ways out</h3><div class="journal-entries">${map.exits.map((e) => `<article><strong>${escapeHtml(WORLD[e.to].name)}</strong> · ${bearings(save.x, save.y, e)}${has(e.requires) ? "" : `<p class="small muted">${escapeHtml(e.lockedDialogue || "Currently closed.")}</p>`}</article>`).join("")}</div>${
@@ -1072,7 +1080,7 @@ function view(v: string, pageIndex = 0) {
   if (chart)
     drawFieldMap(
       chart,
-      WORLD[save.map],
+      currentField(),
       save.x,
       save.y,
       directions(save, has).marker,
@@ -1676,7 +1684,7 @@ function postBattle(evolvable: number[]) {
   next();
 }
 function blocked(x: number, y: number) {
-  const map = WORLD[save.map];
+  const map = currentField();
   return (
     connectedBlocked(map, x, y, save.abilities.includes("surf"), isExitOpen) ||
     actors.solid(map, x, y)
@@ -1703,8 +1711,12 @@ function update(dt: number) {
     bumpLatched = false;
     return;
   }
-  const currentMap = WORLD[save.map];
+  const currentMap = currentField();
   actors.update(currentMap, dt, save);
+  if (glide) {
+    if (advanceGlide(save, glide, dt)) glide = undefined;
+    return;
+  }
   if (actors.approaching) {
     const challenger = actors.approach(currentMap, dt, save);
     if (challenger) challengeTrainer(challenger);
@@ -1748,7 +1760,7 @@ function update(dt: number) {
   const len = Math.hypot(dx, dy);
   dx /= len;
   dy /= len;
-  save.facing =
+  const heading =
     Math.abs(dx) > Math.abs(dy)
       ? dx > 0
         ? "right"
@@ -1756,6 +1768,11 @@ function update(dt: number) {
       : dy > 0
         ? "down"
         : "up";
+  save.facing = heading;
+  if (currentMap.tiles[Math.floor(save.y)]?.[Math.floor(save.x)] === "i") {
+    glide = iceLanding(currentMap, save, heading, blocked);
+    return;
+  }
   const dist = dt * (input.held("speed") ? 7.2 : 5.2);
   const oldX = save.x,
     oldY = save.y;
@@ -1766,6 +1783,13 @@ function update(dt: number) {
       ny = save.y + (dy * dist) / steps;
     if (!blocked(nx, save.y)) save.x = nx;
     if (!blocked(save.x, ny)) save.y = ny;
+    if (currentMap.tiles[Math.floor(save.y)]?.[Math.floor(save.x)] === "i") {
+      const entered = Math.floor(save.x) !== Math.floor(oldX)
+        ? dx > 0 ? "right" : "left" : dy > 0 ? "down" : "up";
+      save.facing = entered;
+      glide = iceLanding(currentMap, save, entered, blocked);
+      break;
+    }
   }
   const moved = Math.hypot(save.x - oldX, save.y - oldY);
   if (moved === 0) {
@@ -1776,7 +1800,7 @@ function update(dt: number) {
     return;
   }
   bumpLatched = false;
-  const map = WORLD[save.map];
+  const map = currentField();
   const exit = exitAt(map, save.x, save.y);
   if (!exit) exitLock = false;
   else if (isExitOpen(exit) && (!exitLock || exit.direction)) {
@@ -1795,7 +1819,7 @@ function update(dt: number) {
         )
       )
         save.facing = "up";
-      actors.enter(WORLD[save.map]);
+      actors.enter(currentField());
       if (!exit.direction) save = normalizeSavePosition(save);
       if (!save.visited.includes(save.map) && WORLD[save.map].kind === "town")
         save.visited.push(save.map);
@@ -1870,10 +1894,10 @@ function frame(now: number) {
   screen.dataset.scene = ["welcome", "title", "intro", "loading"].includes(mode)
     ? "title"
     : mode;
-  actors.enter(WORLD[save.map]);
+  actors.enter(currentField());
   if (WORLD[save.map])
     renderer.render(
-      WORLD[save.map],
+      currentField(),
       save.x,
       save.y,
       save.facing,

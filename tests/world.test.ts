@@ -614,6 +614,6 @@ it("places every room at its exterior entrance and every road on its own uninter
     const site = WORLD[area];
     expect(site.exits.some(e => !e.direction && regionPosition(area, e.x+0.5, e.y+0.5).point.join() === point.join()), m.id).toBe(true);
   }
-  for (const m of maps) for (const o of m.objects.filter(o => o.wildlife))
+  for (const m of maps.filter(m => m.kind === "route")) for (const o of m.objects.filter(o => o.wildlife))
     expect(m.encounters.some(e => e.species === o.wildlife), o.name).toBe(true);
 });

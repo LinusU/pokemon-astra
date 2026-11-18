@@ -1243,7 +1243,7 @@ export class Renderer {
     const bottom = Math.min(map.height, (this.cameraY - oy + HEIGHT) / 16);
     for (let y = top; y < bottom; y += size)
       for (let x = left; x < right; x += size) {
-        const key = map.id + ":" + x + "," + y;
+        const key = map.id + (map.terrainVariant ?? "") + ":" + x + "," + y;
         let image = this.terrains.get(key);
         if (!image) {
           image = this.rebuild(map, x, y, Math.min(size, map.width - x), Math.min(size, map.height - y));
@@ -1254,6 +1254,7 @@ export class Renderer {
       }
   }
   private person(o: WorldObject): string {
+    if (o.sprite) return o.sprite;
     if (o.kind === "starter") return "professor";
     if (o.kind === "healer") return "nurse";
     if (o.kind === "shop") return "clerk";

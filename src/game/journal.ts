@@ -22,15 +22,8 @@ function dungeon(id: string, title: string): Chapter {
     ),
   };
 }
-function gym(n: number, title: string): Chapter {
-  const id = "gym" + n;
-  return {
-    title,
-    steps: [
-      ...WORLD[id].objects.filter((o) => o.kind === "switch").map((o) => o.id),
-      "leader_" + n,
-    ],
-  };
+function gym(n: number, title: string, ...steps: string[]): Chapter {
+  return { title, steps: [...steps, "leader_" + n] };
 }
 const chapters: Chapter[] = [
   { title: "Choose a partner at Alder’s lab", steps: ["alder"] },
@@ -39,7 +32,7 @@ const chapters: Chapter[] = [
   dungeon("undertow", "Restore the harbor’s fog signal"),
   gym(2, "Challenge Marina in Tideglass"),
   dungeon("copperworks", "Trace the missing current at Copperworks"),
-  gym(3, "Challenge Volt in Copperwick"),
+  gym(3, "Take either operator’s catwalk to Volt"),
   dungeon("hourglass", "Recover the Hourglass lens"),
   gym(4, "Challenge Sable in Sunspire"),
   dungeon("bamboo", "Collect the Reedhaven ranger’s report"),
@@ -48,10 +41,10 @@ const chapters: Chapter[] = [
   dungeon("frostvault", "Reopen the mountain pass"),
   gym(6, "Challenge Neve in Rimepeak"),
   dungeon("echo", "Listen to the memory in Echo Bell Tower"),
-  gym(7, "Challenge Lyra in Bellweather"),
+  gym(7, "Stand with Robin at the witness rail", "gym7_witness"),
   dungeon("meridian", "Confront Director Vale at Meridian HQ"),
   dungeon("starfall", "Recover the final beacon lens"),
-  gym(8, "Bring the lens to Orion in Aster"),
+  gym(8, "Bring the lens to Orion in Aster", "gym8_2"),
   {
     title: "Return to Starfall and stop the Engine",
     steps: ["celestial_engine"],
@@ -73,7 +66,7 @@ export function campaignObjective(save: Pick<Save, "flags" | "survey">) {
   const ids = shore === 4 ? ["hourglass", "gym4"] :
     shore === 5 ? ["bamboo", "ember", "gym5"] : ["bamboo", "frostvault", "gym6"];
   const selected = shore && save.flags.includes("badge3") && !save.flags.includes("badge" + shore)
-    ? ids.map(id => chapters.find(chapter => chapter.steps[0].startsWith(id + "_"))!)
+    ? ids.map(id => chapters.find(chapter => landmarks.get(chapter.steps[0])!.map.id.startsWith(id))!)
     : [];
   for (const chapter of [...selected, ...chapters]) {
     // A completed chapter stays complete when maps gain new mechanisms.

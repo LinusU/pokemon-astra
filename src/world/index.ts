@@ -1,5 +1,6 @@
 import { composeGeography, dimensions } from "./geography";
 import { localTrail, opposite, routes, settlements } from "./atlas";
+import { gyms } from "./gyms";
 import { populateHabitats } from "./habitats";
 
 /** Pokémon Astra's authored campaign. Species numbers use the National Pokédex. */
@@ -71,6 +72,7 @@ export interface WorldObject {
   repeatable?: boolean;
   quest?: string;
   facing?: "up" | "down" | "left" | "right";
+  sprite?: string;
   roam?: number;
   sightRange?: number;
   /** A wild resident that can be observed for the Pokédex. */
@@ -112,6 +114,7 @@ export interface WorldMap {
   height: number;
   tiles: string[];
   palette: string;
+  terrainVariant?: string;
   exits: Exit[];
   objects: WorldObject[];
   encounters: Encounter[];
@@ -461,7 +464,8 @@ const leaders: [string, string, string, TeamMember[]][] = [
   ],
 ];
 leaders.forEach(([name, type, town], i) => {
-  map(`gym${i + 1}`, `${name}'s ${type} Gym`, "gym", WORLD[town].palette);
+  const id = `gym${i + 1}`;
+  map(id, `${gyms[id].name} · ${type} Gym`, "gym", WORLD[town].palette);
   connect(town, `gym${i + 1}`, `${name}'s Gym`, town);
 });
 const serviceVisitors: Record<string, [[string, string], [string, string]]> = {
@@ -695,7 +699,7 @@ obj("dewdrop", {
 // Main road gates ensure each community's story is completed before leaving.
 const gates: Record<string, Requirement> = {
   "01": { flags: ["partner"] },
-  "04": { badges: 1, ability: "cut" },
+  "04": { badges: 1, ability: "cut", flags: ["surveyor"] },
   "06": { badges: 2, ability: "surf" },
   "08": { badges: 3, ability: "flash" },
   "12": { flags: ["ranger_report"] },
@@ -710,7 +714,7 @@ const gates: Record<string, Requirement> = {
 };
 const roadAdvice: Record<string, string> = {
   "01": "Visit Professor Alder at the north end of Dewdrop and choose your partner first.",
-  "04": "A young tree blocks the trail. Rescue the surveyor in Lantern Wood, then earn Cut from Fern.",
+  "04": "The east trail needs Cut from Fern and the safe route marked by the surveyor in Lantern Wood.",
   "06": "The quay ends here. Restore the signal in Undertow Cave, then earn Surf from Marina.",
   "08": "The passage is too dark to follow. Restore power at Copperworks, then earn Flash from Volt.",
   "12": "The ranger crew has closed the trail. Find their report across the bridge in Bamboo Sanctuary.",
@@ -786,59 +790,24 @@ for (const [id, name, , mechanism, intermediate, final] of dungeonData) {
     { flags: [final] },
   );
 }
-const objectives = [
-  "surveyor",
-  "fog_signal",
-  "power_restored",
-  "lens_restored",
-  "pokemon_freed",
-  "pass_open",
-  "revelation",
-  "last_lens",
-];
-const keeperAdvice = [
-  "Bring the surveyor home from Lantern Wood and follow the seed, sprout and canopy trail in the gym.",
-  "Get the lighthouse signal working in Undertow Cave, then set the gym sluices from high tide to low.",
-  "Restore the town’s power in Copperworks and reconnect the relays in this room.",
-  "Find the lens in Hourglass Ruins and set the gym’s weights from lightest to heaviest.",
-  "Free the Pokémon in Ember Mine, then clear the gym furnace vents in order.",
-  "Open the Frostvault pass and thaw this room’s channels from spring to pool.",
-  "Listen to the memory in Echo Bell Tower, then ring the gym bells from low to high.",
-  "Recover the observatory lens and align these four stars in the order marked on the chart.",
-];
-const puzzles = [
-  "leaf marker",
-  "sluice",
-  "relay",
-  "pressure plate",
-  "furnace vent",
-  "thaw channel",
-  "memory bell",
-  "constellation",
-];
-leaders.forEach(([name, type, , team], i) => {
+leaders.forEach(([name, , , team], i) => {
   const id = `gym${i + 1}`;
-  let previous: string | undefined;
-  for (let n = 1; n <= (i === 7 ? 4 : 3); n++) {
-    const flag = `gym${i + 1}_puzzle${n}`;
+  const gym = gyms[id];
+  for (const [slot, crew] of gym.crew.entries()) {
+    const trainerId = `${id}_${slot + 1}`;
     obj(id, {
-      id: flag,
-      kind: "switch",
-      name: `${puzzles[i]} ${n}`,
-      dialogue: `The ${puzzles[i]} clicks into place.`,
-      requires: previous ? { flags: [previous] } : undefined,
-      lockedDialogue: "Follow the markers in order.",
-      setsFlag: flag,
+      id: trainerId, kind: "trainer", name: crew.name, sprite: crew.sprite,
+      facing: crew.facing, sightRange: crew.range,
+      dialogue: crew.intro, victoryDialogue: crew.after, setsFlag: trainerId + "_won",
+      trainer: { id: trainerId, name: crew.name, reward: 120 * (i + 1),
+        team: crew.team.map(([species, level]) => ({ species, level })) },
     });
-    previous = flag;
   }
+  for (const landmark of Object.values(gym.landmarks ?? {})) obj(id, landmark);
   obj(id, {
-    id: `leader_${i + 1}`,
-    kind: "leader",
-    name,
-    dialogue: `I am ${name}, keeper of this beacon. Show me the bond you have built!`,
-    requires: { flags: [objectives[i], previous!], badges: i >= 3 && i <= 5 ? 3 : i },
-    lockedDialogue: keeperAdvice[i],
+    id: `leader_${i + 1}`, kind: "leader", name, sprite: gym.sprite, facing: "down",
+    dialogue: gym.intro, lockedDialogue: gym.advice,
+    requires: { flags: gym.requirement, badges: i >= 3 && i <= 5 ? 3 : i },
     setsFlag: `badge${i + 1}`,
     reward: { badge: i + 1, ability: ABILITIES[i] },
     trainer: { id: `leader_${i + 1}`, name, team, reward: 1000 * (i + 1) },
@@ -1626,59 +1595,6 @@ for (const [id] of dungeonData) {
   mechanism.lockedDialogue = `First: ${second.toLowerCase()}.`;
 }
 
-// Each gym gives a clue to a distinct sequence. The physical marker order is
-// scrambled so solving the clue, rather than walking left to right, opens it.
-const gymClues: [string, string[]][] = [
-  [
-    "The leaf trail runs seed, sprout, then canopy.",
-    ["Seed leaf", "Sprout leaf", "Canopy leaf"],
-  ],
-  [
-    "Water flows from high tide to ebb to low tide.",
-    ["High sluice", "Ebb sluice", "Low sluice"],
-  ],
-  [
-    "Power runs from source through coil to lamp.",
-    ["Source relay", "Coil relay", "Lamp relay"],
-  ],
-  [
-    "The weights rise from pebble to stone to boulder.",
-    ["Pebble plate", "Stone plate", "Boulder plate"],
-  ],
-  [
-    "Vent cool air first, then smoke, then flame.",
-    ["Cool vent", "Smoke vent", "Flame vent"],
-  ],
-  [
-    "Thaw the spring, stream, then pool.",
-    ["Spring channel", "Stream channel", "Pool channel"],
-  ],
-  [
-    "The memory rises from low to middle to high.",
-    ["Low bell", "Middle bell", "High bell"],
-  ],
-  [
-    "Trace one night from sunset to zenith to moonset to dawn.",
-    ["Sunset star", "Zenith star", "Moonset star", "Dawn star"],
-  ],
-];
-gymClues.forEach(([clue, labels], i) => {
-  const m = WORLD[`gym${i + 1}`];
-  labels.forEach((label, n) => {
-    const o = m.objects.find(
-      (object) => object.id === `gym${i + 1}_puzzle${n + 1}`,
-    )!;
-    o.name = label;
-    o.lockedDialogue = clue;
-  });
-  obj(m.id, {
-    id: `gym${i + 1}_clue`,
-    kind: "sign",
-    name: "Keeper’s clue",
-    dialogue: clue,
-  });
-});
-
 const townFlavor: Record<string, string> = {
   dewdrop:
     "Alder’s garden points toward the lab. The first beacon watches over the village.",
@@ -1905,7 +1821,7 @@ const engineStory = WORLD.starfall_3.objects.find(
 engineStory.dialogue =
   "All eight badges illuminate the lens. The Engine winds down, releasing Lugia and Ho-Oh’s currents into the sky. Dawn gives way to moving clouds. Robin smiles: “Astra gets to choose its own tomorrow.”";
 const leaderVictory = [
-  "Your care for the forest is as strong as your team. Take the Canopy Badge; Cut will open the groves that connect our communities.",
+  "Take the Canopy Badge. Cut opens our old groves! On the east road, follow the safe trail marked by the surveyor from Lantern Wood.",
   "You brought the harbor its light and earned the Tidal Badge. Surf will carry you across the marked shallows.",
   "Take the Dynamo Badge! The dune lamps and the Tideglass ferry signal are lit. Head into the dunes for Sable, or cross to Reedhaven for Flint and Neve. The three keepers will meet you in any order.",
   "You listened to the ruins and earned the Mirage Badge. Strength will move the marked boulders in your path.",
@@ -1952,7 +1868,7 @@ const townVoices: Record<string, [string, string][]> = {
     ],
     [
       "Keeper’s apprentice",
-      "Fern will challenge you after the surveyor is safe. Read the leaf clues carefully.",
+      "Fern takes challengers as soon as they arrive. The silkhouse has a straight aisle between the nursery beds.",
     ],
   ],
   tideglass: [
@@ -2002,7 +1918,7 @@ const townVoices: Record<string, [string, string][]> = {
     ],
     [
       "Bath attendant",
-      "The warm springs are gentler when the furnace vents are open in the right order.",
+      "The kiln tenders pipe spare heat into the refuge. They have beds ready for the Pokémon in Ember Mine.",
     ],
   ],
   rimepeak: [
