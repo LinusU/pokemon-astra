@@ -114,3 +114,9 @@ The synthesizer’s Gen 2 music wave channel is implemented in the vendored 0.2.
 - At Rimepeak’s counter in an isolated Chrome save, the D-pad changed departments, paged through medicine, adjusted a purchase and cancelled it. A stack of 99 and an unaffordable stone both showed the reason the sale could not go through. Buying two Burn Heals and two Ethers cost ₽1,700. A Burn Heal cured only the burned target. An Ether restored 10 PP to the selected move and retained its PP Ups across a reload.
 - In Scout Ari’s trainer battle, the Bag offered the reserve’s depleted move for Ether and its poisoning for Antidote. Back returned to the same party member before confirming. Both items were consumed once. The lead Metapod won, reached level ten, evolved into Butterfree and learned Confusion through the production UI.
 - The production build, 152 Vitest checks and 18 seeded starter and middle-badge-order campaigns passed. The native item checks cover each of the five individual status cures, Full Heal, and move-specific PP recovery on a fainted partner.
+
+## Fresh journey to the Canopy Badge
+
+A Chrome playthrough using the local verification cartridge followed one save from the Dewdrop doorstep onto Route 04. Growlithe caught Rattata on Dewpath and defeated Scout Ari. Rattata stayed in the Mossford PC during the orchard crossing and rejoined the party at Bramble. The journal led the player to the stranded surveyor in Lantern Wood and then to Fern’s gym.
+
+After losing to Fern, the player picked up the orchard’s Fire Stone, evolved Growlithe, fought local trainers and bought Potions with the winnings. The rematch awarded the Canopy Badge and Cut. Reloading in the gym retained both rewards. The player then used Cut on Bramble’s east road and crossed into Amberbank, where the saved game recorded the cleared tree.
