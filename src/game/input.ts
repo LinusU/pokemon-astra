@@ -37,7 +37,7 @@ export class Input {
   confirmLabel = window.matchMedia?.("(pointer: coarse)").matches ? "A" : "Z";
   private padStates = new Map<
     number,
-    { buttons: boolean[]; axes: boolean[] }
+    { id: string; buttons: boolean[]; axes: number[] }
   >();
 
   constructor() {
@@ -122,19 +122,24 @@ export class Input {
     const pads = Array.from(navigator.getGamepads?.() || []).filter(
       (p): p is Gamepad => !!p && p.connected !== false,
     );
+    for (const [index, state] of this.padStates) {
+      if (pads.some(pad => pad.index === index && pad.id === state.id)) continue;
+      this.padStates.delete(index);
+      if (this.active === index) this.active = -1;
+    }
     for (const pad of pads) {
       const previous = this.padStates.get(pad.index);
       const buttons = pad.buttons.map((button) => button.pressed);
-      const axes = pad.axes.slice(0, 2).map((axis) => Math.abs(axis) > 0.4);
+      const axes = pad.axes.slice(0, 2).map(axis => Math.abs(axis) > 0.4 ? Math.sign(axis) : 0);
       // An idle receiver with an axis already held must not steal the controller.
       const used =
         buttons.some((down, i) => down && !previous?.buttons[i]) ||
-        (!!previous && axes.some((down, i) => down && !previous.axes[i]));
+        (!!previous && axes.some((direction, i) => direction !== 0 && direction !== previous.axes[i]));
       if (used) {
         this.active = pad.index;
         this.confirmLabel = "A";
       }
-      this.padStates.set(pad.index, { buttons, axes });
+      this.padStates.set(pad.index, { id: pad.id, buttons, axes });
     }
     const pad = pads.find((p) => p.index === this.active);
     const actions = new Set<Action>();
@@ -143,15 +148,14 @@ export class Input {
       if (on(0)) actions.add("a");
       if (on(1)) actions.add("b");
       if (on(9)) actions.add("menu");
-      const horizontal = on(14) || on(15),
-        vertical = on(12) || on(13);
-      if (on(12) || (!vertical && (pad.axes[1] ?? 0) < -0.35))
+      const dpad = on(12) || on(13) || on(14) || on(15);
+      if (on(12) || (!dpad && (pad.axes[1] ?? 0) < -0.35))
         actions.add("up");
-      if (on(13) || (!vertical && (pad.axes[1] ?? 0) > 0.35))
+      if (on(13) || (!dpad && (pad.axes[1] ?? 0) > 0.35))
         actions.add("down");
-      if (on(14) || (!horizontal && (pad.axes[0] ?? 0) < -0.35))
+      if (on(14) || (!dpad && (pad.axes[0] ?? 0) < -0.35))
         actions.add("left");
-      if (on(15) || (!horizontal && (pad.axes[0] ?? 0) > 0.35))
+      if (on(15) || (!dpad && (pad.axes[0] ?? 0) > 0.35))
         actions.add("right");
     }
     const now = new Set([

@@ -71,6 +71,35 @@ describe("game input", () => {
     input.update();
     expect(input.held("left")).toBe(true);
   });
+  it("ignores an idle receiver reusing a disconnected controller's slot", () => {
+    const input = new Input();
+    pads = [pad(0, [0, 0], [0])];
+    input.update();
+    expect(input.hit("a")).toBe(true);
+    pads = [];
+    input.update();
+    pads = [pad(0, [-1, 0])];
+    input.update();
+    expect(input.held("left")).toBe(false);
+    pads = [pad(0, [1, 0])];
+    input.update();
+    expect(input.hit("right")).toBe(true);
+    pads = [{ ...pad(0, [0, 1]), id: "Another receiver" }];
+    input.update();
+    expect(input.held("down")).toBe(false);
+  });
+  it("follows the D-pad when the stick is held across it", () => {
+    const input = new Input();
+    pads = [pad(0, [0, -1], [15])];
+    input.update();
+    expect(input.hit("right")).toBe(true);
+    expect(input.held("up")).toBe(false);
+    pads = [pad(0, [1, 0], [12, 14])];
+    input.update();
+    expect(input.hit("left")).toBe(true);
+    expect(input.hit("up")).toBe(true);
+    expect(input.held("right")).toBe(false);
+  });
   it("merges simultaneous touch movement and confirm, and releases cancelled touches", () => {
     const input = new Input();
     const a = new EventTarget() as unknown as HTMLElement;
