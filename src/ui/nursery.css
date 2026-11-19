@@ -1,0 +1,23 @@
+.nest-desk { text-align: center; }
+.nest-desk .buttons, .nest-portraits { display: flex; justify-content: center; }
+.nest-desk .eyebrow { display: none; }
+.nest-portraits { gap: 1.5em; align-items: end; margin: .3em 0; }
+.nest-portraits > div { min-width: 0; display: grid; justify-items: center; }
+.nest-portraits span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.nest-portraits img, .hatch-stage img { width: clamp(44px, 11vmin, 90px); aspect-ratio: 1; image-rendering: pixelated; }
+.hatch-stage { display: grid; place-items: center; padding: 1em 0; background: linear-gradient(#e4e8c9, #c3d9b8); border-block: 2px solid #8da582; }
+.hatch-stage img { grid-area: 1 / 1; width: clamp(64px, 19vmin, 134px); transform-origin: 50% 90%; }
+.hatching .hatch-shell { animation: egg-wobble 720ms ease-in-out 3; }
+.hatching .hatch-baby { animation: chick-appear 400ms ease-out; }
+@keyframes egg-wobble { 25% { transform: rotate(-13deg); } 55% { transform: translateY(-5%) rotate(14deg); } 75% { transform: rotate(-7deg); } }
+@keyframes chick-appear { 0% { transform: translateY(8%) scale(.85); opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .hatching .hatch-shell, .hatching .hatch-baby { animation: none; } }
+.overlay:has(.nest-desk) { container-type: size; padding: 2%; }
+.panel.nest-desk { padding: min(20px, 2.3cqw); }
+.panel.nest-desk h2 { font-size: clamp(20px, 6.7cqw, 30px); margin: 0 0 1.3cqh; }
+.panel.nest-desk p { font-size: clamp(16px, 4.9cqw, 23px); margin: 1.1cqh 0 2cqh; }
+.panel.nest-desk button { font-size: clamp(16px, 4.9cqw, 23px); padding: 1cqh 2cqw; }
+.nest-portraits { font-size: clamp(15px, 4.7cqw, 22px); margin: 0; }
+.nest-portraits img { width: min(22cqh, 90px); }
+.hatch-stage { padding: 0; }
+.hatch-stage img { width: min(39cqh, 134px); }

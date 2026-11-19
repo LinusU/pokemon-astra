@@ -912,6 +912,12 @@ const servicePlans: Record<string, Patch[]> = {
     [8, 6, 2, 1, "T"],
     [4, 7, 4, 1, "a"],
   ],
+  nursery: [
+    [1, 1, 3, 1, "B"],
+    [6, 2, 2, 1, "T"], [6, 4, 2, 1, "T"],
+    [8, 2, 1, 1, "P"], [8, 4, 1, 1, "P"],
+    [2, 5, 1, 1, "C"], [4, 5, 2, 3, "a"],
+  ],
   mart: [
     [1, 1, 9, 1, "B"],
     [2, 3, 3, 1, "C"],
@@ -949,7 +955,7 @@ function interiorLayout(world: Region, map: WorldMap) {
         ? "lab"
         : "home";
   const plan = floorPlan(map, ".");
-  servicePlans[type].forEach(plan.patch);
+  servicePlans[map.id === "reedhaven_house" ? "nursery" : type].forEach(plan.patch);
   const x = Math.floor(map.width / 2);
   const [door] = map.exits;
   relocateExit(world, map, door, [x, map.height - 1]);

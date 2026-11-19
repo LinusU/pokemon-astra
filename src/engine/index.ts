@@ -214,7 +214,20 @@ export class Engine {
       )
     )
       throw Error("Invalid evolution");
-    const base = 0x51424 + (target - 1) * 32;
+    const stats = this.statsFor(mon, target);
+    const oldName = this.species(mon.species).name;
+    return {
+      ...mon,
+      species: target,
+      stats,
+      hp:
+        mon.hp === 0 ? 0 : Math.min(stats[0], mon.hp + stats[0] - mon.stats[0]),
+      nickname:
+        mon.nickname === oldName ? this.species(target).name : mon.nickname,
+    };
+  }
+  statsFor(mon: Pokemon, id = mon.species): number[] {
+    const base = 0x51424 + (id - 1) * 32;
     const atk = mon.dvs[0] >> 4,
       def = mon.dvs[0] & 15,
       spd = mon.dvs[1] >> 4,
@@ -229,7 +242,7 @@ export class Engine {
       mon.stat_exp[4],
       mon.stat_exp[4],
     ];
-    const stats = dvs.map((dv, i) => {
+    return dvs.map((dv, i) => {
       const contribution = Math.floor(
         Math.min(255, Math.ceil(Math.sqrt(exp[i]))) / 4,
       );
@@ -238,16 +251,35 @@ export class Engine {
       );
       return scaled + (i === 0 ? mon.level + 10 : 5);
     });
-    const oldName = this.species(mon.species).name;
-    return {
-      ...mon,
-      species: target,
-      stats,
-      hp:
-        mon.hp === 0 ? 0 : Math.min(stats[0], mon.hp + stats[0] - mon.stats[0]),
-      nickname:
-        mon.nickname === oldName ? this.species(target).name : mon.nickname,
-    };
+  }
+  breedingData(id: number) {
+    const base = 0x51424 + (id - 1) * 32;
+    const groups = this.rom[base + 23];
+    return { genderRatio: this.rom[base + 13], cycles: this.rom[base + 15],
+      groups: [groups >> 4, groups & 15] };
+  }
+  private earlierStages?: Map<number, number>;
+  firstStage(id: number) {
+    if (!this.earlierStages) {
+      this.earlierStages = new Map();
+      for (let species = 1; species <= 251; species++) {
+        for (const evo of this.evolutionData(species).evolutions)
+          this.earlierStages.set(evo.species, species);
+      }
+    }
+    while (this.earlierStages.has(id)) id = this.earlierStages.get(id)!;
+    return id;
+  }
+  inheritableMoves(id: number) {
+    const moves = new Set<number>();
+    const ptr = 0x23b11 + (id - 1) * 2;
+    let cursor = 0x20000 + ((this.rom[ptr] | (this.rom[ptr + 1] << 8)) & 0x3fff);
+    while (this.rom[cursor] !== 0xff) moves.add(this.rom[cursor++]);
+    const flags = 0x51424 + (id - 1) * 32 + 24;
+    for (let i = 0; this.rom[0x1167a + i]; i++) {
+      if (this.rom[flags + (i >> 3)] & (1 << (i & 7))) moves.add(this.rom[0x1167a + i]);
+    }
+    return moves;
   }
   teachMove(mon: Pokemon, move: number, slot: number): Pokemon {
     if (slot < 0 || slot > 3 || move < 1 || move > 251)
@@ -539,7 +571,8 @@ export class Engine {
     return new ImageData(pixels, 16, 16);
   }
   sprite(id: number, back = false): ImageData {
-    if (id < 1 || id > 251) throw Error("Invalid species");
+    const egg = id === 253 && !back;
+    if (!egg && (id < 1 || id > 251)) throw Error("Invalid species");
     const ptr =
       (id === 201 ? 0x124000 : 0x120000 + (id - 1) * 6) + (back ? 3 : 0);
     const bank = this.rom[ptr] + 0x36;
@@ -549,7 +582,7 @@ export class Engine {
       this.rom.subarray(offset, Math.min(offset + 0x4000, this.rom.length)),
       (p, n) => this.wasm.decompress(p, n),
     );
-    const side = back ? 6 : this.rom[0x51424 + (id - 1) * 32 + 17] >> 4;
+    const side = egg ? 5 : back ? 6 : this.rom[0x51424 + (id - 1) * 32 + 17] >> 4;
     const size = side * 8;
     const pixels = new Uint8ClampedArray(size * size * 4);
     const pal = 0xa8ce + id * 8;

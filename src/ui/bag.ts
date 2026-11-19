@@ -84,6 +84,8 @@ export function battleBagKey(id: number) {
 }
 
 export function itemInfo(key: string): ItemInfo {
+  if (key === "nursery_egg")
+    return { name: "Nursery Egg", pocket: "key", description: "A warm Egg tucked into a woven reed sling. Walk to help it hatch.", action: "Check" };
   if (key === "courier_parcel")
     return { name: "Courier’s Parcel", pocket: "key", description: descriptions[key], action: "Inspect" };
   if (key === "aurora_certificate")

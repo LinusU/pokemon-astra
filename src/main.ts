@@ -1,3 +1,5 @@
+import { hatchEgg } from "./game/nursery";
+import { openNursery, showHatch } from "./ui/nursery";
 import { sortCollection, storePokemon } from "./game/collection";
 import { mountStoragePc, type PcState } from "./ui/storage-pc";
 import { specimenCard } from "./ui/specimen";
@@ -554,6 +556,12 @@ function interact() {
     // A stray confirm while walking should leave movement uninterrupted.
     return;
   }
+  if (o.id === "reedhaven_house_host") {
+    sound.overworld("interact");
+    mode = "menu";
+    openNursery(layer, { save, engine, sprite, onSave: persist, onClose: close });
+    return;
+  }
   if (o.kind === "pc") {
     sound.overworld("bootPc");
     mode = "menu";
@@ -979,7 +987,7 @@ function view(v: string, pageIndex = 0) {
   } else if (v === "bag") {
     layer.replaceChildren();
     mountBag(layer, {
-      items: Object.entries(save.items)
+      items: Object.entries({ ...save.items, nursery_egg: save.egg ? 1 : 0 })
         .filter(([, count]) => count > 0)
         .map(([key, count]) => ({
           key,
@@ -1228,6 +1236,12 @@ function rivalSpecies(o: WorldObject, slot: number, original: number) {
   return families[partner]?.[Number(o.id.slice(6)) - 1] ?? original;
 }
 function useItem(item: string) {
+  if (item === "nursery_egg" && save.egg) {
+    const left = Math.max(0, Math.ceil(save.egg.hatchAt - save.steps));
+    message(left <= 24 ? "The Egg rocks in its sling. It’s almost ready!" :
+      `The shell feels warm. About ${left} walking tiles until it hatches.`, () => view("bag"), "Nursery Egg");
+    return;
+  }
   if ((save.items[item] || 0) < 1) return;
   if (item === "courier_parcel") {
     message(itemInfo(item).description!, () => view("bag"));
@@ -1692,6 +1706,17 @@ function update(dt: number) {
     }
     return;
   }
+  const hatch = hatchEgg(save);
+  if (hatch) {
+    persist();
+    mode = "hatching";
+    const name = engine.species(hatch.mon.species).name;
+    sound.overworld("eggCrack");
+    void showHatch(layer, sprite(253), sprite(hatch.mon.species), name,
+      `${name} ${hatch.stored ? "was sent to the Center PC" : "joined your party"} at Lv 5.`,
+      () => { sound.overworld("eggHatch"); cry(hatch.mon.species); }, close);
+    return;
+  }
   if (save.party.some((mon) => mon.hp > 0)) {
     const noticed = actors.spotTrainer(
       currentMap,
@@ -1840,6 +1865,7 @@ function frame(now: number) {
   input.update();
   const wasWorld = mode === "world";
   if (mode === "dialogue" && (input.hit("a") || input.hit("b"))) advance();
+  else if (mode === "hatching" && input.hit("b")) layer.querySelector<HTMLButtonElement>("#hatch-done:enabled")?.click();
   else if (mode === "registration" && input.hit("b")) layer.querySelector<HTMLButtonElement>("#specimen-confirm")?.click();
   else if ((mode === "menu" || mode === "guide" || mode === "starter") && input.hit("b")) {
     const back = layer.querySelector<HTMLButtonElement>(
@@ -1873,6 +1899,7 @@ function frame(now: number) {
       now,
       save.flags,
       {
+        nest: map.id === "reedhaven_house" ? save.nursery?.parents : undefined,
         npcs: actors.states, hideHud: mode !== "world", exitOpen: isExitOpen,
         confirmLabel: input.confirmLabel, canFish: mode === "world" && canFish(map),
       },

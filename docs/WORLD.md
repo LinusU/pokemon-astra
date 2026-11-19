@@ -6,6 +6,8 @@ The regional survey in [`src/world/atlas.ts`](../src/world/atlas.ts) places sett
 
 Buildings open onto compact rooms with a mat at the south threshold. The Centers have a healing station, benches, a local visitor and a shared storage PC against the right wall. Face the terminal and press A to deposit, withdraw or swap a partner. Marts place their clerk behind a counter and reserve browsing space by the shelves. Face the clerk across the counter to heal or shop. The lab, home and seven local buildings also have furnished interiors.
 
+Reedhaven’s Ranger Cabin has two reed beds. The keeper can board two compatible Pokémon from your party while a healthy partner travels with you. Walk 96 tiles to find an Egg, or collect your partners early. The Egg travels in a sling in the Key Items pocket. Its hatch distance follows the species’ egg cycles. Parents and hatchlings join the party when there is space and go to the Center PC when it is full.
+
 ## Travel around Astra
 
 Open **Menu → Map** for the entire region. Select a town or route on the chart, or browse with the two arrows. Zoom enlarges the selected area. The trainer pin follows your position on outdoor maps and marks the exterior entrance when you go inside. The journal star follows your selected survey. **Local map** shows the current tile grid, doors, obstacles and next step. Fly is available for previously visited towns once Orion awards the Astral Badge.

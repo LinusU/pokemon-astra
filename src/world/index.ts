@@ -436,7 +436,7 @@ const serviceVisitors: Record<string, [[string, string], [string, string]]> = {
   reedhaven: [
     [
       "Field ranger",
-      "Traveling with six? Your next catch goes to the PC. That terminal on the right connects every Pokémon Center in Astra.",
+      "That PC connects every Pokémon Center. Pick a pair for the nursery in our Ranger Cabin. Ditto gets along with most grown Pokémon.",
     ],
     [
       "Bird watcher",
@@ -557,8 +557,8 @@ for (const [town, title, host, dialogue] of [
   [
     "reedhaven",
     "Ranger Cabin",
-    "Field researcher",
-    "An extra catch goes to the Pokémon Center PC when you already travel with six. It still counts in our habitat census.",
+    "Nursery keeper",
+    "The nursery is open. Bring two compatible partners to the reed beds and keep a third with you.",
   ],
   [
     "rimepeak",

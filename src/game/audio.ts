@@ -25,6 +25,8 @@ export const OVERWORLD_SOUNDS = {
   surf: 0x53,
   badge: 0x9c,
   evolved: 0xa4,
+  eggCrack: 0x9e,
+  eggHatch: 0xa6,
   flash: 0xa9,
 } as const;
 

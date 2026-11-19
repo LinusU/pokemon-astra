@@ -9,6 +9,7 @@ import { interactionTarget, objectVisible } from "./actors";
 import { barrierTarget, barrierTiles, connectionOffset } from "./navigation";
 
 export interface RendererVisualState {
+  nest?: { species: number }[];
   npcs?: Record<
     string,
     {
@@ -1877,6 +1878,22 @@ export class Renderer {
     }
     this.drawTerrain(c, map);
     this.animateGround(c, map, time);
+    if (map.id === "reedhaven_house") {
+      for (const [i, y] of [2, 4].entries()) {
+        const px = 6 * 16, py = y * 16;
+        c.fillStyle = "#685e3c";
+        c.fillRect(px, py + 1, 32, 14);
+        c.fillStyle = "#b69b63";
+        c.fillRect(px + 1, py + 2, 30, 11);
+        c.fillStyle = "#e1cb91";
+        for (let n = 0; n < 7; n++) c.fillRect(px + 2 + n * 4, py + 4 + n % 3, 3, 2);
+        const id = visualState.nest?.[i]?.species;
+        if (id && this.engine) {
+          const image = this.sprite("mon:" + id, () => this.engine!.sprite(id));
+          if (image) c.drawImage(image, px + 5, py - 12 - Math.floor(time / 650 + i) % 2, 24, 24);
+        }
+      }
+    }
     if (map.kind === "dungeon") expeditionActivity(c, map, time, done);
     if (map.kind === "gym") paintGymActivity(c, map, done, time);
     this.roadBarriers(c, map, isOpen);
