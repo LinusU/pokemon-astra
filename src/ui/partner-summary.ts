@@ -71,7 +71,7 @@ export function mountPartnerSummary(host: HTMLElement, mon: Pokemon, options: Op
       const current = moves[move];
       return `<h3>Moves ↕ <small>PP</small></h3><div class="partner-moves">${moves.map((entry, i) =>
         `<button data-move="${i}" aria-pressed="${i === move}"><b>${html(entry.name)}</b><small>${entry.ppLeft}/${entry.ppMax}</small></button>`).join("")}</div>
-        <p class="move-readout">${current ? `${typeNames[current.type] ?? "???"} · ${current.power === 0 ? "Status" : current.power === 1 ? "Special power" : "Power " + current.power}` : "No known moves"}</p>`;
+        <p class="move-readout" aria-live="polite">${current ? `<strong>${typeNames[current.type] ?? "???"} · ${current.power === 0 ? "Status" : current.power === 1 ? "Special power" : "Power " + current.power}</strong> ${html(current.description)}` : "No known moves"}</p>`;
     }
     const next = evolutions[evolution];
     return `<div class="partner-growth">${line("EXP", mon.exp)}

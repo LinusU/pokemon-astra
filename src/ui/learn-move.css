@@ -23,3 +23,8 @@
 .panel.lesson-choice button:disabled { opacity: .55; }
 .lesson-choices strong { font-weight: normal; }
 .lesson-choices span { font-size: 3.9cqw; }
+.move-comparison { display: grid; gap: 1.5cqw; margin: 0; line-height: 1; }
+.move-comparison div { padding-left: 1.4cqw; border-left: 2px solid #9a9e88; }
+.move-comparison div:last-child { border-color: #54835c; }
+.move-comparison dt { color: #294935; }
+.move-comparison dd { margin: .45cqw 0 0; color: #49594a; font-size: .87em; }

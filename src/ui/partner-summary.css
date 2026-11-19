@@ -33,7 +33,8 @@
 .partner-stats .partner-line:nth-child(even), .partner-moves button:nth-child(even) { background: #f1efd6; }
 .partner-moves button[aria-pressed=true] { box-shadow: inset 2px 0 #4e7655; background: #d8e6be; }
 .partner-moves small { font-size: 4cqw; }
-.partner-card .move-readout { background: #e4e8cf; padding: 1cqh 1.6cqw; font-size: 4.4cqw; }
+.partner-card .move-readout { background: #e4e8cf; padding: .8cqh 1.6cqw; font-size: 4cqw; }
+.move-readout strong { display: block; color: #36553f; }
 .partner-growth { display: flex; flex-flow: column; gap: .7cqh; font-size: 4.6cqw; padding: 1.1cqh 1.6cqw; min-height: 0; }
 .partner-growth > small { font-size: 3.9cqw; color: #4e6655; }
 .partner-growth .exp i { background: #567b8e; }

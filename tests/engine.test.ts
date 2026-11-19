@@ -82,6 +82,19 @@ describe.skipIf(!available)("Crystal ROM native bridge", () => {
     }
     expect(new Set(caught).size).toBe(251);
   });
+  it("decodes the descriptions of all 251 moves from the imported cartridge", async () => {
+    const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});
+    const engine = new Engine(instance.exports as never, readFileSync("pokecrystal11.gbc"));
+    for (let id = 1; id <= 251; id++) {
+      const { description } = engine.move(id);
+      expect(description.length, `move ${id}`).toBeGreaterThan(8);
+      expect(description).not.toMatch(/\n|POKé|�/);
+    }
+    expect(engine.move(2).description).toContain("critical");
+    expect(engine.move(45).description).toContain("foe’s");
+    expect(engine.move(57).description).toContain("water-type");
+    expect(engine.move(251).description).toContain("Pokémon");
+  });
   it("reads both pages of all 251 species records across the four ROM banks", async () => {
     const rom = readFileSync("pokecrystal11.gbc");
     const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});

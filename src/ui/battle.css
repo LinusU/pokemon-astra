@@ -635,6 +635,7 @@
 
 /* The four move positions stay put as PP and move availability change. */
 .battle-moves .battle-box {
+  flex-basis: 44%;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 0.7cqw;
@@ -666,7 +667,7 @@
 }
 
 .battle-learning .battle-box {
-  flex-basis: 50%;
+  flex-basis: 57%;
 }
 .battle-learning .battle-controls {
   grid-template-rows: repeat(3, minmax(0, 1fr));
@@ -677,6 +678,13 @@
 .battle-learning .battle-keep {
   grid-area: 3 / 1 / 4 / -1;
 }
+.battle-lesson-confirm .battle-box {
+  flex-basis: 56%;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  font-size: min(5.2cqw, 24px);
+}
+.battle-lesson-confirm .battle-controls { align-content: end; }
 
 .battle-owned {
   width: 0.72em;

@@ -1500,18 +1500,7 @@ function showBattle(fishing = false) {
     },
     sound: (id) => sound.soundEffect(id),
     animationSound: (...args) => sound.battleAnimation(...args),
-    itemName: (id) =>
-      (
-        ({
-          1: "Master Ball",
-          2: "Ultra Ball",
-          4: "Great Ball",
-          5: "Poké Ball",
-          18: "Potion",
-        }) as Record<number, string>
-      )[id] ||
-      Object.values(MEDICINE).find((m) => m.id === id)?.name ||
-      "item",
+    itemName: (id) => itemName(bagKeyForItem(id)),
     party: () => save.party,
     speed: save.settings.battleSpeed,
     finish: () => {

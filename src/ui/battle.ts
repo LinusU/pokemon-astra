@@ -7,6 +7,7 @@ import { battleStatus, mountParty } from "./party";
 import { escapeHtml } from "./shell";
 import { battleBagKey, itemInfo, mountBag, type BagItem, type BagState } from "./bag";
 import { playMove } from "./move-animation";
+import { moveComparison } from "./learn-move";
 import { findMoveVisual, healingSparkle, nativeConditionVisual, type MoveVisual } from "./move-visuals";
 import "./battle.css";
 
@@ -40,7 +41,7 @@ type Options = {
   act: (index: number) => BattleSnapshot;
   sprite: (mon: PokemonPortrait, back?: boolean) => string;
   species: (id: number) => { name: string; types?: number[] };
-  move: (id: number, dvs?: number) => { name: string; type?: number; pp?: number; power?: number };
+  move: (id: number, dvs?: number) => { name: string; type?: number; pp?: number; power?: number; description?: string };
   cry: (id: number) => void;
   music?: (cue: "Victory" | "Capture") => void;
   sound?: (id: number) => void;
@@ -568,7 +569,7 @@ export class BattlePresenter {
     this.queue = [...snapshot.events] as Event[];
     this.clearCapture();
     this.choosing = false;
-    this.root.classList.remove("battle-choosing", "battle-moves", "battle-learning");
+    this.root.classList.remove("battle-choosing", "battle-moves", "battle-learning", "battle-lesson-confirm");
     this.root.querySelector(".battle-controls")!.innerHTML = "";
     this.next();
   }
@@ -1048,6 +1049,7 @@ export class BattlePresenter {
   }
   private menu(previousGroup = "", initialSlot?: number) {
     this.root.querySelector(".party-screen")?.remove();
+    this.root.classList.remove("battle-lesson-confirm");
     this.choosing = true;
     const s = this.snapshot,
       actions = s.legal as any[],
@@ -1079,11 +1081,12 @@ export class BattlePresenter {
       const maxPp = move.pp != null && currentPp != null
         ? Math.min(61, move.pp + Math.min(7, Math.floor(move.pp / 5)) * (currentPp >> 6))
         : move.pp;
-      return [
+      const stats = [
         typeNames[move.type ?? -1],
-        move.power != null && move.power > 1 ? `Pwr ${move.power}` : undefined,
+        move.power === 0 ? "Status" : move.power === 1 ? "Special power" : move.power != null ? `Pwr ${move.power}` : undefined,
         currentPp != null ? `PP ${currentPp & 63}${maxPp ? `/${maxPp}` : ""}` : undefined,
       ].filter(Boolean).join(" · ");
+      return [stats, move.description].filter(Boolean).join("\n");
     };
     const standard = s.site === "BattleMenu";
     this.root.classList.toggle("battle-choosing", !standard || this.category !== "");
@@ -1179,10 +1182,11 @@ export class BattlePresenter {
       button.onclick = () => {
         if (!learning) return this.act(index);
         const slot = actions[index].LearnMove.slot;
-        const next = learn ? this.o.move(learn.mv).name : "the new move";
-        copy.textContent = slot === null ? `Give up on learning ${next}?`
-          : `Forget ${this.o.move(learningMon.moves[slot]).name} and learn ${next}?`;
+        const candidate = learn ? this.o.move(learn.mv, learningMon.dvs) : { name: "the new move" };
+        if (slot === null) copy.textContent = `Give up on learning ${candidate.name}?\n${candidate.description ?? ""}`;
+        else copy.innerHTML = moveComparison(this.o.move(learningMon.moves[slot], learningMon.dvs), candidate);
         this.root.classList.remove("battle-learning", "battle-moves");
+        this.root.classList.add("battle-lesson-confirm");
         controls.innerHTML = `<button data-reconsider>Choose again</button><button data-confirm-lesson>${slot === null ? "Keep moves" : "Learn move"}</button>`;
         const reconsider = controls.querySelector<HTMLButtonElement>("[data-reconsider]")!;
         reconsider.onclick = () => {

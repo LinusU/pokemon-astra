@@ -100,6 +100,15 @@ type Exports = {
 
 const TRAINING_LEVELS = [12, 18, 24, 30, 37, 43, 48, 53, 60];
 
+const textSymbols: Record<number, string> = {
+  0x4e: "\n", 0x54: "POKé", 0x7f: " ", 0x9a: "(", 0x9b: ")", 0x9c: ":", 0xd3: "’r", 0xd4: "’s",
+  0xd5: "’t", 0xe0: "’", 0xe3: "-", 0xe8: ".", 0xe9: "&", 0xf3: "/", 0xf4: ",",
+};
+
+function flowingText(text: string) {
+  return text.replace(/-\n(?=type\b|strike\b)/g, "-").replace(/-\n/g, "").replace(/\n/g, " ").replaceAll("POKéMON", "Pokémon");
+}
+
 export class Engine {
   constructor(
     private wasm: Exports,
@@ -136,33 +145,28 @@ export class Engine {
     const p = 0x51424 + (id - 1) * 32;
     return { ...v, types: [this.rom[p + 7], this.rom[p + 8]] };
   }
+  private cartridgeText(offset: number) {
+    let text = "", cursor = offset;
+    for (let ch = this.rom[cursor++]; ch !== 0x50; ch = this.rom[cursor++]) {
+      if (ch >= 0x80 && ch <= 0x99) text += String.fromCharCode(65 + ch - 0x80);
+      else if (ch >= 0xa0 && ch <= 0xb9) text += String.fromCharCode(97 + ch - 0xa0);
+      else if (ch >= 0xf6) text += String(ch - 0xf6);
+      else if (textSymbols[ch]) text += textSymbols[ch];
+      else throw Error("Invalid cartridge text");
+    }
+    return { text, next: cursor };
+  }
   /** Crystal 1.1 stores two pages per species across four Pokédex banks. */
   dexEntry(id: number) {
     if (!Number.isInteger(id) || id < 1 || id > 251) throw Error("Invalid species");
     const index = id - 1;
     const bank = this.rom[0xec4c + (index >> 6)];
     const pointer = 0x44378 + index * 2;
-    let cursor = bank * 0x4000 + ((this.rom[pointer] | (this.rom[pointer + 1] << 8)) & 0x3fff);
-    const symbols: Record<number, string> = {
-      0x4e: "\n", 0x54: "POKé", 0x7f: " ", 0xd3: "’r", 0xd4: "’s",
-      0xd5: "’t", 0xe0: "’", 0xe3: "-", 0xe8: ".", 0xf4: ",",
-    };
-    const readText = () => {
-      let text = "";
-      for (let ch = this.rom[cursor++]; ch !== 0x50; ch = this.rom[cursor++]) {
-        if (ch >= 0x80 && ch <= 0x99) text += String.fromCharCode(65 + ch - 0x80);
-        else if (ch >= 0xa0 && ch <= 0xb9) text += String.fromCharCode(97 + ch - 0xa0);
-        else if (ch >= 0xf6) text += String(ch - 0xf6);
-        else if (symbols[ch]) text += symbols[ch];
-        else throw Error("Invalid Pokédex text");
-      }
-      return text;
-    };
-    const category = readText();
-    cursor += 4; // Height and weight precede the first page.
-    const description = [readText(), readText()].join("\n")
-      .replace(/-\n/g, "").replace(/\n/g, " ").replaceAll("POKéMON", "Pokémon");
-    return { category, description };
+    const offset = bank * 0x4000 + ((this.rom[pointer] | (this.rom[pointer + 1] << 8)) & 0x3fff);
+    const category = this.cartridgeText(offset);
+    const first = this.cartridgeText(category.next + 4); // Height and weight precede the first page.
+    const second = this.cartridgeText(first.next);
+    return { category: category.text, description: flowingText(first.text + "\n" + second.text) };
   }
   move(id: number, dvs?: PokemonPortrait["dvs"]) {
     if (id < 1 || id > 251) throw Error("Invalid move");
@@ -172,7 +176,10 @@ export class Engine {
       dvs: id === 237 && dvs !== undefined ? dvWord(dvs) : undefined,
     });
     const offset = 0x41afb + (id - 1) * 7;
-    return { ...move, power: move.power ?? this.rom[offset + 2], type: move.type ?? this.rom[offset + 3] };
+    const pointer = 0x2cb52 + (id - 1) * 2; // MoveDescriptions, bank 0x0b in Crystal 1.1.
+    const description = this.cartridgeText(0x2c000 + ((this.rom[pointer] | (this.rom[pointer + 1] << 8)) & 0x3fff));
+    return { ...move, power: move.power ?? this.rom[offset + 2], type: move.type ?? this.rom[offset + 3],
+      description: flowingText(description.text.replace("\n2nd turn", " · 2nd turn")) };
   }
   training({ species, level, exp }: Pokemon) {
     return this.call<{ next: number | null; percent: number }>({ op: "training", species, level, exp });
