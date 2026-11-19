@@ -5,7 +5,7 @@ import { mountPartnerSummary } from "./ui/partner-summary";
 import { bagKeyForItem, ballIds, giveFromBag, nativeItemId, rewardItems, rewardShortfall, stoneIds } from "./game/items";
 import { hatchEgg } from "./game/nursery";
 import { openNursery, showHatch } from "./ui/nursery";
-import { captureRegistration, sortCollection, storePokemon, surveyStipend } from "./game/collection";
+import { captureRegistration, fossilChoices, sortCollection, starterSpecies, storePokemon, surveyStipend } from "./game/collection";
 import { mountStoragePc, type PcState } from "./ui/storage-pc";
 import { specimenCard } from "./ui/specimen";
 import { typeNames } from "./game/type-names";
@@ -439,7 +439,7 @@ function specimen(mon: Pokemon) {
 }
 function starter(selected = 58) {
   mode = "starter";
-  const choices = [58, 60, 69].map(id => {
+  const choices = starterSpecies.map(id => {
     const data = engine.species(id);
     const types = [...new Set(data.types)].map(type => typeNames[type]).join(" / ");
     return `<button data-id="${id}"><img src="${sprite(id)}" alt=""><strong>${escapeHtml(data.name)}</strong><small>${types}</small></button>`;
@@ -783,13 +783,15 @@ function interact() {
     const p = panel(
       layer,
       "Revive a fossil",
-      '<p>The excavator can revive one of two fossils for you.</p><div class="buttons"><button data-fossil="138">Helix · Omanyte</button><button data-fossil="140">Dome · Kabuto</button><button class="secondary" id="back">Decide later</button></div>',
+      `<p>The excavator can revive one of two fossils for you.</p><div class="buttons">${fossilChoices.map(({ species, fossil }) =>
+        `<button data-fossil="${species}">${fossil} · ${escapeHtml(engine.species(species).name)}</button>`
+      ).join("")}<button class="secondary" id="back">Decide later</button></div>`,
     );
     p.querySelector("#back")!.addEventListener("click", close);
     p.querySelectorAll<HTMLButtonElement>("[data-fossil]").forEach(
       (b) =>
         (b.onclick = () =>
-          finishErrand(o, { ...o.reward, species: Number(b.dataset.fossil) })),
+          finishErrand(o, { ...o.reward, species: Number(b.dataset.fossil) }, "fossil_" + b.dataset.fossil)),
     );
     return;
   }
@@ -1143,7 +1145,7 @@ function rivalSpecies(o: WorldObject, slot: number, original: number) {
     return original;
   // Older journeys store the original starter as the first species caught.
   const partner =
-    [58, 60, 69].find((id) => save.flags.includes("starter_" + id)) ??
+    starterSpecies.find((id) => save.flags.includes("starter_" + id)) ??
     save.caught[0];
   const families: Record<number, number[]> = {
     58: [60, 61, 62, 62],

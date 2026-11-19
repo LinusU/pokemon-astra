@@ -3,6 +3,11 @@ import type { BattleResult, Pokemon } from "../engine";
 export type Collection = { party: Pokemon[]; storage: Pokemon[] };
 
 export const surveyStipend = 600;
+export const starterSpecies = [58, 60, 69] as const;
+export const fossilChoices = [
+  { species: 138, fossil: "Helix" },
+  { species: 140, fossil: "Dome" },
+] as const;
 
 export function captureRegistration(registered: readonly number[], result: Pick<BattleResult, "caught" | "party" | "money">) {
   const mon = result.caught === null ? undefined : result.party[result.caught];

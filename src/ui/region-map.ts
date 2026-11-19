@@ -605,6 +605,37 @@ function locateArea(x: number, y: number) {
   return best;
 }
 
+function markTrainer(c: Ctx, position: Point) {
+  const [x, y] = project(position);
+  stamp(c, [x - 3, y - 8],
+    ["  000  ", " 01110 ", "0222220", "0111110", " 01210 ", "  010  ", "   0   "],
+    ["#3f3c45", "#fff2c7", "#bf614e"]);
+}
+
+function markSelection(c: Ctx, x: number, y: number) {
+  // Leave the printed road number visible between the brackets.
+  c.fillStyle = "#773e43";
+  for (const dx of [-1, 1]) for (const dy of [-1, 1]) {
+    c.fillRect(x + dx * 7 - (dx > 0 ? 2 : 0), y + dy * 6, 3, 1);
+    c.fillRect(x + dx * 7, y + dy * 6 - (dy > 0 ? 2 : 0), 1, 3);
+  }
+}
+
+export function drawHabitatChart(canvas: HTMLCanvasElement, save: Save, position: ReturnType<typeof regionPosition>, wholeArea: boolean, zoom: number) {
+  canvas.width = W;
+  canvas.height = H;
+  const c = canvas.getContext("2d")!;
+  const [x, y] = wholeArea ? centers[position.area] : project(position.point);
+  const left = Math.round(Math.max(0, Math.min(W - W / zoom, x - W / (zoom * 2))));
+  const top = Math.round(Math.max(0, Math.min(H - H / zoom, y - H / (zoom * 2))));
+  c.setTransform(zoom, 0, 0, zoom, -left * zoom, -top * zoom);
+  c.imageSmoothingEnabled = false;
+  c.drawImage(printedChart(), 0, 0);
+  stamp(c, [x - 3, y - 14], ["0000000", "0111110", "0111110", " 01110 ", "  010  ", "   0   "], ["#633c37", "#ffdf67"]);
+  markSelection(c, x, y);
+  markTrainer(c, regionPosition(save.map, save.x, save.y).point);
+}
+
 export function mountRegionChart(panel: HTMLElement, save: Save, objective?: Point) {
   const canvas = panel.querySelector<HTMLCanvasElement>(".region-chart")!;
   canvas.width = W;
@@ -638,12 +669,7 @@ export function mountRegionChart(panel: HTMLElement, save: Save, objective?: Poi
         }
       }
     }
-    for (const dx of [-1, 1])
-      for (const dy of [-1, 1]) {
-        c.fillStyle = "#773e43";
-        c.fillRect(x + dx * 7 - (dx > 0 ? 2 : 0), y + dy * 6, 3, 1);
-        c.fillRect(x + dx * 7, y + dy * 6 - (dy > 0 ? 2 : 0), 1, 3);
-      }
+    markSelection(c, x, y);
     if (objective) {
       const [gx, gy] = project(objective);
       stamp(
@@ -653,13 +679,7 @@ export function mountRegionChart(panel: HTMLElement, save: Save, objective?: Poi
         ["#79503e", "#ffdf72"],
       );
     }
-    const [px, py] = project(here.point);
-    stamp(
-      c,
-      [px - 3, py - 8],
-      ["  000  ", " 01110 ", "0222220", "0111110", " 01210 ", "  010  ", "   0   "],
-      ["#3f3c45", "#fff2c7", "#bf614e"],
-    );
+    markTrainer(c, here.point);
     title.textContent = WORLD[selected].name;
     const r = routes[selected.slice(5)];
     detail.textContent = r

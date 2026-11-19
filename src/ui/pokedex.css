@@ -230,3 +230,36 @@
 }
 .dex-description strong { display: block; color: var(--dex-muted); font-size: 0.87em; }
 .dex-description p { margin-top: 1cqw; }
+
+.dex-atlas {
+  height: 100%;
+  display: grid;
+  grid-template-rows: 14% minmax(0, 1fr) auto 11%;
+  font-size: 5cqw;
+  line-height: 1;
+}
+.dex-atlas .dex-head h2 { font-size: 6.4cqw; }
+.dex-map-paper {
+  display: grid;
+  place-items: center;
+  container-type: size;
+  background: #aec4ad;
+  border-bottom: .4cqw solid var(--dex-line);
+}
+.dex-map-paper canvas {
+  display: block;
+  width: min(100cqw, calc(100cqh * 384 / 231));
+  height: auto;
+  image-rendering: pixelated;
+}
+.dex-map-route { padding: 1cqw 2.2cqw; }
+.dex-map-route:focus { outline: 0; }
+.dex-map-route h3 { font-size: 5.3cqw; font-weight: 400; }
+.dex-map-route p { color: var(--dex-muted); font-size: 4.3cqw; }
+.dex-map-legend { display: inline-flex; align-items: center; gap: 1cqw; }
+.dex-map-legend i {
+  width: 2.8cqw;
+  height: 2.4cqw;
+  background: #ffdf67;
+  clip-path: polygon(0 0, 100% 0, 100% 40%, 50% 100%, 0 40%);
+}

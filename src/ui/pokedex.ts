@@ -1,9 +1,10 @@
-import { buildDex, dexFilters, type DexFilter } from "../game/pokedex";
+import { buildDex, dexFilters, locateHabitat, type DexFilter, type HabitatRecord } from "../game/pokedex";
 import type { Action } from "../game/input";
-import type { Save } from "../game/save";
+import { meetsRequirement, type Save } from "../game/save";
 import { typeNames } from "../game/type-names";
 import { WORLD } from "../world";
 import { escapeHtml } from "./shell";
+import { drawHabitatChart } from "./region-map";
 import "./pokedex.css";
 
 export type DexState = { filter?: DexFilter; selected?: Partial<Record<DexFilter, number>> };
@@ -44,8 +45,9 @@ export function mountPokedex(host: HTMLElement, options: Options) {
   const { lists, habitats, seen, caught } = buildDex(save, id => species(id).types.includes(21));
   let filter = state.filter ?? (seen.size ? "Seen" : "All");
   const selected = state.selected ??= {};
-  let mode: "filters" | "list" | "entry" = lists[filter].length ? "list" : "filters";
+  let mode: "filters" | "list" | "entry" | "map" = lists[filter].length ? "list" : "filters";
   let site = 0;
+  let mapZoom = 2;
   const root = host.ownerDocument.createElement("section");
   root.className = "pokedex";
   root.setAttribute("role", "dialog");
@@ -85,6 +87,10 @@ export function mountPokedex(host: HTMLElement, options: Options) {
     </div>`;
   }
 
+  function habitat(id: number) {
+    return habitats.get(id)?.[site - Number(caught.has(id))];
+  }
+
   function entry(id: number) {
     const records = habitats.get(id) ?? [];
     const hasNotes = caught.has(id);
@@ -97,7 +103,7 @@ export function mountPokedex(host: HTMLElement, options: Options) {
         <div class="dex-description"><strong>${escapeHtml(notes.category)} Pokémon</strong><p>${escapeHtml(notes.description)}</p></div>
       </div>`;
     }
-    const record = records[site - Number(hasNotes)];
+    const record = habitat(id);
     return `<div class="dex-register dex-record">
       <div class="dex-subhead"><span>Habitat</span>${pager}</div>
       ${record ? `<div class="dex-location"><small>${record.map.id === save.map ? "Current location" : save.visited.includes(record.map.id) ? "Visited" : "No visit recorded"}</small>
@@ -106,18 +112,37 @@ export function mountPokedex(host: HTMLElement, options: Options) {
     </div>`;
   }
 
+  function showMap(id: number, record: HabitatRecord) {
+    const { position, hint } = locateHabitat(record, save, req => meetsRequirement(save, req, n => species(n).types));
+    const area = WORLD[position.area].name;
+    root.innerHTML = `<div class="dex-atlas">
+      <header class="dex-head"><h2>Habitat map</h2><span>#${number(id)} ${name(id)}</span></header>
+      <div class="dex-map-paper"><canvas role="img"></canvas></div>
+      <div class="dex-map-route" tabindex="-1"><h3>${escapeHtml(record.map.name)}</h3><p>${escapeHtml(hint)}</p></div>
+      <footer class="dex-foot"><span class="dex-map-legend"><i aria-hidden="true"></i>Habitat</span>
+        <button data-command="zoom" aria-label="${mapZoom === 1 ? "Zoom in" : "Zoom out"}"><kbd>${mapZoom === 1 ? "↑" : "↓"}</kbd> Zoom ${mapZoom === 1 ? "+" : "−"}</button>
+        ${seen.has(id) ? '<button data-command="cry"><kbd>A</kbd> Cry</button>' : ""}
+        <button id="back"><kbd>B</kbd> Record</button></footer></div>`;
+    const canvas = root.querySelector("canvas")!;
+    canvas.setAttribute("aria-label", `Habitat in ${area}. You are in ${WORLD[save.map].name}.`);
+    drawHabitatChart(canvas, save, position, !record.contact && position.area === record.map.id, mapZoom);
+    root.querySelector<HTMLElement>(".dex-map-route")!.focus({ preventScroll: true });
+  }
+
   function render() {
     const i = index(), id = ids()[i];
+    root.dataset.mode = mode;
+    if (mode === "map") return showMap(id, habitat(id)!);
     const detail = mode === "entry";
     const backLabel = detail ? "Index" : mode === "list" ? "Filters" : "Menu";
-    root.dataset.mode = mode;
     root.innerHTML = `<div class="dex-frame">
       <header class="dex-head"><h2><i aria-hidden="true"></i>Pokédex</h2>
         <div class="dex-totals"><span>Seen <b>${seen.size}</b></span><span>Caught <b>${caught.size}/251</b></span></div></header>
       ${detail ? `<div class="dex-entry-nav"><span>Species record</span>${arrows("prev-entry", "next-entry", "species", i, ids().length)}</div>`
         : `<nav class="dex-filters" aria-label="Pokédex filters">${dexFilters.map(f => `<button data-filter="${f}" aria-pressed="${f === filter}">${f}</button>`).join("")}</nav>`}
       <div class="dex-body">${portrait(id)}${detail && id ? entry(id) : catalogue(id, Math.floor(i / pageSize))}</div>
-      <footer class="dex-foot">${detail ? `<span>↔ Species</span><span>↕ Pages</span>${seen.has(id) ? '<button data-command="cry"><kbd>A</kbd> Cry</button>' : ""}`
+      <footer class="dex-foot">${detail ? `<span>↔ Species</span><span>↕ Pages</span>${habitat(id)
+        ? '<button data-command="map"><kbd>A</kbd> Map</button>' : seen.has(id) ? '<button data-command="cry"><kbd>A</kbd> Cry</button>' : ""}`
         : mode === "list" ? '<span>↕ Select</span><span>↔ Page</span><button data-command="open"><kbd>A</kbd> Record</button>'
         : `<span>↔ Filter</span>${ids().length ? '<button data-command="browse"><kbd>↓</kbd> Browse</button>' : ""}`}
         <button id="back"><kbd>B</kbd> ${backLabel}</button></footer></div>`;
@@ -156,7 +181,7 @@ export function mountPokedex(host: HTMLElement, options: Options) {
   }
   function back() {
     if (mode === "filters") return options.onCancel();
-    mode = mode === "entry" ? "list" : "filters";
+    mode = mode === "map" ? "entry" : mode === "entry" ? "list" : "filters";
     render();
   }
   function open() {
@@ -174,15 +199,29 @@ export function mountPokedex(host: HTMLElement, options: Options) {
     const id = ids()[index()];
     if (seen.has(id)) options.cry(id);
   }
+  function openMap() {
+    if (!habitat(ids()[index()])) return;
+    mapZoom = 2;
+    mode = "map";
+    render();
+  }
+  function zoom(level: number) {
+    if (mapZoom === level) return;
+    mapZoom = level;
+    render();
+  }
   function input(action: Control) {
     const delta = action === "up" || action === "left" ? -1 : 1;
     const horizontal = action === "left" || action === "right";
-    if (mode === "filters") {
+    if (mode === "map") {
+      if (action === "a") cry();
+      else if (action === "up" || action === "down") zoom(action === "up" ? 2 : 1);
+    } else if (mode === "filters") {
       if (horizontal) changeFilter(dexFilters[(dexFilters.indexOf(filter) + delta + dexFilters.length) % dexFilters.length]);
       else if (action === "down" || action === "a") browse();
     } else if (mode === "entry") {
       if (horizontal) move(delta);
-      else if (action === "a") cry();
+      else if (action === "a") habitat(ids()[index()]) ? openMap() : cry();
       else turnSite(delta);
     } else if (horizontal) turnPage(delta);
     else if (action === "a") open();
@@ -194,7 +233,7 @@ export function mountPokedex(host: HTMLElement, options: Options) {
     "prev-page": () => turnPage(-1), "next-page": () => turnPage(1),
     "prev-site": () => turnSite(-1), "next-site": () => turnSite(1),
     "prev-entry": () => move(-1), "next-entry": () => move(1),
-    browse, open, cry,
+    browse, open, cry, map: openMap, zoom: () => zoom(mapZoom === 1 ? 2 : 1),
   };
   root.onclick = event => {
     const button = event.target instanceof Element ? event.target.closest("button") : null;
