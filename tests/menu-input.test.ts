@@ -29,6 +29,7 @@ function panel(
   };
   const buttons = layout.map(([left, top, width, buttonHeight]) => {
     const button = {
+      dataset: {} as DOMStringMap,
       getBoundingClientRect: () =>
         rect(
           left,
@@ -63,6 +64,19 @@ function panel(
 }
 
 describe("menu input", () => {
+  it("turns map entries with left and right, repeating while the D-pad is held", () => {
+    const { update, buttons } = panel([[0, 80, 25, 25], [175, 80, 25, 25]]);
+    buttons[0].dataset.mapStep = "-1";
+    buttons[1].dataset.mapStep = "1";
+    update(0);
+    update(10, "right");
+    expect(buttons[1].click).toHaveBeenCalledTimes(1);
+    update(310, undefined, "right");
+    expect(buttons[1].click).toHaveBeenCalledTimes(2);
+    update(320, "left");
+    expect(buttons[0].click).toHaveBeenCalledOnce();
+  });
+
   it("moves down a column, across a row and confirms the selected button", () => {
     const { update, buttons, ownerDocument } = panel([
       [0, 6, 88, 26],

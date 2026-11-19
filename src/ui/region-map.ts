@@ -682,11 +682,11 @@ export function mountRegionChart(panel: HTMLElement, save: Save, objective?: Poi
       "Astra region. You are in " + WORLD[save.map].name + ". Selected " + title.textContent,
     );
   }
-  for (const b of panel.querySelectorAll<HTMLButtonElement>("[data-turn]")) {
+  for (const b of panel.querySelectorAll<HTMLButtonElement>("[data-map-step]")) {
     b.onclick = () => {
       selected =
         chartAreas[
-          (chartAreas.indexOf(selected) + Number(b.dataset.turn) + chartAreas.length) % chartAreas.length
+          (chartAreas.indexOf(selected) + Number(b.dataset.mapStep) + chartAreas.length) % chartAreas.length
         ];
       draw();
     };

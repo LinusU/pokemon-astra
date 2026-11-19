@@ -978,7 +978,7 @@ function view(v: string, pageIndex = 0) {
     body = `<header class="atlas-header"><h2>Astra region</h2><div><button data-zoom aria-pressed="false">Zoom +</button><button id="local-map">Local map</button><button id="back">Back</button></div></header>
       <div class="atlas-paper"><canvas class="region-chart" role="img"></canvas></div>
       <div class="atlas-key"><span><i class="pin-player"></i>You</span><span><i class="pin-goal">✦</i>Journal</span><span><i class="pin-town"></i>Town</span><span><i class="pin-site"></i>Site</span></div>
-      <div class="atlas-readout"><button data-turn="-1" aria-label="Previous place">◀</button><div aria-live="polite"><strong data-place></strong><small data-links></small></div><button data-turn="1" aria-label="Next place">▶</button></div>
+      <div class="atlas-readout"><button data-map-step="-1" aria-label="Previous place">◀</button><div aria-live="polite"><strong data-place></strong><small data-links></small></div><button data-map-step="1" aria-label="Next place">▶</button></div>
       <button class="atlas-fly" data-travel="" hidden>Fly here</button>`;
   } else if (v === "local-map") {
     mountFieldMap(layer, currentField(), save, directions(save, has), has,
