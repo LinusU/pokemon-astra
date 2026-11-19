@@ -276,6 +276,41 @@ it("honors saved mute and resumes explicitly without creating more audio context
   expect(context).toBe(original);
 });
 
+it("silences queued music immediately when restoring a muted journey", async () => {
+  const engine = { startMusicTrack: vi.fn(), nextMusicChunk: () => new Float32Array(12000) };
+  const audio = new GameAudio(() => "town");
+  audio.attach(engine as unknown as Engine);
+  await audio.unlock();
+  await audio.unlock();
+  expect(context.resume).toHaveBeenCalledTimes(1);
+  const scheduled = [...context.sources];
+  audio.attach(engine as unknown as Engine, false);
+  expect(scheduled.length).toBeGreaterThan(0);
+  expect(scheduled.every(source => source.stop.mock.calls.length === 1)).toBe(true);
+  expect(context.state).toBe("suspended");
+});
+
+it("can retry after an interrupted browser refuses to resume audio", async () => {
+  const engine = { startMusicTrack: vi.fn(), nextMusicChunk: () => new Float32Array(12000) };
+  const audio = new GameAudio(() => "town");
+  audio.attach(engine as unknown as Engine);
+  await audio.unlock();
+  Object.assign(document, { hidden: true });
+  document.dispatchEvent(new Event("visibilitychange"));
+  context.resume.mockRejectedValueOnce(new Error("Audio interrupted"));
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  try {
+    Object.assign(document, { hidden: false });
+    document.dispatchEvent(new Event("visibilitychange"));
+    await Promise.resolve();
+    expect(audio.failed).toBe(true);
+    await audio.unlock();
+    expect(audio.playing).toBe(true);
+  } finally {
+    warn.mockRestore();
+  }
+});
+
 it("keeps each town's theme through its shop and each expedition's theme through its rooms", () => {
   const towns = Object.values(WORLD).filter(map => map.kind === "town");
   expect(new Set(towns.map(fieldMusic)).size).toBe(towns.length);

@@ -67,9 +67,9 @@ export class GameAudio {
       if (document.hidden) {
         this.stopScheduled();
         this.stopEffects();
-        void this.context?.suspend();
+        this.suspend();
       } else if (this.enabled && this.context) {
-        void this.context.resume().then(() => this.pump());
+        void this.unlock();
       }
     });
   }
@@ -77,10 +77,15 @@ export class GameAudio {
     if (this.engine !== engine) {
       this.buffers.clear();
     }
-    if (this.engine !== engine || !enabled) this.stopEffects();
+    if (this.engine !== engine || !enabled) {
+      this.stopScheduled();
+      this.stopEffects();
+    }
     this.engine = engine;
     this.enabled = enabled;
     this.current = undefined;
+    if (!enabled) this.suspend();
+    else if (this.playing) this.pump();
     this.changed();
   }
   get playing() {
@@ -88,6 +93,7 @@ export class GameAudio {
   }
   async unlock() {
     if (!this.engine || !this.enabled || document.hidden) return;
+    if (this.playing && this.timer !== undefined) return;
     try {
       if (!this.context || this.context.state === "closed") {
         this.context = new AudioContext({ latencyHint: "interactive" });
@@ -115,9 +121,13 @@ export class GameAudio {
     else {
       this.stopScheduled();
       this.stopEffects();
-      if (this.context) void this.context.suspend();
+      this.suspend();
     }
     this.changed();
+  }
+  private suspend() {
+    if (this.context && this.context.state !== "closed")
+      void this.context.suspend().catch(() => {});
   }
   refreshMusic() {
     this.pump();
