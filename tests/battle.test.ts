@@ -25,6 +25,13 @@ describe("battle presentation", () => {
       "broke free",
     );
   });
+  it("names the copied Pokémon and the new type in Transform and Conversion text", () => {
+    const species = (id: number) => ({ name: id === 201 ? "UNOWN" : "DITTO" });
+    expect(battleMessage({ Transformed: { user: { name: "DITTO" }, species: 201 } },
+      move, () => "Potion", undefined, 0, species)).toBe("DITTO TRANSFORMED into UNOWN!");
+    expect(battleMessage({ TransformedType: { user: { name: "PORYGON" }, kind: 23 } },
+      move, () => "Potion")).toBe("PORYGON transformed into the Electric-type!");
+  });
   it("has an authored effect for every move in the native catalog", () => {
     const source = readFileSync(new URL("../vendor/crystal-battle/src/data/names.rs", import.meta.url), "utf8");
     const table = source.match(/const MOVE_NAMES: &\[&str\] = &\[([\s\S]*?)\];/)![1];

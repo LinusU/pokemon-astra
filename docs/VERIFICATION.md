@@ -127,6 +127,8 @@ From Tideglass the player followed Canal Road to Copperwick, read the night mete
 
 The player used Flash on Copperwick’s north road, crossed Saffron Dunes and caught Marowak. In the Hourglass Ruins, the player read the frieze, sighted the disk from its western shadow, restored the lens and used the sand chute to return. The save recorded both gym trainers defeated, Sable’s Mirage Badge and Strength.
 
+The Sunspire glassworker accepted the repaired offering bowl and awarded a Moon Stone and a Sun Stone. From Reedhaven the player inspected the nest and the burrow in Bamboo Sanctuary, filed the ranger report, and crossed Ashen Trail to the Cinderfall Center.
+
 ## Save recovery
 
 - An isolated production build distinguished an invalid cartridge, an unavailable game engine, a failed cartridge cache write and a failed save read. Retrying the engine and cache used the file already selected. Playing with an uncached cartridge wrote a working save that reopened after choosing the cartridge again.
@@ -140,3 +142,5 @@ The player used Flash on Copperwick’s north road, crossed Saffron Dunes and ca
 - The native encounter test caught all 26 Unown letters. Each capture retained the appearance from battle, and all letters decoded distinct front and back pictures from the local cartridge. The Magikarp check compared both sides against the normal and shiny cartridge colors.
 - An isolated Chrome save at Crown Summit showed four distinct Unown portraits, including shiny I and V. The stored partner’s summary matched its PC portrait, and the party tab distinguished ordinary and shiny Magikarp. The individual letter and shiny labels fit at 320 pixels wide.
 - Older Hall of Fame records with only species and level still open with the standard species portrait. New records include the winning partners’ DVs.
+- In a staged battle at the Copperworks perch, switching from an ordinary Unown to a shiny Unown changed its back picture. Zapdos returned after the player escaped and again after a knockout and reload. Capturing it registered the same front portrait seen in the encounter and marked the perch complete.
+- In a seeded Route 18 encounter, wild Ditto copied shiny Unown V. From the transformation message onward its picture matched an ordinary V in the test party. The HUD still identified Ditto as uncaught. The first-catch card and the saved partner matched the original Ditto’s portrait and DVs.

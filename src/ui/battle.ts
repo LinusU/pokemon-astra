@@ -270,6 +270,7 @@ export function battleMessage(
   item: Options["itemName"],
   trainerName?: string,
   prizeMoney = 0,
+  species?: Options["species"],
 ): string {
   const plain: Record<string, string> = {
     SentHalfToMom: "Half the money was sent to Mom.",
@@ -411,8 +412,8 @@ export function battleMessage(
       if (field === "mv") value = m(value);
       if (field === "item") value = item(value);
       if (field === "stat") value = statName(value);
-      if (field === "species") value = "another Pokémon";
-      if (field === "kind") value = "different";
+      if (field === "species") value = species?.(value).name ?? "another Pokémon";
+      if (field === "kind") value = typeNames[value] ?? "???";
       text = text.replace("…", String(value ?? "Pokémon"));
     }
     return text;
@@ -446,7 +447,7 @@ export class BattlePresenter {
   private root: HTMLElement;
   private snapshot: BattleSnapshot;
   private shown: Record<Battler, BattleMon>;
-  private sentOutDvs: Record<Battler, number>;
+  private sentOut: Record<Battler, BattleMon>;
   private shownSlots: Record<Battler, number>;
   private expProgress: number;
   private lastMoves = new Map<number, { slot: number; id: number }>();
@@ -473,7 +474,7 @@ export class BattlePresenter {
       player: this.initialMon("player"),
       enemy: this.initialMon("enemy"),
     };
-    this.sentOutDvs = { player: this.shown.player.dvs, enemy: this.shown.enemy.dvs };
+    this.sentOut = { ...this.shown };
     this.expProgress = this.expAtSendOut(this.shownSlots.player, o.snapshot.events as Event[]);
     const arena = o.arena ?? (o.trainerName === "Champion Mira" ? "champion" : o.gymBackdrop ? "gym" : o.wildEncounter ?? "field");
     const trainer = o.wildEncounter ? undefined : o.trainerName;
@@ -546,19 +547,21 @@ export class BattlePresenter {
       const image = this.root.querySelector<HTMLImageElement>(
         `.battle-${side} img`,
       )!;
-      const traits = `${mon.dvs}:${this.sentOutDvs[side]}`;
+      const original = this.sentOut[side];
+      const traits = `${mon.dvs}:${original.dvs}`;
       if (image.dataset.species !== String(mon.species) || image.dataset.dvs !== traits) {
         image.dataset.dvs = traits;
         image.dataset.species = String(mon.species);
-        image.src = this.o.sprite({ species: mon.species, dvs: mon.dvs, paletteDvs: this.sentOutDvs[side] }, side === "player");
+        image.src = this.o.sprite({ species: mon.species, dvs: mon.dvs, paletteDvs: original.dvs }, side === "player");
         image.alt = this.o.species(mon.species).name;
       }
       const status = battleStatus(mon.status);
-      const name = side === "player" ? this.memberName(this.shownSlots.player) : image.alt;
+      const name = side === "player" ? this.memberName(this.shownSlots.player)
+        : original.species === mon.species ? image.alt : this.o.species(original.species).name;
       const badge = status
         ? `<span class="battle-status ${status[0].toLowerCase()}" aria-label="${status[1]}" title="${status[1]}">${status[0]}</span>`
         : "";
-      const owned = side === "enemy" && !this.trainerBattle && this.o.caught?.includes(mon.species)
+      const owned = side === "enemy" && !this.trainerBattle && this.o.caught?.includes(original.species)
         ? '<i class="battle-owned" role="img" aria-label="Already caught" title="Already caught"></i>' : "";
       hud.innerHTML = `<div class="battle-hud-top"><strong>${escapeHtml(name)}</strong><span>Lv${mon.level}</span></div><div class="battle-hp"><b>HP</b><div class="battle-hp-track"><i class="${ratio <= 0.2 ? "low" : ratio <= 0.5 ? "mid" : ""}" style="width:${ratio * 100}%"></i></div></div><div class="battle-hud-bottom">${owned}${badge}${side === "player" ? `<span class="battle-hp-value">${mon.hp} / ${mon.max_hp}</span>` : ""}</div>${side === "player" ? `<div class="battle-exp" role="meter" aria-label="Experience to next level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${this.expProgress}"><i style="width:${this.expProgress}%"></i></div>` : ""}`;
     }
@@ -618,6 +621,12 @@ export class BattlePresenter {
       const message = event.Message;
       const kind =
         typeof message === "string" ? message : Object.keys(message)[0];
+      if (message.Transformed) {
+        const side = message.Transformed.user.side === "Player" ? "player" : "enemy";
+        const target = this.shown[side === "player" ? "enemy" : "player"];
+        this.shown[side] = { ...this.shown[side], species: message.Transformed.species, dvs: target.dvs };
+        this.paint();
+      }
       const growth = message.GrewToLevel;
       if (growth?.slot === this.shownSlots.player) {
         this.shown.player.level = growth.level;
@@ -640,6 +649,7 @@ export class BattlePresenter {
           this.o.itemName,
           this.o.trainerName,
           this.o.prizeMoney,
+          this.o.species,
         ),
         !/^(WantsToBattle|WildAppeared|Caught|EnemyWasDefeated|GotMoney|GotMoneySentSomeToMom|LostAgainst|TiedAgainst|AskForgetMove)$/.test(kind),
       );
@@ -650,7 +660,7 @@ export class BattlePresenter {
       const battler = side === "Player" ? "player" : "enemy";
       this.shownSlots[battler] = slot;
       this.shown[battler] = mon;
-      this.sentOutDvs[battler] = mon.dvs;
+      this.sentOut[battler] = mon;
       this.setOutOfReach(battler, false);
       if (battler === "player") this.expProgress = this.expAtSendOut(slot, this.queue);
       this.paint();
