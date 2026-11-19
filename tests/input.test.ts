@@ -93,6 +93,11 @@ describe("game input", () => {
     surface.dispatchEvent(new Event("focus"));
     input.update();
     expect(input.hit("b") || input.held("down")).toBe(false);
+    // Moving the other axis should not send the old cancel into the new menu.
+    pads = [pad(0, [1, 1], [1])];
+    input.update();
+    expect(input.hit("right")).toBe(true);
+    expect(input.hit("b") || input.held("down")).toBe(false);
     pads = [pad(0)];
     input.update();
     pads = [pad(0, [0, 0], [0])];

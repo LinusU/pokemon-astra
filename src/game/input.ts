@@ -26,6 +26,20 @@ const keys: Record<string, Action> = {
   Shift: "speed",
 };
 
+function gamepadActions(pad: Gamepad) {
+  const actions = new Set<Action>();
+  const on = (i: number) => !!pad.buttons[i]?.pressed;
+  if (on(0)) actions.add("a");
+  if (on(1)) actions.add("b");
+  if (on(9)) actions.add("menu");
+  const dpad = on(12) || on(13) || on(14) || on(15);
+  if (on(12) || (!dpad && (pad.axes[1] ?? 0) < -0.35)) actions.add("up");
+  if (on(13) || (!dpad && (pad.axes[1] ?? 0) > 0.35)) actions.add("down");
+  if (on(14) || (!dpad && (pad.axes[0] ?? 0) < -0.35)) actions.add("left");
+  if (on(15) || (!dpad && (pad.axes[0] ?? 0) > 0.35)) actions.add("right");
+  return actions;
+}
+
 /** Shared keyboard, multi-touch and last-actively-used Gamepad API controls. */
 export class Input {
   private keyboard = new Map<string, Action>();
@@ -40,7 +54,7 @@ export class Input {
   confirmLabel = window.matchMedia?.("(pointer: coarse)").matches ? "A" : "Z";
   private padStates = new Map<
     number,
-    { id: string; buttons: boolean[]; axes: number[] }
+    { id: string; buttons: boolean[]; axes: number[]; actions: Set<Action>; heldOnFocus?: Set<Action> }
   >();
 
   constructor() {
@@ -162,26 +176,22 @@ export class Input {
         this.active = pad.index;
         this.confirmLabel = "A";
       }
-      this.padStates.set(pad.index, { id: pad.id, buttons, axes });
+      const actions = gamepadActions(pad);
+      const heldOnFocus = this.padPolling === "resuming" ? new Set(actions) : previous?.heldOnFocus;
+      // Each control held when returning must be released before it can fire again.
+      if (heldOnFocus) {
+        for (const action of heldOnFocus) {
+          if (actions.has(action)) actions.delete(action);
+          else heldOnFocus.delete(action);
+        }
+      }
+      this.padStates.set(pad.index, {
+        id: pad.id, buttons, axes, actions,
+        heldOnFocus: heldOnFocus?.size ? heldOnFocus : undefined,
+      });
     }
     if (this.padPolling === "resuming") this.padPolling = "active";
-    const pad = pads.find((p) => p.index === this.active);
-    const actions = new Set<Action>();
-    if (pad) {
-      const on = (i: number) => !!pad.buttons[i]?.pressed;
-      if (on(0)) actions.add("a");
-      if (on(1)) actions.add("b");
-      if (on(9)) actions.add("menu");
-      const dpad = on(12) || on(13) || on(14) || on(15);
-      if (on(12) || (!dpad && (pad.axes[1] ?? 0) < -0.35))
-        actions.add("up");
-      if (on(13) || (!dpad && (pad.axes[1] ?? 0) > 0.35))
-        actions.add("down");
-      if (on(14) || (!dpad && (pad.axes[0] ?? 0) < -0.35))
-        actions.add("left");
-      if (on(15) || (!dpad && (pad.axes[0] ?? 0) > 0.35))
-        actions.add("right");
-    }
+    const actions = this.padStates.get(this.active)?.actions ?? [];
     const now = new Set([
       ...this.keyboard.values(),
       ...[...this.touch.values()].flat(),
