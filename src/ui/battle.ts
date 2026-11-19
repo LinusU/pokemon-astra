@@ -917,6 +917,10 @@ export class BattlePresenter {
   }
   back() {
     if (this.waiting || !this.choosing) return;
+    if (this.snapshot.site === "LearnMove") {
+      this.root.querySelector<HTMLButtonElement>("[data-reconsider], .battle-keep")?.click();
+      return;
+    }
     if (this.bagView) {
       this.bagView.back();
       return;
@@ -944,7 +948,6 @@ export class BattlePresenter {
       (a) =>
         a === "Cancel" ||
         a?.Cancel !== undefined ||
-        a?.LearnMove?.slot === null ||
         a?.OfferSwitch?.keep === true,
     );
     if (cancel >= 0) this.act(cancel);
@@ -1109,11 +1112,12 @@ export class BattlePresenter {
       );
     } else if (learning) {
       const keep = actions.findIndex(a => a.LearnMove?.slot === null);
-      entries = [`<button class="battle-keep" data-index="${keep}">Keep current moves</button>`];
+      entries = [];
       learningMon.moves.forEach((id, slot) => {
         const index = actions.findIndex(a => a.LearnMove?.slot === slot);
         entries.push(`<button data-index="${index}"${index < 0 ? " disabled" : ""}>Forget ${escapeHtml(this.o.move(id).name)}</button>`);
       });
+      entries.push(`<button class="battle-keep" data-index="${keep}">Keep current moves</button>`);
     } else if (moveMenu) {
       const target = this.bagTarget;
       const mon = target === undefined ? active : s.state.player.party![target];
@@ -1170,9 +1174,25 @@ export class BattlePresenter {
           }
         }),
     );
-    controls
-      .querySelectorAll<HTMLButtonElement>("[data-index]")
-      .forEach((b) => (b.onclick = () => this.act(Number(b.dataset.index))));
+    for (const button of controls.querySelectorAll<HTMLButtonElement>("[data-index]")) {
+      const index = Number(button.dataset.index);
+      button.onclick = () => {
+        if (!learning) return this.act(index);
+        const slot = actions[index].LearnMove.slot;
+        const next = learn ? this.o.move(learn.mv).name : "the new move";
+        copy.textContent = slot === null ? `Give up on learning ${next}?`
+          : `Forget ${this.o.move(learningMon.moves[slot]).name} and learn ${next}?`;
+        this.root.classList.remove("battle-learning", "battle-moves");
+        controls.innerHTML = `<button data-reconsider>Choose again</button><button data-confirm-lesson>${slot === null ? "Keep moves" : "Learn move"}</button>`;
+        const reconsider = controls.querySelector<HTMLButtonElement>("[data-reconsider]")!;
+        reconsider.onclick = () => {
+          this.menu();
+          controls.querySelector<HTMLButtonElement>(`[data-index="${index}"]`)?.focus({ preventScroll: true });
+        };
+        controls.querySelector<HTMLButtonElement>("[data-confirm-lesson]")!.onclick = () => this.act(index);
+        reconsider.focus({ preventScroll: true });
+      };
+    }
   }
   private act(index: number) {
     if (this.waiting || !this.choosing || index < 0) return;
