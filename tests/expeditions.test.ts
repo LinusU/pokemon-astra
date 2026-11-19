@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import { WORLD, QUESTS, type WorldMap } from "../src/world";
 import { expeditions, expeditionState } from "../src/world/expeditions";
+import { guardianField } from "../src/world/guardians";
 import { updateChart, requestHint } from "../src/world/requests";
 import { freshSave, restoreExpeditions, meetsRequirement } from "../src/game/save";
 import { objectVisible, interactionTarget } from "../src/game/actors";
@@ -20,6 +21,40 @@ function walk(map: WorldMap, x: number, y: number, obstacle?: { x: number; y: nu
   }
   return seen;
 }
+
+it("reveals each guardian when its perch opens and leaves an inspectable trace after capture", () => {
+  let checked = 0;
+  for (const map of Object.values(WORLD)) {
+    const guardian = map.objects.find(o => o.kind === "legendary");
+    if (!guardian) continue;
+    checked++;
+    const save = freshSave();
+    const field = () => guardianField(map, save.flags, r => meetsRequirement(save, r));
+    const perch = () => field().objects.find(o => o.id === guardian.id)!;
+    const sealed = perch();
+    expect(sealed).toMatchObject({ kind: "sign", x: guardian.x, y: guardian.y, dialogue: guardian.lockedDialogue });
+    expect(sealed.trainer).toBeUndefined();
+    expect(sealed.setsFlag).toBeUndefined();
+    const requirement = guardian.requires!;
+    save.flags.push(...(requirement.flags ?? []));
+    if (requirement.ability) save.abilities.push(requirement.ability);
+    save.caught = Array.from({ length: requirement.caught ?? 0 }, (_, i) => i + 1);
+    expect(perch()).toBe(guardian);
+    save.flags.push(guardian.setsFlag!);
+    const trace = perch();
+    expect(trace).toMatchObject({ kind: "sign", name: sealed.name, shrine: sealed.shrine });
+    expect(trace.dialogue).not.toBe(sealed.dialogue);
+    expect(trace.trainer).toBeUndefined();
+    expect(objectVisible(trace, new Set(save.flags))).toBe(true);
+    expect(map.objects.find(o => o.id === guardian.id)).toBe(guardian);
+    if (map.id === "undertow_4") {
+      const lapras = field().objects.find(o => o.id === "lighthouse_lapras")!;
+      expect(lapras.kind).toBe("wild");
+      expect(objectVisible(lapras, new Set([lapras.setsFlag!]))).toBe(false);
+    }
+  }
+  expect(checked).toBe(11);
+});
 
 it.each([
   ["undertow_2", "low_tide", "undertow_3"],

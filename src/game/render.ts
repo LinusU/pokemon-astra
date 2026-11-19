@@ -6,7 +6,7 @@ import { paintFieldObject, paintExpeditionFloor, paintReturn, expeditionActivity
 import { paintGymTile, paintGymFixtures, paintGymActivity } from "./gym-art";
 import { trailPalette } from "../world/atlas";
 import { paintSquareTile, paintTownFixtures } from "./town-art";
-import { trailLandmark } from "./trail-landmarks";
+import { paintRelief, trailLandmark } from "./trail-landmarks";
 import { WORLD, isWildEncounter, type Exit, type WorldMap, type WorldObject } from "../world";
 import { pokemonAppearance, type PokemonPortrait } from "../engine/appearance";
 import type { Engine } from "../engine";
@@ -29,6 +29,7 @@ export interface RendererVisualState {
   confirmLabel?: string;
   canFish?: boolean;
   exitOpen?: (exit: Exit) => boolean;
+  resolveMap?: (id: string) => WorldMap;
 }
 
 const GROVE_ART: Record<string, number> = {
@@ -1415,6 +1416,10 @@ export class Renderer {
   ) {
     const x = state ? Math.round(state.x * 16) : o.x * 16 + 8,
       y = state ? Math.round(state.y * 16) : o.y * 16 + 8;
+    if (o.shrine) {
+      paintRelief(c, o.shrine, map.palette, x, y, this.reducedMotion.matches ? 0 : time);
+      return;
+    }
     if (
       ["person", "trainer", "leader", "healer", "shop", "starter"].includes(
         o.kind,
@@ -1766,8 +1771,9 @@ export class Renderer {
     const isOpen = visualState.exitOpen ?? ((e: Exit) => !e.barrier);
     if (this.outdoor(map)) {
       for (const e of map.exits) {
-        const neighbor = WORLD[e.to];
-        if (!e.direction || !neighbor || !this.outdoor(neighbor)) continue;
+        if (!e.direction) continue;
+        const neighbor = visualState.resolveMap?.(e.to) ?? WORLD[e.to];
+        if (!neighbor || !this.outdoor(neighbor)) continue;
         const offset = connectionOffset(map, e);
         const ox = offset.x * WORLD_SCALE,
           oy = offset.y * WORLD_SCALE;

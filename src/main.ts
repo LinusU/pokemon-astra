@@ -16,6 +16,7 @@ import { showBadgeAward } from "./ui/badge-award";
 import { iceLanding, advanceGlide } from "./game/skating";
 import { expeditionState, pitchFlag } from "./world/expeditions";
 import { gymState } from "./world/gyms";
+import { guardianField } from "./world/guardians";
 import { awardBadge, badgeMask, fieldHabitats, fieldTeam } from "./game/badges";
 import { fishingPool } from "./game/pokedex";
 import { Input } from "./game/input";
@@ -172,8 +173,9 @@ document.querySelector("#sound-toggle")?.addEventListener("click", () => {
   if (sound.enabled && !sound.playing) void sound.unlock();
   else toggleMusic();
 });
-function currentField() {
-  return expeditionState(gymState(WORLD[save.map], save.flags), save.flags);
+function currentField(id = save.map) {
+  const map = expeditionState(gymState(WORLD[id], save.flags), save.flags);
+  return guardianField(map, save.flags, has);
 }
 function scene(): MusicScene {
   if (mode === "title" || mode === "intro") return "title";
@@ -1835,7 +1837,7 @@ function frame(now: number) {
       save.flags,
       {
         nest: map.id === "reedhaven_house" ? save.nursery?.parents : undefined,
-        npcs: actors.states, hideHud: mode !== "world", exitOpen: isExitOpen,
+        npcs: actors.states, hideHud: mode !== "world", exitOpen: isExitOpen, resolveMap: currentField,
         confirmLabel: input.confirmLabel, canFish: mode === "world" && canFish(map),
       },
     );

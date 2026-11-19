@@ -7,6 +7,7 @@ import { dungeonPlans } from "./dungeon-plans";
 import { gyms } from "./gyms";
 import { roadCrews } from "./road-crew";
 import { populateHabitats } from "./habitats";
+import { guardianPerches, type GuardianRelief } from "./guardians";
 
 /** Pokémon Astra's authored campaign. Species numbers use the National Pokédex. */
 export type Ability =
@@ -85,6 +86,7 @@ export interface WorldObject {
   sightRange?: number;
   /** A wild resident that can be observed for the Pokédex. */
   wildlife?: number;
+  shrine?: GuardianRelief;
   field?: Fieldwork;
 }
 /** Both encounters remain in the field until a successful capture. */
@@ -1078,27 +1080,14 @@ const legendary: [string, string, number, Requirement][] = [
   ["echo_3", "Ho-Oh", 250, { flags: ["champion"] }],
   ["aurora_3", "Celebi", 251, { flags: ["champion", "aurora_restored"] }],
 ];
-const guardianAdvice: Record<number, string> = {
-  144: "A frozen cascade hides the roost. Lyra’s badge grants Waterfall and opens the way to Articuno.",
-  145: "The intake is still too unstable for Zapdos. The keepers will finish repairs after your League challenge.",
-  146: "The old ore vault is behind fractured rock. Return with Rock Smash from Flint.",
-  150: "The lab capsule is sealed. It can be opened once the League recognizes your work restoring the beacons.",
-  151: "The oldest tree stirs. Return with records of at least 100 different species from your journey.",
-  243: "The island beacon remains dark until a trainer from Astra enters the Hall of Fame.",
-  244: "Heat rises from the quarry stone. The beacon can call Entei once you reach the Hall of Fame.",
-  245: "The moonwater shrine needs a fully restored current. Return after the League challenge.",
-  249: "An eddy covers the deep tunnel. Neve’s badge teaches Whirlpool, which can calm it.",
-  250: "The top bell sounds only after the League recognizes the work of the eight keepers.",
-  251: "The grove is quiet. Record both sanctuary watches and restore the nursery to call Celebi.",
-};
 legendary.forEach(([where, name, species, requires]) =>
   obj(where, {
     id: `legendary_${species}`,
     kind: "legendary",
     name,
-    dialogue: `${name} is waiting. The guardian will return if you cannot catch it.`,
+    dialogue: guardianPerches[species].encounter,
     requires,
-    lockedDialogue: guardianAdvice[species],
+    lockedDialogue: guardianPerches[species].clue,
     setsFlag: `caught_legendary_${species}`,
     trainer: {
       id: `legendary_${species}`,
