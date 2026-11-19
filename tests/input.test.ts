@@ -3,10 +3,11 @@ import { Input } from "../src/game/input";
 
 let surface: EventTarget;
 let pads: Gamepad[];
-function key(type: string, key: string, code = key) {
+function key(type: string, key: string, code = key, modifiers = {}) {
   const event = new Event(type, { cancelable: true });
-  Object.assign(event, { key, code });
+  Object.assign(event, { key, code }, modifiers);
   surface.dispatchEvent(event);
+  return event;
 }
 function pad(index: number, axes = [0, 0], pressed: number[] = []): Gamepad {
   return {
@@ -54,6 +55,50 @@ describe("game input", () => {
     key("keyup", "ArrowUp");
     input.update();
     expect(input.held("up")).toBe(false);
+  });
+  it("leaves browser shortcuts alone while keeping Shift available to run", () => {
+    const input = new Input();
+    expect(key("keydown", "w", "KeyW", { metaKey: true }).defaultPrevented).toBe(false);
+    expect(key("keydown", "s", "KeyS", { ctrlKey: true }).defaultPrevented).toBe(false);
+    expect(key("keydown", "ArrowLeft", "ArrowLeft", { altKey: true }).defaultPrevented).toBe(false);
+    input.update();
+    expect(input.held("up") || input.held("down") || input.held("left")).toBe(false);
+    key("keydown", "Shift", "ShiftLeft", { shiftKey: true });
+    key("keydown", "W", "KeyW", { shiftKey: true });
+    input.update();
+    expect(input.held("up") && input.held("speed")).toBe(true);
+  });
+  it("keeps playing with keyboard input when the browser denies Gamepad access", () => {
+    const getGamepads = vi.fn(() => { throw new DOMException("Blocked", "SecurityError"); });
+    vi.stubGlobal("navigator", { getGamepads });
+    const input = new Input();
+    key("keydown", "z", "KeyZ");
+    input.update();
+    expect(input.hit("a")).toBe(true);
+    input.update();
+    expect(getGamepads).toHaveBeenCalledTimes(1);
+    expect(input.connectedGamepads).toEqual([]);
+  });
+  it("requires fresh controller input after switching windows", () => {
+    const input = new Input();
+    pads = [pad(0, [0, 0], [0])];
+    input.update();
+    expect(input.hit("a")).toBe(true);
+    surface.dispatchEvent(new Event("blur"));
+    input.update();
+    expect(input.held("a")).toBe(false);
+    pads = [pad(0, [0, 1], [1])];
+    input.update();
+    expect(input.held("b") || input.held("down")).toBe(false);
+    surface.dispatchEvent(new Event("focus"));
+    input.update();
+    expect(input.hit("b") || input.held("down")).toBe(false);
+    pads = [pad(0)];
+    input.update();
+    pads = [pad(0, [0, 0], [0])];
+    input.update();
+    expect(input.hit("a")).toBe(true);
+    expect(input.connectedGamepads).toEqual(pads);
   });
   it("ignores a receiver with a stuck axis and follows the controller actually used", () => {
     const input = new Input();

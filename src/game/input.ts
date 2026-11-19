@@ -34,6 +34,9 @@ export class Input {
   private pending = new Set<Action>();
   private pressed = new Set<Action>();
   private active = -1;
+  private padPolling: "active" | "blurred" | "resuming" | "denied" = "active";
+  private pads: Gamepad[] = [];
+  get connectedGamepads(): readonly Gamepad[] { return this.pads; }
   confirmLabel = window.matchMedia?.("(pointer: coarse)").matches ? "A" : "Z";
   private padStates = new Map<
     number,
@@ -42,6 +45,7 @@ export class Input {
 
   constructor() {
     window.addEventListener("keydown", (event) => {
+      if (event.metaKey || event.ctrlKey || event.altKey || event.isComposing) return;
       const action = keys[event.key] || keys[event.key.toLowerCase()];
       if (!action) return;
       const target = event.target as HTMLElement | null;
@@ -58,6 +62,7 @@ export class Input {
       event.preventDefault();
       this.confirmLabel = "Z";
       const code = event.code || event.key;
+      if (event.repeat) return;
       if (!this.keyboard.has(code)) this.pending.add(action);
       this.keyboard.set(code, action);
     });
@@ -68,7 +73,13 @@ export class Input {
       this.keyboard.clear();
       this.touch.clear();
       this.pending.clear();
+      this.pressed.clear();
       this.previous.clear();
+      this.active = -1;
+      this.padPolling = "blurred";
+    });
+    window.addEventListener("focus", () => {
+      if (this.padPolling === "blurred") this.padPolling = "resuming";
     });
   }
 
@@ -118,10 +129,22 @@ export class Input {
     }
   }
 
+  private pollGamepads() {
+    if (this.padPolling === "blurred" || this.padPolling === "denied") return [];
+    try {
+      return Array.from(navigator.getGamepads?.() || []).filter(
+        (p): p is Gamepad => !!p && p.connected !== false,
+      );
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "SecurityError")) throw error;
+      // A frame can run without gamepad permission. Retry when focus returns.
+      this.padPolling = "denied";
+      return [];
+    }
+  }
+
   update() {
-    const pads = Array.from(navigator.getGamepads?.() || []).filter(
-      (p): p is Gamepad => !!p && p.connected !== false,
-    );
+    const pads = this.pads = this.pollGamepads();
     for (const [index, state] of this.padStates) {
       if (pads.some(pad => pad.index === index && pad.id === state.id)) continue;
       this.padStates.delete(index);
@@ -135,12 +158,13 @@ export class Input {
       const used =
         buttons.some((down, i) => down && !previous?.buttons[i]) ||
         (!!previous && axes.some((direction, i) => direction !== 0 && direction !== previous.axes[i]));
-      if (used) {
+      if (used && this.padPolling !== "resuming") {
         this.active = pad.index;
         this.confirmLabel = "A";
       }
       this.padStates.set(pad.index, { id: pad.id, buttons, axes });
     }
+    if (this.padPolling === "resuming") this.padPolling = "active";
     const pad = pads.find((p) => p.index === this.active);
     const actions = new Set<Action>();
     if (pad) {

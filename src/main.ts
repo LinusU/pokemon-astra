@@ -20,7 +20,7 @@ import { awardBadge, badgeMask, fieldHabitats, fieldTeam } from "./game/badges";
 import { fishingPool } from "./game/pokedex";
 import { Input } from "./game/input";
 import { Renderer } from "./game/render";
-import { WorldActors, interactionTarget } from "./game/actors";
+import { WorldActors, facingToward, interactionTarget } from "./game/actors";
 import {
   barrierTarget,
   fieldActions,
@@ -995,8 +995,7 @@ function view(v: string, pageIndex = 0) {
   } else {
     title = "Settings & save";
     body = `<div class="save-retry" hidden><p class="error" role="alert"></p><button id="retry-save"></button></div><p>Battle speed: ${save.settings.battleSpeed}×</p><div class="buttons"><button id="speed">Change speed</button><button id="time">${save.settings.night ? "Switch to day" : "Camp until night"}</button><button id="music">${sound.enabled ? "Mute sound" : "Play sound"}</button><button id="how">How to play</button><button id="export">Export save</button><button data-backup-picker id="choose-save">Import save</button><input hidden id="import" type="file" accept="application/json,.json"></div><p class="small muted">Controller: ${escapeHtml(
-      Array.from(navigator.getGamepads?.() || [])
-        .filter((p): p is Gamepad => !!p)
+      input.connectedGamepads
         .map((p) => p.id)
         .join(", ") || "No gamepad connected",
     )}. Standard 8BitDo modes use A, B, Start and the D-pad or left stick.</p><p class="small muted">To install: on iPhone or iPad, open Share and choose Add to Home Screen. On Android, use your browser’s Install app or Add to Home screen menu.</p><p class="small muted">Your adventure saves automatically in this browser. Export a backup to keep it safe.</p>`;
@@ -1671,6 +1670,12 @@ function update(dt: number) {
       return;
     }
   }
+  const moving = (a: "right" | "left" | "down" | "up") =>
+    Number(input.held(a) || input.hit(a));
+  let dx = moving("right") - moving("left"),
+    dy = moving("down") - moving("up");
+  const heading = dx || dy ? facingToward(dx, dy) : undefined;
+  if (heading) save.facing = heading;
   if (input.hit("a")) {
     interact();
     return;
@@ -1679,26 +1684,13 @@ function update(dt: number) {
     menu();
     return;
   }
-  const moving = (a: "right" | "left" | "down" | "up") =>
-    Number(input.held(a) || input.hit(a));
-  let dx = moving("right") - moving("left"),
-    dy = moving("down") - moving("up");
-  if (!dx && !dy) {
+  if (!heading) {
     bumpLatched = false;
     return;
   }
   const len = Math.hypot(dx, dy);
   dx /= len;
   dy /= len;
-  const heading =
-    Math.abs(dx) > Math.abs(dy)
-      ? dx > 0
-        ? "right"
-        : "left"
-      : dy > 0
-        ? "down"
-        : "up";
-  save.facing = heading;
   if (currentMap.tiles[Math.floor(save.y)]?.[Math.floor(save.x)] === "i") {
     glide = iceLanding(currentMap, save, heading, blocked);
     return;
