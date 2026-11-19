@@ -68,6 +68,30 @@ describe("battle presentation", () => {
 const romAvailable =
   existsSync("pokecrystal11.gbc") && existsSync("public/astra_native.wasm");
 describe.skipIf(!romAvailable)("real native battle events", () => {
+  it("collects Pay Day coins on wins and catches, applies Amulet Coin, and leaves coins behind on escape", async () => {
+    const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});
+    const engine = new Engine(instance.exports as never, readFileSync("pokecrystal11.gbc"));
+    const meowth = engine.teachMove(engine.makePokemon(52, 50), 6, 0);
+    for (const [outcome, item, money, credit] of [
+      ["win", 0, 3000, 100], ["win", 91, 3000, 200], ["win", 91, 999980, 19],
+      ["caught", 0, 3000, 100], ["draw", 0, 3000, 0],
+    ] as const) {
+      const battle = engine.startBattle({
+        party: [{ ...meowth, item }], money, balls: [[1, 1]], seed: 5,
+        opponent: outcome === "win" ? { species: 19, level: 2 } : { species: 143, level: 35 },
+      });
+      const move = battle.snapshot().legal.findIndex((action: any) => action.Move?.slot === 0);
+      let snap = battle.act(move);
+      if (outcome !== "win")
+        snap = battle.act(snap.legal.findIndex((action: any) => outcome === "caught" ? action.Item?.id === 1 : action === "Run"));
+      expect(snap.outcome).toBe(outcome);
+      expect(snap.result?.money).toBe(money + credit);
+      const receipt = (snap.events as any[]).find(event => event.Message?.CollectedPayDay)?.Message;
+      if (credit) expect(battleMessage(receipt, id => engine.move(id), id => engine.itemName(id)))
+        .toBe(`Picked up ₽${credit} in scattered coins!`);
+      else expect(receipt).toBeUndefined();
+    }
+  });
   it("keeps a successful escape distinct from a tied battle and records the wild sighting", async () => {
     const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});
     const engine = new Engine(instance.exports as never, readFileSync("pokecrystal11.gbc"));

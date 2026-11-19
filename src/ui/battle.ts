@@ -370,6 +370,7 @@ export function battleMessage(
     PartyRecoveredHp: () => `${n} recovered ${d.hp} HP!`,
     EnemyWasDefeated: () => `${d.trainer.name} was defeated!`,
     GotMoney: () => `${d.player} got ¥${d.money} for winning!`,
+    CollectedPayDay: () => `Picked up ₽${d.money} in scattered coins!`,
     HitTimes: () => `Hit ${d.times} times!`,
     Magnitude: () => `Magnitude ${d.magnitude}!`,
     DidntAffect: () => `It didn't affect ${n}!`,

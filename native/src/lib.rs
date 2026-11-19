@@ -1,7 +1,7 @@
 use crystal_battle::{
-    battle::{Battle, BattleSetup, Pokemon, PromptSite, Status},
+    battle::{Battle, BattleSetup, Outcome, Pokemon, PromptSite, Status},
     data::{GameData, move_pp, names},
-    engine::sym::W_CUR_PARTY_MON,
+    engine::sym::{W_AMULET_COIN, W_CUR_PARTY_MON},
 };
 use serde_json::{Value, json};
 use std::cell::RefCell;
@@ -18,7 +18,7 @@ fn make_mon(id: u8, level: u8) -> Result<Pokemon, String> {
         .ok_or("could not generate Pokémon".into())
 }
 fn snapshot(b: &Battle) -> Value {
-    let (site, legal, state, events, outcome) = match b.status() {
+    let (site, legal, state, mut events, outcome) = match b.status() {
         Status::Decision(d) => (
             json!(d.site),
             json!(d.legal),
@@ -48,7 +48,20 @@ fn snapshot(b: &Battle) -> Value {
         .decision()
         .filter(|d| d.site == PromptSite::LearnMove)
         .map(|_| b.engine().engine().mem.rb(W_CUR_PARTY_MON));
-    json!({"site":site,"bag":engine.bag(),"legal":legal,"state":state,"events":events,"outcome":outcome,"result":b.result(),"learning_slot":learning_slot,"exp_progress":exp_progress})
+    let mut result = b.result();
+    if let Some(result) = result.as_mut() {
+        // Crystal collects scattered coins in ExitBattle, after the battle
+        // engine has returned. A capture also sets the cartridge's WIN flag.
+        if matches!(result.outcome, Outcome::Win | Outcome::Caught) && result.pay_day > 0 {
+            let multiplier = if engine.mem.rb(W_AMULET_COIN) != 0 { 2 } else { 1 };
+            let collected = (result.pay_day * multiplier).min(999_999u32.saturating_sub(result.money));
+            result.money += collected;
+            if collected > 0 {
+                events.as_array_mut().unwrap().push(json!({"Message":{"CollectedPayDay":{"money":collected}}}));
+            }
+        }
+    }
+    json!({"site":site,"bag":engine.bag(),"legal":legal,"state":state,"events":events,"outcome":outcome,"result":result,"learning_slot":learning_slot,"exp_progress":exp_progress})
 }
 fn run(v: Value) -> Result<Value, String> {
     match v["op"].as_str().unwrap_or("") {
