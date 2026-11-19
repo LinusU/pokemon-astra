@@ -221,4 +221,14 @@ describe("Center PC", () => {
     expect(save.party[3]).toBe(injured);
     expect(save.storage).toEqual([outgoing]);
   });
+  it("stores a swapped partner after earlier arrivals of the same species and level", () => {
+    const save = populated();
+    const incoming = { ...pokemon, species: 1 };
+    const earlier = { ...pokemon, nickname: "Ash" };
+    save.storage = [incoming, earlier];
+    const outgoing = save.party[0];
+    expect(withdrawPokemon(save, incoming, 0)).toBe(true);
+    expect(save.storage).toEqual([earlier, outgoing]);
+    expect(save.party[0]).toBe(incoming);
+  });
 });

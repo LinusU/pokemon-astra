@@ -75,7 +75,12 @@ export function mountStorageIndex(
       if (horizontal) return turnPage(delta);
       row = Math.max(0, Math.min(names().length - 1, row + delta));
     } else {
-      const next = Math.max(0, Math.min(initials.length - 1, letter + delta * (horizontal ? 1 : columns)));
+      const rowStart = letter - letter % columns;
+      const nextRow = rowStart + delta * columns;
+      if (!horizontal && (nextRow < 0 || nextRow >= initials.length)) return;
+      const next = horizontal
+        ? Math.max(rowStart, Math.min(letter + delta, rowStart + columns - 1, initials.length - 1))
+        : Math.min(letter + delta * columns, initials.length - 1);
       if (next === letter) return;
       letter = next;
       row = 0;

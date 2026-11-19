@@ -41,9 +41,9 @@ export function withdrawPokemon({ party, storage }: Collection, mon: Pokemon, re
     party.push(mon);
   } else {
     if (!canDeposit(party, replace, mon)) return false;
-    storage[index] = party[replace];
+    storage.splice(index, 1);
+    storePokemon(storage, party[replace]);
     party[replace] = mon;
-    sortCollection(storage);
   }
   return true;
 }
