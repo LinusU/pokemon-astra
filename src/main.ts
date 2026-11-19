@@ -1172,7 +1172,7 @@ function repelExpired() {
   };
   p.querySelector<HTMLButtonElement>("#back")!.onclick = close;
 }
-function useItem(item: string) {
+function useItem(item: string, initialSlot?: number) {
   if (item === "nursery_egg" && save.egg) {
     const left = Math.max(0, Math.ceil(save.egg.hatchAt - save.steps));
     message(left <= 24 ? "The Egg rocks in its sling. It’s almost ready!" :
@@ -1261,7 +1261,7 @@ function useItem(item: string) {
   mode = "menu";
   layer.replaceChildren();
   mountParty(layer, {
-    title: itemName(item),
+    title: itemName(item), initialSlot,
     rows: fieldPartyRows().map((row, i) => ({
       ...row, disabled: !targets[i].eligible,
       note: targets[i].eligible ? undefined : held ? "Holding item" : "No effect",
@@ -1300,7 +1300,7 @@ function useItem(item: string) {
           return `<button data-move-slot="${slot}" ${current >= max ? "disabled" : ""}><strong>${escapeHtml(move.name)}</strong><span>PP ${current}/${max}</span></button>`;
         }).join("");
         const p = panel(layer, "Use Ether", `<p>Choose a move for ${escapeHtml(name)}.</p><p class="lesson-new">Restores up to 10 PP.</p><div class="lesson-choices">${choices}</div><button id="back" class="secondary">Back</button>`, "lesson-panel lesson-choice");
-        p.querySelector<HTMLButtonElement>("#back")!.onclick = () => useItem(item);
+        p.querySelector<HTMLButtonElement>("#back")!.onclick = () => useItem(item, index);
         for (const b of p.querySelectorAll<HTMLButtonElement>("[data-move-slot]:enabled")) b.onclick = () => {
           const slot = Number(b.dataset.moveSlot);
           const next = useMedicine(item, mon, engine, slot);
