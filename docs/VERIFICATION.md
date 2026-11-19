@@ -93,6 +93,8 @@ The synthesizer’s Gen 2 music wave channel is implemented in the vendored 0.2.
 - A separate Chrome check aborted the browser's write transaction during a full-party swap. The terminal kept the selected Pokémon and both original rosters. Retrying committed one exchange, which survived a reload. Aborting a backup import also preserved the previous journey.
 - Compact portrait screenshots at 320 and 390 pixels wide were inspected. The production build, 141 Vitest checks, native Rust and cartridge smoke checks, and the three starter campaign simulations passed.
 - On a subsequent production build, unplugging and reconnecting a simulated pad with its stick held kept the PC cursor in place. Pressing right on the D-pad with the stick held up advanced one page. The release passed 146 Vitest checks.
+- On a fresh adventure, Growlithe caught a Rattata on Dewpath. The player deposited Rattata at the Mossford PC, crossed the orchard and withdrew it at the Bramble PC.
+- With a 251-species save at Crown Summit, the D-pad opened a stored Wartortle’s summary, displayed its held Potion, moves and growth, and returned to its transfer screen. Pressing left on the first page kept the selected row. A full-party swap, deposit and withdrawal persisted through an offline reload. The detail and growth screens fit at 320 pixels wide.
 
 ## Wild encounters and Reedhaven nursery
 

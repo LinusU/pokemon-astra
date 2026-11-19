@@ -54,7 +54,7 @@ At a Mart, left/right switches departments and up/down browses stock. Choose an 
 
 Open **Party**, choose a Pokémon and use left/right to read **Stats**, **Moves** and **Growth**. Up/down selects a move or cycles through evolution paths. Growth shows the experience needed for the next level and the current friendship value. Traveling partners gain a friendship point every 128 tiles. Press A to change the lead or give and take held items. When evolution offers a move and all four slots are full, you can review the moves before replacing one. An unfinished choice resumes after reloading.
 
-Use the PC on the right in any Pokémon Center to manage your team. It keeps one collection in Pokédex order. Select **Stored** or **Party**, press A to browse, and use up/down to select a Pokémon or left/right to skip six entries. A opens its details. Withdraw into an open party slot or swap directly when traveling with six. B returns one screen.
+Use the PC on the right in any Pokémon Center to manage your team. Every Center shares one collection, sorted by Pokédex number and then by level. Select **Stored** or **Party** and press A to browse. Up/down selects a Pokémon, left/right turns the page, and A opens its details. From there, press right to inspect its stats, moves, growth and held item, or A to deposit, withdraw or swap. B returns to the previous screen.
 
 Open **Menu → Journal** and press left or right to turn between Survey, Requests, Paths and Badges. In Requests or Paths, press up or down to select an entry, A to read it and B to return to the index. Inspect a blocked route in the field with A to record it. After the third badge, choose your next beacon on the Survey page to follow Sunspire, Cinderfall or Rimepeak in your preferred order.
 

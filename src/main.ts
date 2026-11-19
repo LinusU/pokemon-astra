@@ -599,7 +599,7 @@ function interact() {
     sound.overworld("bootPc");
     mode = "menu";
     mountStoragePc(layer, {
-      save, state: pcState, engine, sprite,
+      save, state: pcState, engine, sprite, itemName,
       saveTransfer: async roster => {
         mode = "saving";
         try {
@@ -1103,13 +1103,13 @@ function partyDetails(index: number) {
   const mon = save.party[index];
   mode = "menu";
   mountPartnerSummary(layer, mon, {
-    engine, image: sprite(mon.species), itemName, canLead: index > 0 && mon.hp > 0,
+    engine, image: sprite(mon.species), itemName,
     onBack: () => view("party", index),
-    onLead: () => {
+    onLead: index > 0 && mon.hp > 0 ? () => {
       [save.party[0], save.party[index]] = [mon, save.party[0]];
       persist();
       view("party");
-    },
+    } : undefined,
     onItem: () => {
       if (mon.item) {
         const key = bagKeyForItem(mon.item);

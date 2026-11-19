@@ -4,6 +4,7 @@ import { canDeposit, depositPokemon, withdrawPokemon, type Collection } from "..
 import type { Save } from "../game/save";
 import { typeNames } from "../game/type-names";
 import { battleStatus, mountParty } from "./party";
+import { mountPartnerSummary } from "./partner-summary";
 import { escapeHtml as html } from "./shell";
 import "./storage-pc.css";
 
@@ -13,7 +14,8 @@ export type PcState = { tab?: Tab; storage?: number; party?: number };
 type Options = {
   save: Save;
   state: PcState;
-  engine: Pick<Engine, "species" | "move">;
+  engine: Engine;
+  itemName: (key: string) => string;
   sprite: (id: number) => string;
   saveTransfer: (roster: Collection) => Promise<void>;
   onClose: () => void;
@@ -68,7 +70,7 @@ export function mountStoragePc(host: HTMLElement, options: Options) {
     const heading = detail ? "Known moves" : tab === "storage" ? "Pokédex order" : "Party order";
     const content = detail
       ? `<div class="pc-moves">${mon.moves.map((id, slot) => id ? `<div>${html(engine.move(id).name)}<small>${mon.pp[slot] & 63} PP</small></div>` : "").join("")}</div>
-        ${eligible() ? `<button class="pc-action" data-command="confirm">▸ ${action()}${action() === "Swap" ? " with party" : ""}</button>`
+        ${eligible() ? `<button class="pc-action" data-command="confirm"><kbd>A</kbd> ${action()}${action() === "Swap" ? " with party" : ""}</button>`
           : '<p class="pc-locked">Keep one healthy Pokémon in your party.</p>'}`
       : `<div class="pc-rows">${mons.slice(start, start + pageSize).map((entry, j) =>
         `<button data-row="${start + j}" ${start + j === i ? 'aria-current="true"' : ""}>
@@ -81,17 +83,25 @@ export function mountStoragePc(host: HTMLElement, options: Options) {
 
   function render() {
     const detail = mode === "detail";
-    const tip = receipt || (detail ? action() === "Swap" ? "Choose a party member to exchange." : tab === "party" ? "Send this Pokémon to the Center PC." : "Add this Pokémon to your party."
-      : mode === "tabs" ? "← → Select   ↓ Browse" : "↑ ↓ Select   ← → Page");
+    const transferAvailable = detail && eligible();
+    let tip = mode === "tabs" ? "← → Select   ↓ Browse" : "↑ ↓ Select   ← → Page";
+    if (detail) {
+      if (!transferAvailable) tip = "You can still inspect this Pokémon.";
+      else if (action() === "Swap") tip = "Choose a party member to exchange.";
+      else tip = tab === "party" ? "Send this Pokémon to the Center PC." : "Add this Pokémon to your party.";
+    }
+    const primary = detail
+      ? `<button data-summary><kbd>${transferAvailable ? "→" : "A"}</kbd> Summary</button>`
+      : list().length ? `<button data-command="confirm"><kbd>A</kbd> ${mode === "tabs" ? "Browse" : "Inspect"}</button>` : "<span></span>";
     root.dataset.mode = mode;
     root.innerHTML = `<header class="pc-head"><h1><i class="pc-terminal" aria-hidden="true"></i>Pokémon Storage</h1><span>Center PC</span></header>
       <nav class="pc-tabs" aria-label="Pokémon lists">
       <button data-tab="storage" aria-pressed="${tab === "storage"}">Stored <b>${save.storage.length}</b></button>
       <button data-tab="party" aria-pressed="${tab === "party"}">Party <b>${save.party.length}/6</b></button></nav>
-      ${roster()}<p class="pc-tip" role="status">${html(tip)}</p>
-      <footer class="pc-foot">${list().length && !detail ? `<button data-command="confirm"><kbd>A</kbd> ${mode === "tabs" ? "Browse" : "Inspect"}</button>` : "<span></span>"}
+      ${roster()}<p class="pc-tip" role="status">${html(receipt || tip)}</p>
+      <footer class="pc-foot">${primary}
       <button id="back"><kbd>B</kbd> ${mode === "tabs" ? "Log off" : "Back"}</button></footer>`;
-    const target = detail ? ".pc-action, #back" : mode === "tabs" ? '[aria-pressed="true"]' : '[aria-current="true"]';
+    const target = detail ? ".pc-action, [data-summary]" : mode === "tabs" ? '[aria-pressed="true"]' : '[aria-current="true"]';
     root.querySelector<HTMLButtonElement>(target)?.focus({ preventScroll: true });
   }
 
@@ -138,6 +148,13 @@ export function mountStoragePc(host: HTMLElement, options: Options) {
       onBack: () => { host.replaceChildren(root); render(); },
     });
   }
+  function summary() {
+    const mon = list()[index()];
+    mountPartnerSummary(host, mon, {
+      engine, image: options.sprite(mon.species), itemName: options.itemName,
+      onBack: () => { host.replaceChildren(root); render(); },
+    });
+  }
   function confirm() {
     const mon = list()[index()];
     if (!mon) return;
@@ -150,7 +167,7 @@ export function mountStoragePc(host: HTMLElement, options: Options) {
         void transfer(roster => depositPokemon(roster, index()), `${name(mon)} was deposited.`);
       } else if (save.party.length === 6) swap(mon);
       else void transfer(roster => withdrawPokemon(roster, mon), `${name(mon)} joined your party.`);
-    } else back();
+    } else summary();
   }
   function back() {
     receipt = "";
@@ -167,18 +184,25 @@ export function mountStoragePc(host: HTMLElement, options: Options) {
   function input(action: Control) {
     if (writing) return;
     if (action === "a") return confirm();
-    if (mode === "detail") return;
+    if (mode === "detail") {
+      if (action === "right") summary();
+      return;
+    }
     const horizontal = action === "left" || action === "right";
     if (mode === "tabs") {
       if (horizontal) selectTab(tab === "party" ? "storage" : "party");
       else if (action === "down" && list().length) move(0);
     } else if (action === "up" && index() === 0) back();
-    else move((action === "up" || action === "left" ? -1 : 1) * (horizontal ? pageSize : 1));
+    else if (horizontal) {
+      const page = Math.floor(index() / pageSize) + (action === "left" ? -1 : 1);
+      if (page >= 0 && page * pageSize < list().length) move(action === "left" ? -pageSize : pageSize);
+    } else move(action === "up" ? -1 : 1);
   }
   root.onclick = event => {
     const b = event.target instanceof Element ? event.target.closest("button") : null;
     if (!b || b.disabled) return;
     if (b.id === "back") back();
+    else if (b.hasAttribute("data-summary")) summary();
     else if (b.dataset.tab) selectTab(b.dataset.tab as Tab);
     else if (b.dataset.jump) move(Number(b.dataset.jump) * pageSize);
     else if (b.dataset.row !== undefined) {

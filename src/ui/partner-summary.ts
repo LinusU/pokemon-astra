@@ -20,9 +20,8 @@ type Options = {
   engine: Engine;
   image: string;
   itemName: (key: string) => string;
-  canLead: boolean;
-  onLead: () => void;
-  onItem: () => void;
+  onLead?: () => void;
+  onItem?: () => void;
   onBack: () => void;
 };
 
@@ -51,10 +50,10 @@ export function mountPartnerSummary(host: HTMLElement, mon: Pokemon, options: Op
     name: engine.species(e.species).name, condition: evolutionCondition(e, options.itemName),
   }));
   const commands = [
-    ...(options.canLead ? [{ name: "Make lead", id: "lead", run: options.onLead }] : []),
-    { name: mon.item ? "Take held item" : "Give held item", id: mon.item ? "take" : "give", run: options.onItem },
-    { name: "Cancel", id: "cancel", run: () => dismiss() },
+    ...(options.onLead ? [{ name: "Make lead", id: "lead", run: options.onLead }] : []),
+    ...(options.onItem ? [{ name: mon.item ? "Take held item" : "Give held item", id: mon.item ? "take" : "give", run: options.onItem }] : []),
   ];
+  if (commands.length) commands.push({ name: "Cancel", id: "cancel", run: dismiss });
   const root = host.ownerDocument.createElement("section");
   root.className = "partner-card";
   root.setAttribute("role", "dialog");
@@ -90,7 +89,7 @@ export function mountPartnerSummary(host: HTMLElement, mon: Pokemon, options: Op
       <div class="partner-bar"><i style="width:${100 * mon.hp / Math.max(1, mon.stats[0])}%"></i></div><small>${status}</small></div></aside>
       <section class="partner-data" aria-label="${page}">${contents()}</section></div>
       <div class="partner-held"><span>Held item</span><b>${html(held)}</b></div>
-      <footer><span>◂ ▸ Pages</span><button data-manage><kbd>A</kbd> Manage</button><button id="back"><kbd>B</kbd> Back</button></footer>
+      <footer><span>◂ ▸ Pages</span>${commands.length ? '<button data-manage><kbd>A</kbd> Manage</button>' : '<button data-next-page><kbd>A</kbd> Next page</button>'}<button id="back"><kbd>B</kbd> Back</button></footer>
       ${managing ? `<div class="partner-popup" aria-label="Manage partner">${commands.map((c,i) => `<button data-command="${i}" id="${c.id}" aria-current="${command === i}">${c.name}</button>`).join("")}</div>` : ""}`;
     if (managing) {
       for (const area of root.querySelectorAll<HTMLElement>("nav, .partner-body, [data-manage]")) area.inert = true;
@@ -108,8 +107,8 @@ export function mountPartnerSummary(host: HTMLElement, mon: Pokemon, options: Op
     if (command !== -1) {
       if (action === "a") return commands[command].run();
       if (action === "up" || action === "down") command = Math.min(commands.length - 1, Math.max(0, command + delta));
-    } else if (action === "a") command = 0;
-    else if (action === "left" || action === "right") page = pages[(pages.indexOf(page) + pages.length + delta) % pages.length];
+    } else if (action === "a" && commands.length) command = 0;
+    else if (action === "left" || action === "right" || action === "a") page = pages[(pages.indexOf(page) + pages.length + delta) % pages.length];
     else if (page === "Moves") move = Math.max(0, Math.min(moves.length - 1, move + delta));
     else if (page === "Growth" && evolutions.length) evolution = (evolution + evolutions.length + delta) % evolutions.length;
     render();
@@ -118,6 +117,7 @@ export function mountPartnerSummary(host: HTMLElement, mon: Pokemon, options: Op
     const b = event.target instanceof Element ? event.target.closest("button") : null;
     if (!b) return;
     if (b.id === "back") return dismiss();
+    if (b.hasAttribute("data-next-page")) return input("right");
     if (b.dataset.command !== undefined) return commands[Number(b.dataset.command)].run();
     if (b.dataset.page) page = b.dataset.page as Page;
     if (b.dataset.move !== undefined) move = Number(b.dataset.move);
