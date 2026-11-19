@@ -133,6 +133,34 @@ export class Engine {
     const p = 0x51424 + (id - 1) * 32;
     return { ...v, types: [this.rom[p + 7], this.rom[p + 8]] };
   }
+  /** Crystal 1.1 stores two pages per species across four Pokédex banks. */
+  dexEntry(id: number) {
+    if (!Number.isInteger(id) || id < 1 || id > 251) throw Error("Invalid species");
+    const index = id - 1;
+    const bank = this.rom[0xec4c + (index >> 6)];
+    const pointer = 0x44378 + index * 2;
+    let cursor = bank * 0x4000 + ((this.rom[pointer] | (this.rom[pointer + 1] << 8)) & 0x3fff);
+    const symbols: Record<number, string> = {
+      0x4e: "\n", 0x54: "POKé", 0x7f: " ", 0xd3: "’r", 0xd4: "’s",
+      0xd5: "’t", 0xe0: "’", 0xe3: "-", 0xe8: ".", 0xf4: ",",
+    };
+    const readText = () => {
+      let text = "";
+      for (let ch = this.rom[cursor++]; ch !== 0x50; ch = this.rom[cursor++]) {
+        if (ch >= 0x80 && ch <= 0x99) text += String.fromCharCode(65 + ch - 0x80);
+        else if (ch >= 0xa0 && ch <= 0xb9) text += String.fromCharCode(97 + ch - 0xa0);
+        else if (ch >= 0xf6) text += String(ch - 0xf6);
+        else if (symbols[ch]) text += symbols[ch];
+        else throw Error("Invalid Pokédex text");
+      }
+      return text;
+    };
+    const category = readText();
+    cursor += 4; // Height and weight precede the first page.
+    const description = [readText(), readText()].join("\n")
+      .replace(/-\n/g, "").replace(/\n/g, " ").replaceAll("POKéMON", "Pokémon");
+    return { category, description };
+  }
   move(id: number) {
     if (id < 1 || id > 251) throw Error("Invalid move");
     const move = this.call<{ id: number; name: string; pp: number }>({

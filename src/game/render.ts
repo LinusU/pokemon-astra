@@ -1,3 +1,4 @@
+import { fieldArena } from "./field-arena";
 import { paintFieldObject, paintExpeditionFloor, paintReturn, expeditionActivity } from "./expedition-art";
 import { paintGymTile, paintGymFixtures, paintGymActivity } from "./gym-art";
 import { trailPalette } from "../world/atlas";
@@ -19,6 +20,8 @@ export interface RendererVisualState {
     }
   >;
   hideHud?: boolean;
+  confirmLabel?: string;
+  canFish?: boolean;
   exitOpen?: (exit: Exit) => boolean;
 }
 
@@ -1764,6 +1767,13 @@ export class Renderer {
         }
       }
   }
+  battleBackdrop(map: WorldMap, x: number, y: number, fishing: boolean) {
+    if (!this.outdoor(map)) return;
+    const region = map.kind === "route" ? trailPalette(map.id, x, y, map.palette) : map.palette;
+    const onWater = map.tiles[Math.floor(y)]?.[Math.floor(x)] === "~";
+    return fieldArena(region, PALETTES[region] ?? PALETTES.meadow, fishing || onWater, this.night);
+  }
+
   render(
     map: WorldMap,
     x: number,
@@ -1962,11 +1972,13 @@ export class Renderer {
       .map((e) => ({ e, distance: Math.hypot(e.x + 0.5 - x, e.y + 0.5 - y) }))
       .filter(({ distance }) => distance < 2.25)
       .sort((a, b) => a.distance - b.distance)[0]?.e;
-    if (barrier || target || exit) {
+    if (barrier || target || visualState.canFish || exit) {
+      const confirm = visualState.confirmLabel ?? "A";
       const hint = barrier
-        ? `A · Inspect ${barrier.label}`
+        ? `${confirm} · Inspect ${barrier.label}`
         : target
-          ? `A · ${target.name}`
+          ? `${confirm} · ${target.name}`
+          : visualState.canFish ? `${confirm} · Fish`
           : `${exit!.direction ? DIRECTION_ARROW[exit!.direction] : "→"} ${exit!.label}`;
       const w = Math.ceil(Math.min(300, c.measureText(hint).width + 16));
       const left = Math.floor((WIDTH - w) / 2);

@@ -1,3 +1,5 @@
+import { specimenCard } from "./ui/specimen";
+import { typeNames } from "./game/type-names";
 import { openFieldwork } from "./ui/fieldwork";
 import { requestHint, updateChart } from "./world/requests";
 import { gymBattleBackdrop } from "./game/gym-art";
@@ -27,7 +29,7 @@ import { MenuInput } from "./ui/menu-input";
 import { MEDICINE, isMedicine, useMedicine } from "./game/medicine";
 import { GameAudio } from "./game/audio";
 import { battleTheme, trainerIntroMusic, victoryTheme, type MusicScene } from "./game/music";
-import { BattlePresenter } from "./ui/battle";
+import { BattlePresenter, escapeAnnounced } from "./ui/battle";
 import { playEvolution } from "./ui/evolution";
 import { get, set, download } from "./game/storage";
 import {
@@ -48,6 +50,7 @@ import {
   type Requirement,
   type Reward,
   type WorldObject,
+  type WorldMap,
 } from "./world";
 import { initEngine, type Engine } from "./engine";
 import "./styles.css";
@@ -68,7 +71,7 @@ let engine: Engine,
   encounterDistance = 0,
   exitLock = true,
   bumpLatched = false,
-  battle: any,
+  battle: ReturnType<Engine["startBattle"]>,
   battleObject: WorldObject | undefined,
   approachingTrainer: WorldObject | undefined,
   battleMusic: MusicScene | undefined,
@@ -160,11 +163,11 @@ function currentField() {
   return expeditionState(gymState(WORLD[save.map], save.flags), save.flags);
 }
 function scene(): MusicScene {
-  if (mode === "title") return "title";
+  if (mode === "title" || mode === "intro") return "title";
   if (mode === "ceremony") return "hallOfFame";
   if (mode === "evolution") return "evolution";
   if (mode === "evolution-result") return "silent";
-  if (mode === "battle" || mode === "encounter")
+  if (mode === "battle" || mode === "encounter" || mode === "registration")
     return battleMusic ?? battleTheme(battleObject, !!save.settings.night);
   if ((mode === "dialogue" || mode === "menu") && interactionMusic) return interactionMusic;
   if (mode === "world" && approachingTrainer && actors.approaching)
@@ -237,7 +240,7 @@ function message(text: string, callback?: () => void, speaker?: string, music?: 
     interactionMusic = music;
     const next = pages.shift() || "";
     dialogueCallback = pages.length ? show : callback;
-    layer.innerHTML = `<div class="dialogue" role="status">${speaker ? `<strong class="speaker">${escapeHtml(speaker)}</strong>` : ""}${escapeHtml(next)}<span class="advance">A ▸</span></div>`;
+    layer.innerHTML = `<div class="dialogue" role="status">${speaker ? `<strong class="speaker">${escapeHtml(speaker)}</strong>` : ""}${escapeHtml(next)}<span class="advance">${input.confirmLabel} ▸</span></div>`;
     layer.querySelector(".dialogue")?.addEventListener("click", advance);
     sound.refreshMusic();
   }
@@ -335,11 +338,12 @@ async function start(bytes: Uint8Array) {
 }
 function title() {
   mode = "title";
+  const goal = directions(save, has);
   const p = panel(
     layer,
     "Welcome back",
-    `<p>Continue your journey in ${escapeHtml(WORLD[save.map].name)}.</p><div class="buttons"><button id="continue">Continue journey</button><button class="secondary" id="new">New adventure</button></div>`,
-    "", fieldCursors.title ??= {},
+    `<p>${escapeHtml(WORLD[save.map].name)} · ${save.badges}/8 badges · ${save.caught.length} caught</p><div class="objective"><strong>${escapeHtml(goal.title)}</strong><br>${escapeHtml(goal.hint)}</div><div class="buttons"><button id="continue">Continue journey</button><button class="secondary" id="new">New adventure</button></div>`,
+    "opening-panel", fieldCursors.title ??= {},
   );
   p.querySelector("#continue")!.addEventListener("click", () => {
     mode = "world";
@@ -364,8 +368,8 @@ function intro() {
   const p = panel(
     layer,
     "Dewdrop Village",
-    `<p>Professor Alder has a Pokémon for you. Meet him at the lab in the north garden.</p><p class="small">Walk with the D-pad. Face Alder and press A to talk.</p><div class="buttons"><button id="begin">Begin adventure</button><button id="how" class="secondary">How to play</button></div>`,
-    "", fieldCursors.intro ??= {},
+    `<p>The flock over Dewdrop has circled three times this morning. Robin thinks one of the beacons has gone dark.</p><p>Meet Professor Alder at the lab in the north garden to choose your partner.</p><p class="small">Face Alder and press ${input.confirmLabel} to talk.</p><div class="buttons"><button id="begin">Begin adventure</button><button id="how" class="secondary">How to play</button></div>`,
+    "opening-panel", fieldCursors.intro ??= {},
   );
   p.querySelector("#how")!.addEventListener("click", () => fieldBasics(intro));
   p.querySelector("#begin")!.addEventListener("click", () => {
@@ -384,42 +388,44 @@ function fieldBasics(back: () => void) {
   );
   p.querySelector("#back")!.addEventListener("click", back);
 }
-function starter() {
+function specimen(id: number) {
+  return { ...engine.species(id), ...engine.dexEntry(id), image: sprite(id) };
+}
+function starter(selected = 58) {
   mode = "starter";
-  const p = panel(
-    layer,
-    "Choose your partner",
-    `<p>Which Pokémon will you take with you?</p><div class="list"><button data-id="58"><img class="mini-sprite" src="${sprite(58)}" alt=""> Growlithe <span class="muted">· Fire</span></button><button data-id="60"><img class="mini-sprite" src="${sprite(60)}" alt=""> Poliwag <span class="muted">· Water</span></button><button data-id="69"><img class="mini-sprite" src="${sprite(69)}" alt=""> Bellsprout <span class="muted">· Grass</span></button></div>`,
-  );
-  p.querySelectorAll<HTMLButtonElement>("[data-id]").forEach(
-    (b) =>
-      (b.onclick = () => {
-        const id = Number(b.dataset.id);
-        save.party = [engine.makeStarter(id)];
-        flag("starter_" + id);
-        cry(id);
-        save.seen.push(id);
-        save.caught.push(id);
-        // Earlier saves already included these supplies before meeting Alder.
-        if (save.flags.includes("starter_supplies_pending")) {
-          applyReward({
-            items: [
-              { item: "poke_ball", amount: 10 },
-              { item: "potion", amount: 5 },
-            ],
-          });
-          save.flags = save.flags.filter(
-            (f) => f !== "starter_supplies_pending",
-          );
-          sound.overworld("item");
-        }
-        flag("partner");
-        persist();
-        message(
-          `${engine.species(id).name} joined your party! Alder packed 10 Poké Balls and 5 Potions in your Bag. Take the east road to Mossford.`,
-        );
-      }),
-  );
+  const choices = [58, 60, 69].map(id => {
+    const data = engine.species(id);
+    const types = [...new Set(data.types)].map(type => typeNames[type]).join(" / ");
+    return `<button data-id="${id}"><img src="${sprite(id)}" alt=""><strong>${escapeHtml(data.name)}</strong><small>${types}</small></button>`;
+  });
+  const p = panel(layer, "Choose your partner",
+    `<p>Pick a Pokémon to hear its cry and see its moves.</p><div class="partner-choices">${choices.join("")}</div>`, "partner-lab");
+  p.querySelector<HTMLButtonElement>(`[data-id="${selected}"]`)?.focus({ preventScroll: true });
+  for (const button of p.querySelectorAll<HTMLButtonElement>("[data-id]")) {
+    button.onclick = () => {
+      const id = Number(button.dataset.id);
+      const mon = engine.makeStarter(id);
+      const data = specimen(id);
+      const moves = mon.moves.filter(Boolean).map(move => engine.move(move).name).join(" · ");
+      cry(id);
+      specimenCard(layer, "Meet your partner", data, `Lv ${mon.level} · ${moves}`,
+        `Choose ${data.name}`, () => {
+          save.party = [mon];
+          flag("starter_" + id);
+          if (!save.seen.includes(id)) save.seen.push(id);
+          if (!save.caught.includes(id)) save.caught.push(id);
+          // Earlier saves already included these supplies before meeting Alder.
+          if (save.flags.includes("starter_supplies_pending")) {
+            applyReward({ items: [{ item: "poke_ball", amount: 10 }, { item: "potion", amount: 5 }] });
+            save.flags = save.flags.filter(f => f !== "starter_supplies_pending");
+            sound.overworld("item");
+          }
+          flag("partner");
+          persist();
+          message(`${data.name} joined your party! Alder packed 10 Poké Balls and 5 Potions in your Bag. Take the east road to Mossford.`);
+        }, () => starter(id));
+    };
+  }
 }
 function itemName(key: string) {
   const name =
@@ -539,10 +545,14 @@ function inspectBarrier(exit: Exit) {
     message(action[2]);
   });
 }
+function canFish(map: WorldMap) {
+  if (!save.party.length || !save.flags.includes("quest_angler_complete")) return false;
+  const dx = save.facing === "left" ? -1 : save.facing === "right" ? 1 : 0;
+  const dy = save.facing === "up" ? -1 : save.facing === "down" ? 1 : 0;
+  return map.tiles[Math.floor(save.y + dy * 0.75)]?.[Math.floor(save.x + dx * 0.75)] === "~";
+}
 function interact() {
-  const map = currentField(),
-    dx = save.facing === "left" ? -1 : save.facing === "right" ? 1 : 0,
-    dy = save.facing === "up" ? -1 : save.facing === "down" ? 1 : 0;
+  const map = currentField();
   actors.enter(map);
   const barrier = barrierTarget(map, save, isExitOpen);
   if (barrier) {
@@ -550,23 +560,17 @@ function interact() {
     inspectBarrier(barrier);
     return;
   }
-  const tx = save.x + dx * 0.75,
-    ty = save.y + dy * 0.75;
   const o = interactionTarget(map, save, new Set(save.flags), (o) =>
     actors.position(o),
   );
   if (!o) {
-    if (
-      save.flags.includes("quest_angler_complete") &&
-      map.tiles[Math.floor(ty)]?.[Math.floor(tx)] === "~" &&
-      save.party.length
-    ) {
+    if (canFish(map)) {
       const fish = fishingPool(map, (id) =>
         engine.species(id).types.includes(21), save,
       );
       const pick = fish[Math.floor(Math.random() * fish.length)];
       message("A Pokémon took the bait!", () =>
-        startBattle(pick.species, pick.minLevel),
+        startBattle(pick.species, pick.minLevel, undefined, true),
       );
       return;
     }
@@ -1011,7 +1015,7 @@ function view(v: string, pageIndex = 0) {
     return;
   } else if (v === "dex") {
     mountPokedex(layer, {
-      save, state: fieldDexState, species: id => engine.species(id), sprite, cry, onCancel: menu,
+      save, state: fieldDexState, species: id => engine.species(id), entry: id => engine.dexEntry(id), sprite, cry, onCancel: menu,
     });
     return;
   } else if (v === "journal") {
@@ -1455,13 +1459,12 @@ function useItem(item: string) {
     },
   });
 }
-function startBattle(species: number, level: number, o?: WorldObject) {
+function startBattle(species: number, level: number, o?: WorldObject, fishing = false) {
   try {
     battleObject = o;
     battleMusic = undefined;
     interactionMusic = undefined;
     battleSpecies = species;
-    if (!save.seen.includes(species)) save.seen.push(species);
     const opponent =
       o?.trainer && !isWildEncounter(o)
         ? {
@@ -1489,20 +1492,22 @@ function startBattle(species: number, level: number, o?: WorldObject) {
     sound.refreshMusic();
     layer.innerHTML =
       '<div class="encounter-transition" aria-hidden="true"></div>';
-    window.setTimeout(showBattle, 620);
+    window.setTimeout(() => showBattle(fishing), 620);
   } catch (e) {
     message(
       `Battle could not start: ${e instanceof Error ? e.message : String(e)}`,
     );
   }
 }
-function showBattle() {
+function showBattle(fishing = false) {
   mode = "battle";
   const s = battle.snapshot();
   if (s.outcome && s.result) {
     const result = s.result;
     const caughtSpecies =
       result.caught !== null ? result.party[result.caught]?.species : undefined;
+    const firstCatch = caughtSpecies !== undefined && !save.caught.includes(caughtSpecies);
+    const catchDestination = (result.caught ?? -1) >= 6 ? "storage" : "party";
     save.party = result.party.slice(0, 6);
     if (result.party.length > 6) save.storage.push(...result.party.slice(6));
     save.money = result.money;
@@ -1574,10 +1579,22 @@ function showBattle() {
       else afterVictory();
       return;
     }
+    if (!blackout && s.outcome === "draw" && escapeAnnounced(s.events)) {
+      wrapUp();
+      return;
+    }
+    const afterCatch = receipt ? () => showReceipt(receipt, wrapUp, battleMusic) : wrapUp;
+    if (firstCatch) {
+      mode = "registration";
+      specimenCard(layer, "New Pokédex entry", specimen(caughtSpecies),
+        `${catchDestination === "storage" ? "Sent to storage" : "Joined your party"} · ${save.caught.length} / 251 caught`,
+        "Continue", afterCatch);
+      return;
+    }
     if (blackout) sound.heal();
     message(
       caughtSpecies
-        ? `${engine.species(caughtSpecies).name} joined ${result.caught >= 6 ? "your storage" : "your party"}!`
+        ? `${engine.species(caughtSpecies).name} ${catchDestination === "storage" ? "was sent to storage" : "joined your party"}!`
         : blackout
           ? `Your team was exhausted. You returned to ${WORLD[save.map].name}, where your Pokémon were healed.`
           : s.outcome.toLowerCase() === "draw"
@@ -1585,7 +1602,7 @@ function showBattle() {
             : s.outcome.toLowerCase().includes("enemy")
               ? "The wild Pokémon fled."
               : "Got away safely!",
-      receipt ? () => showReceipt(receipt, wrapUp, battleMusic) : wrapUp,
+      afterCatch,
       undefined,
       battleMusic,
     );
@@ -1598,12 +1615,14 @@ function showBattle() {
         ? battleObject.trainer.name || battleObject.name
         : undefined,
     gymBackdrop: gymBattleBackdrop(currentField()),
+    fieldBackdrop: renderer.battleBackdrop(currentField(), save.x, save.y, fishing),
     arena: battleObject?.id.endsWith("league_4")
       ? "champion"
       : battleObject?.id.includes("league_")
         ? "league"
         : undefined,
     wildEncounter: battleObject?.kind === "legendary" ? "legendary" : undefined,
+    caught: save.caught,
     prizeMoney: battleObject?.trainer?.reward ?? 0,
     snapshot: s,
     act: (index) => battle.act(index),
@@ -1917,7 +1936,8 @@ function frame(now: number) {
   input.update();
   const wasWorld = mode === "world";
   if (mode === "dialogue" && (input.hit("a") || input.hit("b"))) advance();
-  else if ((mode === "menu" || mode === "guide") && input.hit("b")) {
+  else if (mode === "registration" && input.hit("b")) layer.querySelector<HTMLButtonElement>("#specimen-confirm")?.click();
+  else if ((mode === "menu" || mode === "guide" || mode === "starter") && input.hit("b")) {
     const back = layer.querySelector<HTMLButtonElement>(
       "[data-bag-cancel], #back, #later",
     );
@@ -1938,17 +1958,22 @@ function frame(now: number) {
   screen.dataset.scene = ["welcome", "title", "intro", "loading"].includes(mode)
     ? "title"
     : mode;
-  actors.enter(currentField());
-  if (WORLD[save.map])
+  if (screen.dataset.scene !== "title" && mode !== "battle") {
+    const map = currentField();
+    actors.enter(map);
     renderer.render(
-      currentField(),
+      map,
       save.x,
       save.y,
       save.facing,
       now,
       save.flags,
-      { npcs: actors.states, hideHud: mode !== "world", exitOpen: isExitOpen },
+      {
+        npcs: actors.states, hideHud: mode !== "world", exitOpen: isExitOpen,
+        confirmLabel: input.confirmLabel, canFish: mode === "world" && canFish(map),
+      },
     );
+  }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

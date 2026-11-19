@@ -3,8 +3,9 @@ import { Input, type Action } from "../game/input";
 export function createShell(input: Input) {
   document.querySelector<HTMLDivElement>("#app")!.innerHTML =
     `<main class="shell"><header class="topbar"><div class="brand"><i>✦</i><span>POKÉMON ASTRA</span></div><button class="sound-toggle" id="sound-toggle" aria-label="Toggle game sound" aria-pressed="true">♫ Enable sound</button></header><div class="device"><div class="screen"><canvas width="320" height="240" aria-label="Pokémon Astra game screen"></canvas><div id="layer"></div></div></div><div class="statusbar"><span>✦ &nbsp; THE ASTRA REGION</span><span>ARROWS / WASD &nbsp; · &nbsp; Z CONFIRM &nbsp; · &nbsp; X BACK &nbsp; · &nbsp; M MENU</span></div><div class="controls" aria-label="Touch controls"><div class="dpad"><button class="touch up" data-action="up" aria-label="Up">▲</button><button class="touch left" data-action="left" aria-label="Left">◀</button><button class="touch right" data-action="right" aria-label="Right">▶</button><button class="touch down" data-action="down" aria-label="Down">▼</button></div><button class="touch round button-b" data-action="b" aria-label="B, Back">B</button><button class="touch round button-a" data-action="a" aria-label="A, Confirm">A</button><button class="touch button-menu" data-action="menu">MENU</button></div></main>`;
+  input.bindDpad(document.querySelector<HTMLElement>(".dpad")!);
   document
-    .querySelectorAll<HTMLElement>("[data-action]")
+    .querySelectorAll<HTMLElement>(".controls > [data-action]")
     .forEach((el) => input.bind(el, el.dataset.action as Action));
   return {
     canvas: document.querySelector<HTMLCanvasElement>("canvas")!,

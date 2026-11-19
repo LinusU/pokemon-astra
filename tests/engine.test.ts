@@ -6,6 +6,21 @@ import { MUSIC_TRACKS } from "../src/game/music";
 const available =
   existsSync("pokecrystal11.gbc") && existsSync("public/astra_native.wasm");
 describe.skipIf(!available)("Crystal ROM native bridge", () => {
+  it("reads both pages of all 251 species records across the four ROM banks", async () => {
+    const rom = readFileSync("pokecrystal11.gbc");
+    const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});
+    const engine = new Engine(instance.exports as never, rom);
+    const descriptions = new Set<string>();
+    for (let id = 1; id <= 251; id++) {
+      const { category, description } = engine.dexEntry(id);
+      expect(category).toMatch(/^[A-Z0-9 -]+$/);
+      expect(description.length).toBeGreaterThan(50);
+      expect(description).toMatch(/\.$/);
+      expect(description).not.toMatch(/\n|POKé|�/);
+      descriptions.add(description);
+    }
+    expect(descriptions.size).toBe(251);
+  });
   it("decodes distinct directional walk poses and retains enclosed highlights", async () => {
     // ImageData is normally supplied by the browser.
     const previous = globalThis.ImageData;

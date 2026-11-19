@@ -94,4 +94,25 @@ describe("game input", () => {
     input.update();
     expect(input.held("up")).toBe(false);
   });
+  it("steers through diagonals, the center and the edge with one held thumb", () => {
+    const input = new Input();
+    const pad = Object.assign(new EventTarget(), {
+      dataset: {}, setPointerCapture() {}, hasPointerCapture: () => true,
+      getBoundingClientRect: () => ({ left: 10, top: 20, width: 144, height: 144 }),
+    });
+    input.bindDpad(pad as unknown as HTMLElement);
+    function move(type: string, x: number, y: number) {
+      pad.dispatchEvent(Object.assign(new Event(type), { pointerId: 7, clientX: x, clientY: y }));
+      input.update();
+      return (["up", "right", "down", "left"] as const).filter(d => input.held(d));
+    }
+    expect(move("pointerdown", 82, 42)).toEqual(["up"]);
+    expect(move("pointermove", 137, 42)).toEqual(["up", "right"]);
+    expect(move("pointermove", 137, 92)).toEqual(["right"]);
+    expect(move("pointermove", 82, 92)).toEqual([]);
+    expect(move("pointermove", 9, 92)).toEqual([]);
+    expect(move("pointermove", 33, 92)).toEqual(["left"]);
+    expect(move("lostpointercapture", 33, 92)).toEqual([]);
+    expect(move("pointermove", 82, 42)).toEqual([]);
+  });
 });

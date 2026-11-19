@@ -29,11 +29,12 @@ const keys: Record<string, Action> = {
 /** Shared keyboard, multi-touch and last-actively-used Gamepad API controls. */
 export class Input {
   private keyboard = new Map<string, Action>();
-  private touch = new Map<number, Action>();
+  private touch = new Map<number, Action[]>();
   private previous = new Set<Action>();
   private pending = new Set<Action>();
   private pressed = new Set<Action>();
   private active = -1;
+  confirmLabel = window.matchMedia?.("(pointer: coarse)").matches ? "A" : "Z";
   private padStates = new Map<
     number,
     { buttons: boolean[]; axes: boolean[] }
@@ -55,6 +56,7 @@ export class Input {
       )
         return;
       event.preventDefault();
+      this.confirmLabel = "Z";
       const code = event.code || event.key;
       if (!this.keyboard.has(code)) this.pending.add(action);
       this.keyboard.set(code, action);
@@ -71,16 +73,48 @@ export class Input {
   }
 
   bind(element: HTMLElement, action: Action) {
+    this.bindPointer(element, () => [action]);
+  }
+
+  bindDpad(element: HTMLElement) {
+    const paint = () => {
+      element.dataset.held = [...this.touch.values()].flat().join(" ");
+    };
+    this.bindPointer(element, event => {
+      const rect = element.getBoundingClientRect();
+      const x = (event.clientX - rect.left) / rect.width * 2 - 1;
+      const y = (event.clientY - rect.top) / rect.height * 2 - 1;
+      if (Math.max(Math.abs(x), Math.abs(y)) > 1) return [];
+      const axes: Action[] = [];
+      if (Math.abs(x) > 1 / 3) axes.push(x < 0 ? "left" : "right");
+      if (Math.abs(y) > 1 / 3) axes.push(y < 0 ? "up" : "down");
+      return axes;
+    }, paint);
+    window.addEventListener("blur", paint);
+  }
+
+  private bindPointer(element: HTMLElement, read: (event: PointerEvent) => Action[], paint?: () => void) {
+    const update = (event: PointerEvent) => {
+      const previous = this.touch.get(event.pointerId);
+      const next = read(event);
+      for (const action of next) if (!previous?.includes(action)) this.pending.add(action);
+      this.touch.set(event.pointerId, next);
+      paint?.();
+    };
     element.addEventListener("pointerdown", (event) => {
       event.preventDefault();
       element.setPointerCapture(event.pointerId);
-      this.touch.set(event.pointerId, action);
-      this.pending.add(action);
+      this.confirmLabel = "A";
+      update(event);
+    });
+    if (paint) element.addEventListener("pointermove", event => {
+      if (this.touch.has(event.pointerId) && element.hasPointerCapture(event.pointerId)) update(event);
     });
     for (const name of ["pointerup", "pointercancel", "lostpointercapture"]) {
-      element.addEventListener(name, (event) =>
-        this.touch.delete((event as PointerEvent).pointerId),
-      );
+      element.addEventListener(name, (event) => {
+        this.touch.delete((event as PointerEvent).pointerId);
+        paint?.();
+      });
     }
   }
 
@@ -96,7 +130,10 @@ export class Input {
       const used =
         buttons.some((down, i) => down && !previous?.buttons[i]) ||
         (!!previous && axes.some((down, i) => down && !previous.axes[i]));
-      if (used) this.active = pad.index;
+      if (used) {
+        this.active = pad.index;
+        this.confirmLabel = "A";
+      }
       this.padStates.set(pad.index, { buttons, axes });
     }
     const pad = pads.find((p) => p.index === this.active);
@@ -119,7 +156,7 @@ export class Input {
     }
     const now = new Set([
       ...this.keyboard.values(),
-      ...this.touch.values(),
+      ...[...this.touch.values()].flat(),
       ...actions,
     ]);
     this.pressed = new Set([

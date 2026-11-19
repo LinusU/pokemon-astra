@@ -13,6 +13,7 @@ type Options = {
   save: Save;
   state: DexState;
   species: (id: number) => Species;
+  entry: (id: number) => { category: string; description: string };
   sprite: (id: number) => string;
   cry: (id: number) => void;
   onCancel: () => void;
@@ -28,7 +29,7 @@ const pageSize = 6;
 const number = (id: number) => String(id).padStart(3, "0");
 
 function arrows(previous: string, next: string, label: string, position: number, total: number) {
-  const vertical = label === "habitat";
+  const vertical = label === "record page";
   return `<div class="dex-pager"><button data-command="${previous}" aria-label="Previous ${label}" ${position <= 0 ? "disabled" : ""}>${vertical ? "▴" : "◂"}</button><span>${position + 1} / ${total}</span><button data-command="${next}" aria-label="Next ${label}" ${position + 1 >= total ? "disabled" : ""}>${vertical ? "▾" : "▸"}</button></div>`;
 }
 
@@ -86,9 +87,19 @@ export function mountPokedex(host: HTMLElement, options: Options) {
 
   function entry(id: number) {
     const records = habitats.get(id) ?? [];
-    const record = records[site];
+    const hasNotes = caught.has(id);
+    const total = records.length + Number(hasNotes);
+    const pager = total ? arrows("prev-site", "next-site", "record page", site, total) : "";
+    if (hasNotes && site === 0) {
+      const notes = options.entry(id);
+      return `<div class="dex-register dex-notes">
+        <div class="dex-subhead"><span>Field notes</span>${pager}</div>
+        <div class="dex-description"><strong>${escapeHtml(notes.category)} Pokémon</strong><p>${escapeHtml(notes.description)}</p></div>
+      </div>`;
+    }
+    const record = records[site - Number(hasNotes)];
     return `<div class="dex-register dex-record">
-      <div class="dex-subhead"><span>Habitat</span>${record ? arrows("prev-site", "next-site", "habitat", site, records.length) : ""}</div>
+      <div class="dex-subhead"><span>Habitat</span>${pager}</div>
       ${record ? `<div class="dex-location"><small>${record.map.id === save.map ? "Current location" : save.visited.includes(record.map.id) ? "Visited" : "Unvisited"}</small>
         <h3>${escapeHtml(record.map.name)}</h3></div>
         <div class="dex-method"><strong>${escapeHtml(record.method)} · Lv ${record.level}</strong><span>${escapeHtml(record.note)}</span></div>` : '<p class="dex-empty">No recorded habitat.</p>'}
@@ -106,11 +117,11 @@ export function mountPokedex(host: HTMLElement, options: Options) {
       ${detail ? `<div class="dex-entry-nav"><span>Species record</span>${arrows("prev-entry", "next-entry", "species", i, ids().length)}</div>`
         : `<nav class="dex-filters" aria-label="Pokédex filters">${dexFilters.map(f => `<button data-filter="${f}" aria-pressed="${f === filter}">${f}</button>`).join("")}</nav>`}
       <div class="dex-body">${portrait(id)}${detail && id ? entry(id) : catalogue(id, Math.floor(i / pageSize))}</div>
-      <footer class="dex-foot">${detail ? `<span>↔ Species</span><span>↕ Habitat</span>${seen.has(id) ? '<button data-command="cry"><kbd>A</kbd> Cry</button>' : ""}`
-        : mode === "list" ? '<span>↕ Select</span><span>↔ Page</span><button data-command="open"><kbd>A</kbd> Habitat</button>'
+      <footer class="dex-foot">${detail ? `<span>↔ Species</span><span>↕ Pages</span>${seen.has(id) ? '<button data-command="cry"><kbd>A</kbd> Cry</button>' : ""}`
+        : mode === "list" ? '<span>↕ Select</span><span>↔ Page</span><button data-command="open"><kbd>A</kbd> Record</button>'
         : `<span>↔ Filter</span>${ids().length ? '<button data-command="browse"><kbd>↓</kbd> Browse</button>' : ""}`}
         <button id="back"><kbd>B</kbd> ${backLabel}</button></footer></div>`;
-    const focus = mode === "filters" ? `[data-filter="${filter}"]` : detail ? ".dex-record" : `[data-id="${id}"]`;
+    const focus = mode === "filters" ? `[data-filter="${filter}"]` : detail ? ".dex-register" : `[data-id="${id}"]`;
     const target = root.querySelector<HTMLElement>(focus) ?? root;
     if (detail) target.tabIndex = -1;
     target.focus({ preventScroll: true });
@@ -137,7 +148,9 @@ export function mountPokedex(host: HTMLElement, options: Options) {
   }
   function turnSite(delta: number) {
     const next = site + delta;
-    if (!habitats.get(ids()[index()])?.[next]) return;
+    const id = ids()[index()];
+    const total = (habitats.get(id)?.length ?? 0) + Number(caught.has(id));
+    if (next < 0 || next >= total) return;
     site = next;
     render();
   }

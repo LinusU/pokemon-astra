@@ -16,12 +16,25 @@ type Event = Record<string, any>;
 type Battler = "player" | "enemy";
 type SoundAnimation = { anim: number; param: number };
 type ItemAction = { id: number; target: number | null; move_slot: number | null };
+const escapes = new Set(["GotAwaySafely", "WildFled", "EnemyFled", "FledUsingItem", "FledFromBattle", "FledInFear", "BlownAway"]);
+
+/** Crystal also uses the draw result for a successful escape. */
+export function escapeAnnounced(events: unknown[]) {
+  return events.some(event => {
+    if (!event || typeof event !== "object" || !("Message" in event)) return false;
+    const message = event.Message;
+    return typeof message === "string" ? escapes.has(message)
+      : !!message && typeof message === "object" && Object.keys(message).some(key => escapes.has(key));
+  });
+}
 type Options = {
   layer: HTMLElement;
   trainerName?: string;
+  caught?: readonly number[];
   prizeMoney?: number;
   arena?: "league" | "champion";
   gymBackdrop?: string;
+  fieldBackdrop?: string;
   wildEncounter?: "legendary";
   snapshot: BattleSnapshot;
   act: (index: number) => BattleSnapshot;
@@ -483,6 +496,10 @@ export class BattlePresenter {
     </section>`;
     this.root = o.layer.querySelector(".battle-scene")!;
     if (o.gymBackdrop) this.root.style.setProperty("--gym-backdrop", `url("${o.gymBackdrop}")`);
+    if (arena === "field" && o.fieldBackdrop) {
+      this.root.classList.add("field-backdrop");
+      this.root.style.setProperty("--field-backdrop", `url("${o.fieldBackdrop}")`);
+    }
     trackMenuCursor(this.root.querySelector<HTMLElement>(".battle-controls")!, button => {
       if (this.snapshot.site === "BattleMenu" && button.dataset.group)
         this.lastCommand = button.dataset.group;
@@ -536,7 +553,9 @@ export class BattlePresenter {
       const badge = status
         ? `<span class="battle-status ${status[0].toLowerCase()}" aria-label="${status[1]}" title="${status[1]}">${status[0]}</span>`
         : "";
-      hud.innerHTML = `<div class="battle-hud-top"><strong>${escapeHtml(name)}</strong><span>Lv${mon.level}</span></div><div class="battle-hp"><b>HP</b><div class="battle-hp-track"><i class="${ratio <= 0.2 ? "low" : ratio <= 0.5 ? "mid" : ""}" style="width:${ratio * 100}%"></i></div></div><div class="battle-hud-bottom">${badge}${side === "player" ? `<span class="battle-hp-value">${mon.hp} / ${mon.max_hp}</span>` : ""}</div>${side === "player" ? `<div class="battle-exp" role="meter" aria-label="Experience to next level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${this.expProgress}"><i style="width:${this.expProgress}%"></i></div>` : ""}`;
+      const owned = side === "enemy" && !this.trainerBattle && this.o.caught?.includes(mon.species)
+        ? '<i class="battle-owned" role="img" aria-label="Already caught" title="Already caught"></i>' : "";
+      hud.innerHTML = `<div class="battle-hud-top"><strong>${escapeHtml(name)}</strong><span>Lv${mon.level}</span></div><div class="battle-hp"><b>HP</b><div class="battle-hp-track"><i class="${ratio <= 0.2 ? "low" : ratio <= 0.5 ? "mid" : ""}" style="width:${ratio * 100}%"></i></div></div><div class="battle-hud-bottom">${owned}${badge}${side === "player" ? `<span class="battle-hp-value">${mon.hp} / ${mon.max_hp}</span>` : ""}</div>${side === "player" ? `<div class="battle-exp" role="meter" aria-label="Experience to next level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${this.expProgress}"><i style="width:${this.expProgress}%"></i></div>` : ""}`;
     }
   }
   private enqueue(snapshot: BattleSnapshot) {

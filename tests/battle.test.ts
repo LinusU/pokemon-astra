@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
-import { battleMessage, battleMonAtSendOut } from "../src/ui/battle";
+import { battleMessage, battleMonAtSendOut, escapeAnnounced } from "../src/ui/battle";
 import { findMoveVisual, nativeConditionVisual } from "../src/ui/move-visuals";
 import { Engine } from "../src/engine";
 
@@ -61,6 +61,20 @@ describe("battle presentation", () => {
 const romAvailable =
   existsSync("pokecrystal11.gbc") && existsSync("public/astra_native.wasm");
 describe.skipIf(!romAvailable)("real native battle events", () => {
+  it("keeps a successful escape distinct from a tied battle and records the wild sighting", async () => {
+    const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});
+    const engine = new Engine(instance.exports as never, readFileSync("pokecrystal11.gbc"));
+    const battle = engine.startBattle({
+      party: [engine.makePokemon(58, 50)], opponent: { species: 129, level: 5 },
+      seen: [58], caught: [58], seed: 4,
+    });
+    const result = battle.act(battle.snapshot().legal.indexOf("Run"));
+    expect(result.outcome).toBe("draw");
+    expect(escapeAnnounced(result.events)).toBe(true);
+    expect(escapeAnnounced([{ Message: { TiedAgainst: { trainer: "Robin" } } }])).toBe(false);
+    expect(result.result?.world.seen).toEqual([58, 129]);
+    expect(result.result?.world.caught).toEqual([58]);
+  });
   it("sends out fresh trainer Pokémon at full HP", async () => {
     const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});
     const engine = new Engine(instance.exports as never, readFileSync("pokecrystal11.gbc"));

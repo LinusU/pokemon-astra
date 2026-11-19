@@ -220,3 +220,13 @@
   font: inherit;
   text-align: center;
 }
+
+.dex-notes:focus { outline: none; }
+.dex-description {
+  align-self: center;
+  padding: 1.8cqw;
+  font-size: 4.4cqw;
+  line-height: 1.02;
+}
+.dex-description strong { display: block; color: var(--dex-muted); font-size: 0.87em; }
+.dex-description p { margin-top: 1cqw; }

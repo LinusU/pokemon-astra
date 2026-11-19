@@ -78,3 +78,10 @@ The synthesizer’s Gen 2 music wave channel is implemented in the vendored 0.2.
 - In an isolated Chrome profile, prepared saves exercised all 16 field requests through the game UI, including a native Lapras capture, the Kabuto fossil choice, Robin’s stone, and the selected atlas cover. The tests supplied Pokédex records for the census and atlas thresholds.
 - Keyboard movement stopped at Undertow’s high water and crossed the same tiles on foot after drainage. Both summit field actions persisted independently. At Echo Tower, a player played the peal, read the wax, walked through the revealed archive door and received Unown. The overnight sanctuary watch and each intermediate ice push survived a reload.
 - At a 390×844 viewport, directional controls and confirm operated both telescope wheels while the sight stayed visible. Inspecting an orchard blossom added its progress to the journal before meeting the orchard keeper.
+
+## November 19 playability pass
+
+- In an isolated Chrome profile, a new journey imported the local cartridge, walked from home to Alder, previewed all three partners and chose Poliwag. Back returned to the same candidate. Previewing left the party empty until confirmation. Poliwag received its two displayed moves and the starting supplies.
+- A prepared fishing save exercised a move, a first capture, a repeat capture with six occupied party slots, and a successful escape. The first catch opened its species record. The second showed the caught marker in battle and went to storage. Escaping returned to the pond after the native escape text. The saved journey then resumed offline.
+- At 1100×700, the screen and keyboard legend fit together. The partner card fit at 320 and 390 pixels wide. A simulated touch steered from up through a diagonal to right and released. Portrait and landscape were inspected in Chrome.
+- The production build, 136 Vitest checks, three Rust tests and the native cartridge smoke test passed. The ROM checks read both description pages for all 251 species. All three starter campaigns cleared the League in the seeded simulation.
