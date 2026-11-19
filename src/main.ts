@@ -82,6 +82,7 @@ let engine: Engine,
   interactionMusic: MusicScene | undefined,
   battleSpecies = 0,
   lastAutosave = 0,
+  journeyStarted = false,
   encounterTarget = 6;
 const ballIds: Record<string, number> = {
   master_ball: 1,
@@ -138,6 +139,7 @@ function cry(id: number) {
   sound.cry(id);
 }
 function toggleMusic() {
+  if (mode === "saving") return;
   save.settings.music = !sound.enabled;
   sound.setEnabled(save.settings.music);
   persist();
@@ -193,19 +195,25 @@ const flag = (f?: string) => {
   if (f && !save.flags.includes(f)) save.flags.push(f);
 };
 function persist() {
-  if (!engine || ["welcome", "loading", "title", "intro"].includes(mode))
-    return;
+  if (!journeyStarted || mode === "saving") return;
   void set("save", save).catch(() => {
     const status = document.querySelector(".statusbar > span");
     if (status)
       status.textContent = "Save unavailable · export a backup in Settings";
   });
 }
-function restoreSession(data: Save) {
-  save = normalizeSavePosition(restoreExpeditions(data));
-  updateChart(save.flags, save.map);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden" && (mode === "world" || mode === "menu")) persist();
+});
+function prepareSave(data: Save) {
+  const ready = normalizeSavePosition(restoreExpeditions(data));
+  updateChart(ready.flags, ready.map);
+  sortCollection(ready.storage);
+  return ready;
+}
+function restoreSession(ready: Save) {
+  save = ready;
   fieldBagState = {};
-  sortCollection(save.storage);
   pcState = {};
   fieldDexState = {};
   fieldJournalState = {};
@@ -222,6 +230,30 @@ function restoreSession(data: Save) {
   interactionMusic = undefined;
   renderer.setNight(!!save.settings.night);
   sound.attach(engine, save.settings.music !== false);
+}
+async function importJourney(file: File) {
+  const previousMode = mode;
+  mode = "saving";
+  layer.inert = true;
+  try {
+    let data: unknown;
+    try {
+      data = JSON.parse(await file.text());
+    } catch {
+      throw Error("Choose a readable Astra JSON save.");
+    }
+    if (!isValidSave(data)) throw Error("Choose a valid Astra JSON save.");
+    const next = prepareSave(data);
+    try {
+      await set("save", next);
+    } catch {
+      throw Error("The browser could not store this backup. Free some space and try again.");
+    }
+    restoreSession(next);
+  } finally {
+    layer.inert = false;
+    mode = previousMode;
+  }
 }
 function message(text: string, callback?: () => void, speaker?: string, music?: MusicScene) {
   // Keep short thoughts together and prefer a sentence break between pages.
@@ -308,7 +340,7 @@ async function start(bytes: Uint8Array) {
   glide = undefined;
   const existing = await get<Save>("save");
   if (isValidSave(existing)) {
-    restoreSession(existing);
+    restoreSession(prepareSave(existing));
     title();
   } else if (existing !== undefined) {
     mode = "recovery";
@@ -326,15 +358,11 @@ async function start(bytes: Uint8Array) {
       try {
         const file = input.files?.[0];
         if (!file) return;
-        const data = JSON.parse(await file.text());
-        if (!isValidSave(data)) throw Error();
-        restoreSession(data);
-        await set("save", save);
+        await importJourney(file);
         title();
-      } catch {
+      } catch (error) {
         input.value = "";
-        p.querySelector("p")!.textContent =
-          "That backup could not be read. Choose an Astra JSON save.";
+        p.querySelector("p")!.textContent = error instanceof Error ? error.message : "Choose another backup.";
       }
     };
   } else {
@@ -353,6 +381,7 @@ function title() {
     "opening-panel", fieldCursors.title ??= {},
   );
   p.querySelector("#continue")!.addEventListener("click", () => {
+    journeyStarted = true;
     mode = "world";
     layer.innerHTML = "";
     void sound.unlock();
@@ -365,7 +394,7 @@ function title() {
     );
     confirm.querySelector("#cancel")!.addEventListener("click", title);
     confirm.querySelector("#confirm")!.addEventListener("click", () => {
-      restoreSession(freshSave());
+      restoreSession(prepareSave(freshSave()));
       intro();
     });
   });
@@ -380,6 +409,7 @@ function intro() {
   );
   p.querySelector("#how")!.addEventListener("click", () => fieldBasics(intro));
   p.querySelector("#begin")!.addEventListener("click", () => {
+    journeyStarted = true;
     mode = "world";
     layer.innerHTML = "";
     void sound.unlock();
@@ -567,7 +597,16 @@ function interact() {
     mode = "menu";
     mountStoragePc(layer, {
       save, state: pcState, engine, sprite,
-      onTransfer: () => { persist(); sound.overworld("pcTransfer"); },
+      saveTransfer: async roster => {
+        mode = "saving";
+        try {
+          await set("save", { ...save, ...roster });
+          Object.assign(save, roster);
+          sound.overworld("pcTransfer");
+        } finally {
+          mode = "menu";
+        }
+      },
       onClose: () => { sound.overworld("shutDownPc"); close(); },
     });
     return;
@@ -1123,13 +1162,10 @@ function view(v: string, pageIndex = 0) {
       try {
         const f = (e.target as HTMLInputElement).files?.[0];
         if (!f) return;
-        const data = JSON.parse(await f.text()) as Save;
-        if (!isValidSave(data)) throw Error("Invalid save");
-        restoreSession(data);
-        persist();
+        await importJourney(f);
         message("Save imported successfully.");
-      } catch {
-        message("This save file could not be imported.", () =>
+      } catch (error) {
+        message(error instanceof Error ? error.message : "This save file could not be imported.", () =>
           view("settings"),
         );
       }
@@ -1880,7 +1916,7 @@ function frame(now: number) {
   else if (mode === "evolution-result") {
     if (input.hit("a") || input.hit("b"))
       layer.querySelector<HTMLButtonElement>(".evolution-continue")?.click();
-  } else if (!["world", "loading", "dialogue", "evolution"].includes(mode)) {
+  } else if (!["world", "loading", "saving", "dialogue", "evolution"].includes(mode)) {
     menuInput.update(layer, input, now, mode === "battle");
   }
   if (wasWorld) update(dt);

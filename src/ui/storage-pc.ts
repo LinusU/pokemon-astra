@@ -1,6 +1,6 @@
 import type { Engine, Pokemon } from "../engine";
 import type { Action } from "../game/input";
-import { canDeposit, depositPokemon, withdrawPokemon } from "../game/collection";
+import { canDeposit, depositPokemon, withdrawPokemon, type Collection } from "../game/collection";
 import type { Save } from "../game/save";
 import { typeNames } from "../game/type-names";
 import { battleStatus, mountParty } from "./party";
@@ -15,7 +15,7 @@ type Options = {
   state: PcState;
   engine: Pick<Engine, "species" | "move">;
   sprite: (id: number) => string;
-  onTransfer: () => void;
+  saveTransfer: (roster: Collection) => Promise<void>;
   onClose: () => void;
 };
 
@@ -31,6 +31,7 @@ export function mountStoragePc(host: HTMLElement, options: Options) {
   let tab: Tab = state.tab ?? (save.storage.length ? "storage" : "party");
   let mode: "tabs" | "roster" | "detail" = "tabs";
   let receipt = "";
+  let writing = false;
   const root = host.ownerDocument.createElement("section");
   root.className = "storage-pc";
   root.setAttribute("role", "dialog");
@@ -100,12 +101,26 @@ export function mountStoragePc(host: HTMLElement, options: Options) {
     receipt = "";
     render();
   }
-  function finished(text: string) {
-    receipt = text;
-    options.onTransfer();
-    state[tab] = index();
-    mode = list().length ? "roster" : "tabs";
+  async function transfer(change: (roster: Collection) => boolean, text: string) {
+    if (writing) return;
+    const roster = { party: [...save.party], storage: [...save.storage] };
+    if (!change(roster)) return;
+    writing = true;
+    receipt = "Saving transfer…";
     host.replaceChildren(root);
+    root.inert = true;
+    render();
+    try {
+      await options.saveTransfer(roster);
+      state[tab] = index();
+      mode = list().length ? "roster" : "tabs";
+      receipt = text;
+    } catch {
+      mode = "detail";
+      receipt = "Save failed. Try the transfer again.";
+    }
+    writing = false;
+    root.inert = false;
     render();
   }
   function swap(incoming: Pokemon) {
@@ -118,7 +133,7 @@ export function mountStoragePc(host: HTMLElement, options: Options) {
       })),
       onSelect: i => {
         const outgoing = name(save.party[i]);
-        if (withdrawPokemon(save, incoming, i)) finished(`${name(incoming)} joined your party. ${outgoing} was stored.`);
+        void transfer(roster => withdrawPokemon(roster, incoming, i), `${name(incoming)} joined your party. ${outgoing} was stored.`);
       },
       onBack: () => { host.replaceChildren(root); render(); },
     });
@@ -132,9 +147,9 @@ export function mountStoragePc(host: HTMLElement, options: Options) {
       render();
     } else if (eligible()) {
       if (tab === "party") {
-        if (depositPokemon(save, index())) finished(`${name(mon)} was deposited.`);
+        void transfer(roster => depositPokemon(roster, index()), `${name(mon)} was deposited.`);
       } else if (save.party.length === 6) swap(mon);
-      else if (withdrawPokemon(save, mon)) finished(`${name(mon)} joined your party.`);
+      else void transfer(roster => withdrawPokemon(roster, mon), `${name(mon)} joined your party.`);
     } else back();
   }
   function back() {
@@ -150,6 +165,7 @@ export function mountStoragePc(host: HTMLElement, options: Options) {
     render();
   }
   function input(action: Control) {
+    if (writing) return;
     if (action === "a") return confirm();
     if (mode === "detail") return;
     const horizontal = action === "left" || action === "right";

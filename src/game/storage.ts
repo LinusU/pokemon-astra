@@ -7,27 +7,24 @@ function database(): Promise<IDBDatabase> {
     r.onerror = () => reject(r.error);
   });
 }
-export async function get<T>(key: string): Promise<T | undefined> {
+async function transact<T>(mode: IDBTransactionMode, action: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
   const db = await database();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction("data");
-    const r = tx.objectStore("data").get(key);
-    r.onsuccess = () => resolve(r.result as T | undefined);
-    r.onerror = () => reject(r.error);
-    tx.oncomplete = () => db.close();
-  });
+  try {
+    return await new Promise<T>((resolve, reject) => {
+      const tx = db.transaction("data", mode);
+      const request = action(tx.objectStore("data"));
+      tx.oncomplete = () => resolve(request.result);
+      tx.onabort = () => reject(tx.error ?? new DOMException("Transaction aborted", "AbortError"));
+    });
+  } finally {
+    db.close();
+  }
+}
+export function get<T>(key: string): Promise<T | undefined> {
+  return transact("readonly", store => store.get(key));
 }
 export async function set(key: string, value: unknown): Promise<void> {
-  const db = await database();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction("data", "readwrite");
-    tx.objectStore("data").put(value, key);
-    tx.oncomplete = () => {
-      db.close();
-      resolve();
-    };
-    tx.onerror = () => reject(tx.error);
-  });
+  await transact("readwrite", store => store.put(value, key));
 }
 export function download(name: string, data: unknown) {
   const a = document.createElement("a");

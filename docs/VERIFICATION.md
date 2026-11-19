@@ -90,6 +90,7 @@ The synthesizer’s Gen 2 music wave channel is implemented in the vendored 0.2.
 
 - All twelve Centers have a solid PC with a clear interaction tile in front. The field menu no longer offers remote storage. Tests cover transfers with duplicate species, a full party, a fainted Pokémon and the last healthy partner.
 - An isolated Chrome session imported a legacy save containing all 251 species in reverse order. At the Crown Summit terminal, simulated gamepad input browsed the sorted register, paged through it, cancelled a full-party swap, then completed a swap, deposit and withdrawal. The party and collection matched the saved native Pokémon records after an offline reload.
+- A separate Chrome check aborted the browser's write transaction during a full-party swap. The terminal kept the selected Pokémon and both original rosters. Retrying committed one exchange, which survived a reload. Aborting a backup import also preserved the previous journey.
 - Compact portrait screenshots at 320 and 390 pixels wide were inspected. The production build, 141 Vitest checks, native Rust and cartridge smoke checks, and the three starter campaign simulations passed.
 
 ## Wild encounters and Reedhaven nursery

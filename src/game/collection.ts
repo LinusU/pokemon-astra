@@ -1,6 +1,6 @@
 import type { Pokemon } from "../engine";
 
-type Collection = { party: Pokemon[]; storage: Pokemon[] };
+export type Collection = { party: Pokemon[]; storage: Pokemon[] };
 
 /** One register, in National Pokédex order. Equal species and levels keep arrival order. */
 export function sortCollection(storage: Pokemon[]) {
