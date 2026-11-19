@@ -28,6 +28,7 @@ pub fn start(data: &'static GameData, setup: &BattleSetup, rng: u64, events: boo
     let mut engine = Engine::new(super::start::boot_mem(setup.options.battle_scene), rng, Flags {
         link_battle: link,
         external_enemy: external,
+        stationary_wild: setup.options.stationary_wild,
         ..Flags::default()
     });
     engine.data = data;
@@ -223,7 +224,7 @@ pub fn generate(config: &BattleConfig, seed: u64) -> Result<(BattleSetup, u64), 
         party,
         bag,
         opponent,
-        options: Options { battle_scene: config.battle.battle_scene != Some(false) },
+        options: Options { battle_scene: config.battle.battle_scene != Some(false), ..Options::default() },
         world: engine.read_world(),
     };
     Ok((setup, engine.rng))

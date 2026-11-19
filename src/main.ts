@@ -1337,7 +1337,7 @@ function startBattle(species: number, level: number, o?: WorldObject, fishing = 
               engine.makePokemon(rivalSpecies(o, i, m.species), m.level),
             ),
           }
-        : { species, level };
+        : { species, level, stationary: o?.kind === "legendary" };
     battle = engine.startBattle({
       party: save.party,
       opponent,

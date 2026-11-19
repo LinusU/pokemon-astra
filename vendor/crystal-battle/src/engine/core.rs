@@ -769,7 +769,7 @@ impl Engine {
 
     /// `TryEnemyFlee` (carry = the wild mon flees).
     fn try_enemy_flee(&mut self) -> bool {
-        if self.battle_mode() != WILD_BATTLE {
+        if self.battle_mode() != WILD_BATTLE || self.flags.stationary_wild {
             return false;
         }
         if self.mem.bit(W_PLAYER_SUB_STATUS5, SUBSTATUS_CANT_RUN) || self.mem.rb(W_ENEMY_WRAP_COUNT) != 0 {

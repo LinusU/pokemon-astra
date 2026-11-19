@@ -129,6 +129,8 @@ The player used Flash on Copperwick’s north road, crossed Saffron Dunes and ca
 
 The Sunspire glassworker accepted the repaired offering bowl and awarded a Moon Stone and a Sun Stone. From Reedhaven the player inspected the nest and the burrow in Bamboo Sanctuary, filed the ranger report, and crossed Ashen Trail to the Cinderfall Center.
 
+After several losses on Ember Slope, the party defeated the freight dispatcher and freed Cyndaquil and Slugma in the mine. Flint won the first gym challenge. At the Cinderfall PC the player exchanged Rattata and Tentacool for the Magcargo and Golduck caught earlier. Magcargo led the team against Robin and the kiln trainers, then reached level 36 in the rematch that awarded the fifth badge and Rock Smash.
+
 ## Save recovery
 
 - An isolated production build distinguished an invalid cartridge, an unavailable game engine, a failed cartridge cache write and a failed save read. Retrying the engine and cache used the file already selected. Playing with an uncached cartridge wrote a working save that reopened after choosing the cartridge again.
@@ -145,3 +147,10 @@ The Sunspire glassworker accepted the repaired offering bowl and awarded a Moon 
 - In a staged battle at the Copperworks perch, switching from an ordinary Unown to a shiny Unown changed its back picture. Zapdos returned after the player escaped and again after a knockout and reload. Capturing it registered the same front portrait seen in the encounter and marked the perch complete.
 - In a seeded Route 18 encounter, wild Ditto copied shiny Unown V. From the transformation message onward its picture matched an ordinary V in the test party. The HUD still identified Ditto as uncaught. The first-catch card and the saved partner matched the original Ditto’s portrait and DVs.
 - Two Unown V showed Grass and Electric Hidden Power in their summaries, each with 49 power. The Fight menu showed the lead’s Grass move. In a separate Route 09 encounter a player’s Ditto copied a wild Unown and the menu changed to Flying with 60 power. The native calculation was checked for every 16-bit DV combination. All 160 Vitest checks, four Rust tests, the WASM cartridge smoke test and all 18 seeded League campaigns passed.
+
+## Legendary encounters
+
+- In isolated Chrome fixtures with the required progress, the player interacted with each of the eleven guardians at its authored perch. A Master Ball at each site registered the species, added its individual record to the party and set the encounter’s completion flag.
+- A separate fixture brought one injured partner to Zapdos. Defeat returned the healed party to Copperwick Center. The player withdrew a reserve at the PC, walked through Switchyard, took the reopened lift and captured Zapdos at the same perch.
+- Native battles compared an ordinary wild encounter with a fixed shrine encounter using the same species and seed. Ordinary Raikou and Entei fled on the first turn. At their shrines both took turns, fell asleep, were weakened to 1 HP and were caught in Ultra Balls.
+- Seeded Chrome checks repeated the captures at the Tidal Crossing and Old Quarry shrines with Smeargle. Raikou took three Ultra Balls and Entei took four. Both saves retained the guardian at 1 HP.

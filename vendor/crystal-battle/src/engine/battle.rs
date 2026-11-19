@@ -29,6 +29,8 @@ pub struct Flags {
     pub link_battle: bool,
     /// A thrown ball caught the wild mon (`Outcome::Caught`).
     pub caught_wild_mon: bool,
+    /// Host-authored stationary wild encounter.
+    pub stationary_wild: bool,
     /// Move slot picked at the battle menu, for the patched
     /// `MoveSelectionScreen` (`Cpu::cli_pending_move`).
     pub pending_move: Option<u8>,

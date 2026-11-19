@@ -8,6 +8,35 @@ import { MUSIC_TRACKS } from "../src/game/music";
 const available =
   existsSync("pokecrystal11.gbc") && existsSync("public/astra_native.wasm");
 describe.skipIf(!available)("Crystal ROM native bridge", () => {
+  it("lets fixed shrine guardians fight and be weakened before a regular ball", async () => {
+    const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});
+    const engine = new Engine(instance.exports as never, readFileSync("pokecrystal11.gbc"));
+    const smeargle = { ...engine.makePokemon(235, 100), moves: [206, 147, 150, 0], pp: [40, 15, 40, 0] };
+    for (const species of [243, 244]) {
+      for (const stationary of [false, true]) {
+        const battle = engine.startBattle({ party: [smeargle], opponent: { species, level: 60, stationary },
+          seed: 29, balls: [[2, 30]] });
+        const splash = battle.snapshot().legal.findIndex((a: any) => a.Move?.slot === 2);
+        let snap = battle.act(splash);
+        if (!stationary) {
+          expect(snap.outcome).toBe("draw");
+          expect(snap.events.some((e: any) => e.Message?.WildFled)).toBe(true);
+          continue;
+        }
+        expect(snap.outcome).toBeNull();
+        for (let turn = 0; turn < 50 && !snap.outcome; turn++) {
+          const foe = snap.state.enemy.active;
+          const slot = !(foe.status & 7) ? 1 : foe.hp > 1 ? 0 : undefined;
+          const action = snap.legal.findIndex((a: any) => slot === undefined ? a.Item?.id === 2 : a.Move?.slot === slot);
+          expect(action).toBeGreaterThanOrEqual(0);
+          snap = battle.act(action);
+        }
+        expect(snap.outcome).toBe("caught");
+        const caught = snap.result!.party[snap.result!.caught!];
+        expect([caught.species, caught.hp]).toEqual([species, 1]);
+      }
+    }
+  });
   it("uses native level thresholds and keeps the IDs of taken held items across the Bag round trip", async () => {
     const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});
     const engine = new Engine(instance.exports as never, readFileSync("pokecrystal11.gbc"));

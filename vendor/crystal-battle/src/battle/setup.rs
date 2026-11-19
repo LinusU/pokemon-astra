@@ -143,11 +143,14 @@ pub enum Opponent {
 pub struct Options {
     /// Battle animations on (they decide some of what is shown).
     pub battle_scene: bool,
+    /// A fixed wild encounter stays for its turn instead of using the roaming flee table.
+    #[serde(default)]
+    pub stationary_wild: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Options { battle_scene: true }
+        Options { battle_scene: true, stationary_wild: false }
     }
 }
 
