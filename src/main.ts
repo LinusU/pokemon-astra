@@ -1,4 +1,5 @@
 import { openFieldGuide } from "./ui/field-guide";
+import "./ui/backup-review.css";
 import { mountMart } from "./ui/mart";
 import { chooseEvolutionMove } from "./ui/learn-move";
 import { levelEvolution, queueEvolutionMoves, resolveEvolutionMove, finishEvolutionChoice, recordTravel } from "./game/training";
@@ -258,19 +259,21 @@ function restoreSession(ready: Save) {
   renderer.setNight(!!save.settings.night);
   sound.attach(engine, save.settings.music !== false);
 }
-async function importJourney(file: File) {
+async function readBackup(file: File) {
+  let data: unknown;
+  try {
+    data = JSON.parse(await file.text());
+  } catch {
+    throw Error("Choose a readable Astra JSON save.");
+  }
+  if (!isValidSave(data)) throw Error("Choose a valid Astra JSON save.");
+  return prepareSave(data);
+}
+async function importJourney(next: Save) {
   const previousMode = mode;
   mode = "saving";
   layer.inert = true;
   try {
-    let data: unknown;
-    try {
-      data = JSON.parse(await file.text());
-    } catch {
-      throw Error("Choose a readable Astra JSON save.");
-    }
-    if (!isValidSave(data)) throw Error("Choose a valid Astra JSON save.");
-    const next = prepareSave(data);
     try {
       await writeJourney(next);
     } catch (error) {
@@ -283,19 +286,52 @@ async function importJourney(file: File) {
     mode = previousMode;
   }
 }
-function bindBackupPicker(p: HTMLElement, done: () => void, failed: (reason: string) => void) {
+function bindBackupPicker(p: HTMLElement, done: () => void, failed: (reason: string) => void, keepCurrent?: () => void) {
   const input = p.querySelector<HTMLInputElement>("input[type=file]")!;
-  p.querySelector<HTMLButtonElement>("[data-backup-picker]")!.onclick = () => input.click();
-  input.onchange = async () => {
-    if (!input.files?.[0]) return;
+  const picker = p.querySelector<HTMLButtonElement>("[data-backup-picker]")!;
+  picker.onclick = () => input.click();
+  function preview(next: Save, error?: string) {
+    const row = (label: string, journey: Save) => `<div><dt>${label}</dt><dd><strong>${escapeHtml(WORLD[journey.map].name)}</strong>
+      <small>${journey.badges}/8 badges · ${journey.caught.length} caught</small></dd></div>`;
+    const review = panel(layer, "Restore this backup?",
+      `<dl class="backup-records">${row("Current", save)}${row("Backup", next)}</dl>
+      <p${error ? ' class="error" role="alert"' : ""}>${error ? escapeHtml(error) : "Restoring replaces your browser save."}</p>
+      <div class="buttons"><button id="back">Keep current</button><button id="export" class="secondary">Export current</button>
+      <button id="restore-backup" class="secondary">${error ? "Retry restore" : "Restore"}</button></div>`, "backup-review");
+    const back = review.querySelector<HTMLButtonElement>("#back")!;
+    back.onclick = keepCurrent!;
+    review.querySelector<HTMLButtonElement>("#export")!.onclick = () => download("pokemon-astra-save.json", save);
+    review.querySelector<HTMLButtonElement>("#restore-backup")!.onclick = () => restore(next);
+    back.focus({ preventScroll: true });
+  }
+  async function restore(next: Save) {
     try {
-      await importJourney(input.files[0]);
-      done();
+      await importJourney(next);
     } catch (error) {
-      input.value = "";
       if (error instanceof JourneyConflict && !journeyStarted) return startupConflict();
-      failed(error instanceof Error ? error.message : "Choose a readable Astra backup.");
+      const reason = error instanceof Error ? error.message : "Could not restore this backup.";
+      if (keepCurrent && !(error instanceof JourneyConflict)) return preview(next, reason);
+      return failed(reason);
     }
+    done();
+  }
+  input.onchange = async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    picker.disabled = true;
+    input.value = "";
+    let next: Save;
+    try {
+      next = await readBackup(file);
+    } catch (error) {
+      if (p.isConnected) failed(error instanceof Error ? error.message : "Choose a readable Astra backup.");
+      return;
+    } finally {
+      picker.disabled = false;
+    }
+    if (!p.isConnected) return;
+    if (keepCurrent) preview(next);
+    else await restore(next);
   };
 }
 function message(text: string, callback?: () => void, speaker?: string, music?: MusicScene) {
@@ -1070,7 +1106,7 @@ function view(v: string, pageIndex = 0) {
   if (v === "settings") {
     offlineSetup?.bindOptions(p);
     mountSaveRetry(p);
-    bindBackupPicker(p, () => message("Save imported successfully."), error => message(error, () => view("settings")));
+    bindBackupPicker(p, () => message("Save imported successfully."), error => message(error, () => view("settings")), () => view("settings"));
   }
 }
 function mountSaveRetry(p: HTMLElement) {
