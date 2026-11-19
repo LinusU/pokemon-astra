@@ -1,3 +1,4 @@
+import { mountMart } from "./ui/mart";
 import { chooseEvolutionMove } from "./ui/learn-move";
 import { levelEvolution, queueEvolutionMoves, resolveEvolutionMove, finishEvolutionChoice, recordTravel } from "./game/training";
 import { mountPartnerSummary } from "./ui/partner-summary";
@@ -32,7 +33,7 @@ import { mountRegionChart } from "./ui/region-map";
 import { campaignObjective, directions, bearings } from "./game/journal";
 import { drawFieldMap } from "./ui/field-map";
 import { mountBag, itemInfo, type BagState } from "./ui/bag";
-import { mountParty } from "./ui/party";
+import { battleStatus, mountParty } from "./ui/party";
 import { mountPokedex, type DexState } from "./ui/pokedex";
 import { mountJournal, type JournalState } from "./ui/journal";
 import { MenuInput } from "./ui/menu-input";
@@ -60,7 +61,7 @@ import {
   type WorldObject,
   type WorldMap,
 } from "./world";
-import { initEngine, type Engine } from "./engine";
+import { initEngine, type Engine, type Pokemon } from "./engine";
 import "./styles.css";
 import "./ui/region-map.css";
 
@@ -843,102 +844,12 @@ function offerRematch(o: WorldObject, practice: boolean) {
   );
   p.querySelector("#back")!.addEventListener("click", close);
 }
-function shop(selected?: string) {
+function shop() {
   mode = "menu";
-  const stock: [string, string, number, number][] = [
-    ["poke_ball", "Poké Ball", 200, 0],
-    ...Object.entries(MEDICINE).map(
-      ([key, m]): [string, string, number, number] => [
-        key,
-        m.name,
-        m.price,
-        m.badges,
-      ],
-    ),
-    ["repel", "Repel", 350, 0],
-    ["great_ball", "Great Ball", 600, 2],
-    ["ultra_ball", "Ultra Ball", 1200, 5],
-    ["fire_stone", "Fire Stone", 2100, 2],
-    ["water_stone", "Water Stone", 2100, 2],
-    ["leaf_stone", "Leaf Stone", 2100, 2],
-    ["thunder_stone", "Thunder Stone", 2100, 3],
-    ["moon_stone", "Moon Stone", 2100, 4],
-    ["sun_stone", "Sun Stone", 2100, 4],
-    ["link_cable", "Link Cable", 2500, 4],
-    ["metal_coat", "Metal Coat", 2500, 5],
-    ["kings_rock", "King’s Rock", 2500, 5],
-    ["dragon_scale", "Dragon Scale", 2500, 6],
-    ["up_grade", "Up-Grade", 2500, 6],
-  ];
-  const p = panel(
-    layer,
-    "Astra Mart",
-    `<p>Funds: ₽${save.money}</p><div class="list">${stock
-      .filter((v) => save.badges >= v[3])
-      .map(
-        ([id, name, cost]) =>
-          `<button data-item="${id}" data-cost="${cost}">${name} · ₽${cost}<span class="stock-count">Bag ${save.items[id] || 0}</span></button>`,
-      )
-      .join("")}</div><button class="secondary" id="back">Leave</button>`,
-  );
-  p.querySelectorAll<HTMLButtonElement>("[data-item]").forEach(
-    (b) =>
-      (b.onclick = () => {
-        const key = b.dataset.item!,
-          cost = Number(b.dataset.cost);
-        const back = () => shop(key);
-        const max = Math.min(
-          99 - (save.items[key] || 0),
-          Math.floor(save.money / cost),
-        );
-        if (max < 1) {
-          message(
-            (save.items[key] || 0) >= 99
-              ? "Your Bag already holds 99 of those."
-              : "You don’t have enough money.",
-            back,
-          );
-          return;
-        }
-        const buy = (quantity: number) => {
-          save.money -= cost * quantity;
-          save.items[key] = (save.items[key] || 0) + quantity;
-          persist();
-          sound.overworld("purchase");
-          message(
-            `You put ${itemName(key)} × ${quantity} in your Bag.`,
-            back,
-            "Shopkeeper",
-          );
-        };
-        const quantities = [1, 5, 10].filter((q) => q <= max);
-        const sale = panel(
-          layer,
-          itemName(key),
-          `<p>${escapeHtml(itemInfo(key).description || "")}</p><p class="small">Money ₽${save.money} · In Bag ${save.items[key] || 0}</p><div class="list">${quantities
-            .map(
-              (q) =>
-                `<button data-quantity="${q}">Buy ${q}<span class="stock-count">₽${q * cost}</span></button>`,
-            )
-            .join(
-              "",
-            )}</div><button class="secondary" id="back">Cancel</button>`,
-        );
-        sale.querySelector("#back")!.addEventListener("click", back);
-        sale
-          .querySelectorAll<HTMLButtonElement>("[data-quantity]")
-          .forEach(
-            (button) =>
-              (button.onclick = () => buy(Number(button.dataset.quantity))),
-          );
-      }),
-  );
-  p.querySelector("#back")!.addEventListener("click", close);
-  if (selected) {
-    const row = p.querySelector<HTMLButtonElement>(`[data-item="${selected}"]`);
-    row?.focus({ preventScroll: true });
-    if (row) p.scrollTop = Math.max(0, row.offsetTop - p.clientHeight / 2);
-  }
+  mountMart(layer, { save, name: itemName, onClose: close, onPurchase: () => {
+    persist();
+    sound.overworld("purchase");
+  } });
 }
 function close() {
   mode = "world";
@@ -1294,9 +1205,16 @@ function useItem(item: string) {
     );
     return;
   }
+  function finishMedicine(index: number, healed: Pokemon, note: string) {
+    save.party[index] = healed;
+    save.items[item]--;
+    persist();
+    sound.overworld(item === "ether" || item === "max_elixer" ? "restorePp" : "potion");
+    message(note, () => view("bag"));
+  }
   const held = giveFromBag(item) ? nativeItemId(item) : undefined;
   const targets = save.party.map((mon) => {
-    const healed = isMedicine(item)
+    const healed = item !== "ether" && isMedicine(item)
       ? useMedicine(item, mon, engine)
       : undefined;
     const evo =
@@ -1311,8 +1229,9 @@ function useItem(item: string) {
                   (e.parameter === 255 || e.parameter === mon.item)),
             )
         : undefined;
-    const eligible = isMedicine(item)
-      ? !!healed
+    const eligible = item === "ether"
+      ? engine.healPokemon(mon).pp.some((pp, i) => mon.moves[i] && (mon.pp[i] & 63) < (pp & 63))
+      : isMedicine(item) ? !!healed
       : held
         ? !mon.item
         : item === "friendship_charm"
@@ -1353,17 +1272,29 @@ function useItem(item: string) {
         );
         return;
       }
+      const name = mon.nickname || engine.species(mon.species).name;
+      if (item === "ether") {
+        const full = engine.healPokemon(mon).pp;
+        const choices = mon.moves.map((id, slot) => {
+          if (!id) return "";
+          const move = engine.move(id), current = mon.pp[slot] & 63, max = full[slot] & 63;
+          return `<button data-move-slot="${slot}" ${current >= max ? "disabled" : ""}><strong>${escapeHtml(move.name)}</strong><span>PP ${current}/${max}</span></button>`;
+        }).join("");
+        const p = panel(layer, "Use Ether", `<p>Choose a move for ${escapeHtml(name)}.</p><p class="lesson-new">Restores up to 10 PP.</p><div class="lesson-choices">${choices}</div><button id="back" class="secondary">Back</button>`, "lesson-panel lesson-choice");
+        p.querySelector<HTMLButtonElement>("#back")!.onclick = () => useItem(item);
+        for (const b of p.querySelectorAll<HTMLButtonElement>("[data-move-slot]:enabled")) b.onclick = () => {
+          const slot = Number(b.dataset.moveSlot);
+          const next = useMedicine(item, mon, engine, slot);
+          if (next) finishMedicine(index, next, `${name} recovered ${(next.pp[slot] & 63) - (mon.pp[slot] & 63)} PP for ${engine.move(mon.moves[slot]).name}.`);
+        };
+        p.querySelector<HTMLButtonElement>("[data-move-slot]:enabled")?.focus({ preventScroll: true });
+        return;
+      }
       if (healed) {
-        save.party[index] = healed;
-        save.items[item]--;
-        persist();
-        sound.overworld(item === "max_elixer" ? "restorePp" : "potion");
-        message(
-          item === "max_elixer"
-            ? `${engine.species(mon.species).name}’s move PP was restored.`
-            : `${engine.species(mon.species).name} recovered with the ${itemName(item)}. HP ${healed.hp}/${healed.stats[0]}.`,
-          () => view("bag"),
-        );
+        const note = item === "max_elixer" ? `${name}’s move PP was restored.`
+          : battleStatus(mon.status) && !healed.status && healed.hp === mon.hp ? `${name} is no longer ${battleStatus(mon.status)![1].toLowerCase()}.`
+          : `${name} recovered with the ${itemName(item)}. HP ${healed.hp}/${healed.stats[0]}.`;
+        finishMedicine(index, healed, note);
         return;
       }
       if (!evo) return;

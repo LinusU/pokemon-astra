@@ -29,12 +29,6 @@ type BagOptions = {
 };
 
 const descriptions: Record<string, string> = {
-  potion: "Restores 20 HP to one Pokémon.",
-  super_potion: "Restores 50 HP to one Pokémon.",
-  hyper_potion: "Restores up to 200 HP to one Pokémon.",
-  full_restore: "Fully restores HP and cures a Pokémon’s status condition.",
-  revive: "Revives a fainted Pokémon with half its maximum HP.",
-  max_elixer: "Fully restores PP for a Pokémon’s moves.",
   repel: "Keeps wild Pokémon away for a short time.",
   rare_lure: "Attracts a rarer local Pokémon on your next grass encounter.",
   friendship_charm: "Raises a Pokémon’s friendship.",
@@ -68,9 +62,10 @@ const battleKeys: Record<number, string> = {
   4: "great_ball",
   5: "poke_ball",
 };
-for (const [key, { id, name }] of Object.entries(MEDICINE)) {
+for (const [key, { id, name, description }] of Object.entries(MEDICINE)) {
   battleKeys[id] = key;
   names[key] = name;
+  descriptions[key] = description;
 }
 
 export function battleBagKey(id: number) {

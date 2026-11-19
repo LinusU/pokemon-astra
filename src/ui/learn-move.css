@@ -20,5 +20,6 @@
   border: 1px solid #92a28c; background: #fff9df; color: #263f34; text-align: left;
 }
 .panel.lesson-choice .lesson-choices [aria-current=true] { background: #d8e7bc; color: #244238; outline: 1px solid #3f674e; outline-offset: -1px; box-shadow: inset 2px 0 #3f674e; }
+.panel.lesson-choice button:disabled { opacity: .55; }
 .lesson-choices strong { font-weight: normal; }
 .lesson-choices span { font-size: 3.9cqw; }

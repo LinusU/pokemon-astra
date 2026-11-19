@@ -50,6 +50,8 @@ Shift runs faster. Connect the FlipPad in a browser-supported Gamepad API mode, 
 
 Open **Menu → Map** for a zoomable regional atlas. Select towns and numbered routes to see their connections, or open **Local map** for the next exit or objective. Party details show current moves, PP and evolution methods.
 
+At a Mart, left/right switches departments and up/down browses stock. Choose an item, set the quantity, then press A to buy or B to cancel. Five status cures are available from the start. The second badge unlocks Ether for an individual move, and the third unlocks Full Heal.
+
 Open **Party**, choose a Pokémon and use left/right to read **Stats**, **Moves** and **Growth**. Up/down selects a move or cycles through evolution paths. Growth shows the experience needed for the next level and the current friendship value. Traveling partners gain a friendship point every 128 tiles. Press A to change the lead or give and take held items. When evolution offers a move and all four slots are full, you can review the moves before replacing one. An unfinished choice resumes after reloading.
 
 Use the PC on the right in any Pokémon Center to manage your team. It keeps one collection in Pokédex order. Select **Stored** or **Party**, press A to browse, and use up/down to select a Pokémon or left/right to skip six entries. A opens its details. Withdraw into an open party slot or swap directly when traveling with six. B returns one screen.

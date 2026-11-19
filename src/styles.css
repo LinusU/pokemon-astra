@@ -573,9 +573,6 @@ canvas {
 .journal-entries article p {
   margin: 3px 0;
 }
-.stock-count {
-  float: right;
-}
 .map-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
