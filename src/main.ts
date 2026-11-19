@@ -84,6 +84,7 @@ let engine: Engine,
   dialogueCallback: (() => void) | undefined,
   last = performance.now(),
   encounterDistance = 0,
+  repelWoreOff = false,
   exitLock = true,
   bumpLatched = false,
   battle: ReturnType<Engine["startBattle"]>,
@@ -216,6 +217,7 @@ async function writeJourney(next: Save, skipUnchanged = false) {
 }
 function persist() {
   if (!journeyStarted || mode === "saving") return;
+  lastAutosave = save.steps;
   void writeJourney(save, true).catch(error => {
     if (!(error instanceof JourneyConflict)) showSaveIssue("storage");
   });
@@ -240,6 +242,7 @@ function restoreSession(ready: Save) {
   actors.reset();
   glide = undefined;
   encounterDistance = 0;
+  repelWoreOff = false;
   encounterTarget = 6;
   lastAutosave = save.steps;
   exitLock = true;
@@ -1149,6 +1152,26 @@ function rivalSpecies(o: WorldObject, slot: number, original: number) {
   };
   return families[partner]?.[Number(o.id.slice(6)) - 1] ?? original;
 }
+function applyRepel() {
+  save.items.repel--;
+  save.repel = 100;
+}
+function repelExpired() {
+  repelWoreOff = false;
+  persist();
+  if (!save.items.repel) {
+    message("The Repel wore off. Pokémon can appear in tall grass again.");
+    return;
+  }
+  mode = "menu";
+  const p = panel(layer, "Repel wore off",
+    `<p>You have ${save.items.repel} left in your Bag.</p><div class="buttons"><button id="renew-repel">Use another Repel</button><button class="secondary" id="back">Keep walking</button></div>`);
+  p.querySelector<HTMLButtonElement>("#renew-repel")!.onclick = () => {
+    applyRepel();
+    close();
+  };
+  p.querySelector<HTMLButtonElement>("#back")!.onclick = close;
+}
 function useItem(item: string) {
   if (item === "nursery_egg" && save.egg) {
     const left = Math.max(0, Math.ceil(save.egg.hatchAt - save.steps));
@@ -1182,7 +1205,6 @@ function useItem(item: string) {
     }
     save.items[item]--;
     flag("lure_ready");
-    encounterTarget = 1;
     persist();
     message(
       "The lure will attract one of this habitat's rarer Pokémon on your next grass encounter.",
@@ -1192,13 +1214,12 @@ function useItem(item: string) {
   }
   if (item === "repel") {
     if (save.repel) {
-      message("Your Repel is still working.", () => view("bag"));
+      message(`Your Repel will last another ${Math.ceil(save.repel)} walking tiles.`, () => view("bag"));
       return;
     }
-    save.items.repel--;
-    save.repel = 100;
+    applyRepel();
     persist();
-    message("Repel will keep wild Pokémon away for a while.", () =>
+    message("Repel will keep wild Pokémon away for 100 walking tiles.", () =>
       view("bag"),
     );
     return;
@@ -1632,7 +1653,11 @@ function update(dt: number) {
   if (glide) {
     const oldX = save.x, oldY = save.y;
     if (advanceGlide(save, glide, dt)) glide = undefined;
-    countTravel(Math.hypot(save.x - oldX, save.y - oldY));
+    if (recordTravel(save, Math.hypot(save.x - oldX, save.y - oldY))) repelWoreOff = true;
+    return;
+  }
+  if (repelWoreOff) {
+    repelExpired();
     return;
   }
   if (actors.approaching) {
@@ -1722,7 +1747,7 @@ function update(dt: number) {
     return;
   }
   bumpLatched = false;
-  countTravel(moved);
+  repelWoreOff = recordTravel(save, moved);
   const map = currentField();
   const exit = exitAt(map, save.x, save.y);
   if (!exit) exitLock = false;
@@ -1749,24 +1774,16 @@ function update(dt: number) {
     });
     return;
   }
-  if (save.repel) {
-    save.repel = Math.max(0, save.repel - moved);
-    if (!save.repel) {
-      persist();
-      message("The Repel wore off. Pokémon can appear in tall grass again.");
-      return;
-    }
-  }
   if (
     map.tiles[Math.floor(save.y)]?.[Math.floor(save.x)] === "g" &&
     save.party.length &&
-    !save.repel
+    !save.repel && !repelWoreOff
   ) {
     encounterDistance += moved;
-    if (encounterDistance >= encounterTarget && map.encounters.length) {
+    const lured = save.flags.includes("lure_ready");
+    if (encounterDistance >= (lured ? 1 : encounterTarget) && map.encounters.length) {
       encounterDistance = 0;
       encounterTarget = 8 + Math.random() * 14;
-      const lured = save.flags.includes("lure_ready");
       const residents = fieldHabitats(map, save);
       const minWeight = Math.min(...residents.map((e) => e.weight));
       const pool = lured
@@ -1781,13 +1798,6 @@ function update(dt: number) {
         e.minLevel + Math.floor(Math.random() * (e.maxLevel - e.minLevel + 1)),
       );
     }
-  }
-}
-function countTravel(distance: number) {
-  recordTravel(save, distance);
-  if (save.steps - lastAutosave >= 10) {
-    lastAutosave = save.steps;
-    persist();
   }
 }
 function frame(now: number) {
@@ -1814,7 +1824,10 @@ function frame(now: number) {
   } else if (!["world", "loading", "saving", "dialogue", "evolution"].includes(mode)) {
     menuInput.update(layer, input, now, mode === "battle");
   }
-  if (wasWorld) update(dt);
+  if (wasWorld) {
+    update(dt);
+    if (mode === "world" && save.steps - lastAutosave >= 10) persist();
+  }
   const screen = canvas.parentElement!;
   screen.dataset.scene = ["welcome", "recovery", "title", "intro", "loading"].includes(mode)
     ? "title"

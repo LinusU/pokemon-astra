@@ -66,3 +66,15 @@ describe.skipIf(!existsSync("pokecrystal11.gbc") || !existsSync("public/astra_na
     expect(save.party[1].happiness).toBe(255);
   });
 });
+
+it("counts Repel by traveled distance across a save and reports expiry once", () => {
+  const save = freshSave();
+  save.repel = 1.5;
+  expect(recordTravel(save, 0.75)).toBe(false);
+  const restored = JSON.parse(JSON.stringify(save));
+  expect(restored.repel).toBe(0.75);
+  expect(recordTravel(restored, 0)).toBe(false);
+  expect(recordTravel(restored, 1)).toBe(true);
+  expect(restored.repel).toBe(0);
+  expect(recordTravel(restored, 1)).toBe(false);
+});

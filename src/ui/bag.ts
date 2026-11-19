@@ -29,7 +29,7 @@ type BagOptions = {
 };
 
 const descriptions: Record<string, string> = {
-  repel: "Keeps wild Pokémon away for a short time.",
+  repel: "Prevents tall-grass encounters for 100 walking tiles.",
   rare_lure: "Attracts a rarer local Pokémon on your next grass encounter.",
   friendship_charm: "Raises a Pokémon’s friendship.",
   link_cable:

@@ -35,10 +35,13 @@ export function finishEvolutionChoice(save: Save) {
   if (!save.pendingEvolutions?.length) delete save.pendingEvolutions;
 }
 
-/** Astra's compact routes award a point of friendship for every 128 tiles traveled together. */
+/** Count actual distance for friendship and Repel, including ice and road crossings. */
 export function recordTravel(save: Save, distance: number) {
   const before = Math.floor(save.steps / 128);
   save.steps += distance;
   const gain = Math.floor(save.steps / 128) - before;
   if (gain > 0) for (const mon of save.party) mon.happiness = Math.min(255, mon.happiness + gain);
+  if (!save.repel) return false;
+  save.repel = Math.max(0, save.repel - distance);
+  return save.repel === 0;
 }
