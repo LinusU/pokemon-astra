@@ -5,6 +5,7 @@ import { updateChart, requestHint } from "../src/world/requests";
 import { freshSave, restoreExpeditions, meetsRequirement } from "../src/game/save";
 import { objectVisible, interactionTarget } from "../src/game/actors";
 import { instrument } from "../src/ui/fieldwork";
+import { rewardItems, rewardShortfall } from "../src/game/items";
 
 function walk(map: WorldMap, x: number, y: number, obstacle?: { x: number; y: number }) {
   const seen = new Set<string>();
@@ -148,6 +149,33 @@ it("keeps one claim per side quest and gives every request a discoverable lead",
     expect(claims[0].request).toBe(q.id);
     expect(claims[0].dialogue.length).toBeGreaterThan(70);
   }
+});
+
+it("checks space for a complete pickup or delivery before spending its trade-in", () => {
+  const parcel = WORLD.bramble.objects.find(o => o.id === "parcel_recipient")!.reward;
+  const bag = { courier_parcel: 1, great_ball: 97 };
+  expect(rewardShortfall(bag, parcel)).toEqual([{ item: "great_ball", amount: 3 }]);
+  expect(bag).toEqual({ courier_parcel: 1, great_ball: 97 });
+  bag.great_ball = 94;
+  expect(rewardShortfall(bag, parcel)).toEqual([]);
+  expect([...rewardItems(parcel)]).toEqual([["great_ball", 5]]);
+
+  const cache = WORLD.route01.objects.find(o => o.id === "item_route01")!.reward!;
+  expect(rewardShortfall({ [cache.item!]: 98 }, cache)).toEqual([{ item: cache.item, amount: 1 }]);
+});
+
+it("reserves room for every stack in a field gift and the stone chosen with Eevee", () => {
+  const offering = WORLD.sunspire.objects.find(o => o.id === "quest_oasis")!.reward;
+  expect(rewardShortfall({ moon_stone: 98, sun_stone: 99 }, offering)).toEqual([{ item: "sun_stone", amount: 1 }]);
+  expect(rewardShortfall({ moon_stone: 98, sun_stone: 98 }, offering)).toEqual([]);
+
+  const promise = WORLD.aster.objects.find(o => o.id === "quest_promise")!.reward!;
+  const bag = { fire_stone: 99, water_stone: 0 };
+  expect(rewardShortfall(bag, { ...promise, item: "fire_stone" })).toEqual([{ item: "fire_stone", amount: 1 }]);
+  expect(rewardShortfall(bag, { ...promise, item: "water_stone" })).toEqual([]);
+  expect(rewardShortfall({ potion: 98 }, {
+    takeItem: "potion", item: "potion", items: [{ item: "potion", amount: 2 }],
+  })).toEqual([{ item: "potion", amount: 1 }]);
 });
 
 it.each([

@@ -2,7 +2,7 @@ import { mountMart } from "./ui/mart";
 import { chooseEvolutionMove } from "./ui/learn-move";
 import { levelEvolution, queueEvolutionMoves, resolveEvolutionMove, finishEvolutionChoice, recordTravel } from "./game/training";
 import { mountPartnerSummary } from "./ui/partner-summary";
-import { bagKeyForItem, ballIds, giveFromBag, nativeItemId, stoneIds } from "./game/items";
+import { bagKeyForItem, ballIds, giveFromBag, nativeItemId, rewardItems, rewardShortfall, stoneIds } from "./game/items";
 import { hatchEgg } from "./game/nursery";
 import { openNursery, showHatch } from "./ui/nursery";
 import { captureRegistration, sortCollection, storePokemon, surveyStipend } from "./game/collection";
@@ -495,12 +495,7 @@ function itemName(key: string) {
 }
 function rewardReceipt(r?: Reward) {
   if (!r) return "";
-  const items = [...(r.items || [])];
-  if (r.item && r.item !== "starter_supplies")
-    items.push({ item: r.item, amount: r.amount });
-  const lines = items.map(
-    (grant) => itemName(grant.item) + " × " + (grant.amount || 1),
-  );
+  const lines = Array.from(rewardItems(r), ([item, amount]) => itemName(item) + " × " + amount);
   if (r.species)
     lines.push(
       engine.species(r.species).name +
@@ -508,24 +503,25 @@ function rewardReceipt(r?: Reward) {
     );
   return lines.join(" · ");
 }
+function hasRewardSpace(reward?: Reward) {
+  const missing = rewardShortfall(save.items, reward);
+  if (!missing.length) return true;
+  const space = missing.map(({ item, amount }) => itemName(item) + " × " + amount).join(" · ");
+  message(`Make room for ${space} in your Bag. You can collect the full reward here when you return.`, undefined, "Bag capacity");
+  return false;
+}
 function applyReward(r?: Reward) {
   if (!r) return;
-  if (r.takeItem) delete save.items[r.takeItem];
+  if (r.takeItem) {
+    if (save.items[r.takeItem] > 1) save.items[r.takeItem]--;
+    else delete save.items[r.takeItem];
+  }
   if (r.badge) awardBadge(save, r.badge);
   if (r.ability && !save.abilities.includes(r.ability))
     save.abilities.push(r.ability);
   if (r.money) save.money = Math.min(999999, save.money + r.money);
-  if (r.items)
-    for (const grant of r.items)
-      save.items[grant.item] = Math.min(
-        99,
-        (save.items[grant.item] || 0) + (grant.amount || 1),
-      );
-  if (r.item && r.item !== "starter_supplies")
-    save.items[r.item] = Math.min(
-      99,
-      (save.items[r.item] || 0) + (r.amount || 1),
-    );
+  for (const [item, amount] of rewardItems(r))
+    save.items[item] = Math.min(99, (save.items[item] ?? 0) + amount);
   if (r.species) {
     const mon = engine.makePokemon(r.species, r.level || 5);
     if (save.party.length < 6) save.party.push(mon);
@@ -707,11 +703,11 @@ function interact() {
     return;
   }
   if (field?.device) {
+    if (!hasRewardSpace(o.reward)) return;
     mode = "menu";
     openFieldwork(layer, o.name, field.device, choice => {
-      if (field.device === "atlas") flag("atlas_cover_" + choice);
       const reward = field.device === "promise" ? { ...o.reward, item: choice } : o.reward;
-      finishErrand(o, reward);
+      finishErrand(o, reward, field.device === "atlas" ? "atlas_cover_" + choice : undefined);
     }, close, pitch => sound.bell(pitch));
     return;
   }
@@ -797,12 +793,14 @@ function interact() {
   }
   finishErrand(o, o.reward);
 }
-function finishErrand(o: WorldObject, reward?: Reward) {
+function finishErrand(o: WorldObject, reward?: Reward, choiceFlag?: string) {
+  if (!hasRewardSpace(reward)) return;
   const receipt = rewardReceipt(reward);
+  applyReward(reward);
   flag(o.setsFlag);
+  flag(choiceFlag);
   flag(pitchFlag(o.id));
   updateChart(save.flags, save.map);
-  applyReward(reward);
   persist();
   message(o.dialogue, receipt ? () => showReceipt(receipt) : undefined, o.name);
 }
