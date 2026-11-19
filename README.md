@@ -46,13 +46,13 @@ The region plan is in [docs/DESIGN.md](docs/DESIGN.md); implemented content and 
 | Touch | Lower-screen D-pad | A | B; MENU |
 | Standard gamepad / 8BitDo | D-pad or left stick | A (button 0) | B (button 1); Start (button 9) |
 
-Shift runs faster. Connect the FlipPad in a browser-supported Gamepad API mode, then press a button. The last actively used controller is selected so an idle receiver does not steal input. Standard mappings are implemented and tested with simulated pad events; physical FlipPad/iOS hardware has not been tested here.
+Shift runs faster. Connect the FlipPad in a browser-supported Gamepad API mode, then press a button. The last actively used controller is selected so an idle receiver does not steal input. Choose **Options → Controller A/B** to swap the confirm and back buttons. The choice is saved with the journey. Controller tests use simulated pad events. Physical FlipPad and iOS hardware remain unverified.
 
-Open **Menu → Map** for a zoomable regional atlas. Select towns and numbered routes to see their connections, or open **Local map** to locate a Center, Mart, route landmark or journal destination. Tap a map symbol or press left and right to browse. A blocked crossing shows which field action can open it. Party details show current moves, PP and evolution methods.
+Open **Menu → Map** for a zoomable regional atlas. Select towns and numbered routes to see their connections, or open **Local map** to locate a Center, Mart, route landmark or journal destination. Tap a map symbol or press left and right to browse. A blocked crossing shows which field action can open it. In the Pokédex, select a habitat record and press A to locate it on the region map. The record gives directions from your current location. Press B to return to the same record.
 
 At a Mart, left/right switches departments and up/down browses stock. Choose an item, set the quantity, then press A to buy or B to cancel. Five status cures are available from the start. The second badge unlocks Ether for an individual move, and the third unlocks Full Heal.
 
-Open **Party**, choose a Pokémon and use left/right to read **Stats**, **Moves** and **Growth**. Up/down selects a move or cycles through evolution paths. Growth shows the experience needed for the next level and the current friendship value. Traveling partners gain a friendship point every 128 tiles. Press A to change the lead or give and take held items. When evolution offers a move and all four slots are full, you can review the moves before replacing one. An unfinished choice resumes after reloading.
+Open **Party**, choose a Pokémon and use left/right to read **Stats**, **Moves** and **Growth**. Up/down selects a move or cycles through evolution paths. The Moves page and the Fight menu show the highlighted move’s effect. Move-learning prompts let you compare both effects before replacing a move. Growth shows the experience needed for the next level and the current friendship value. Traveling partners gain a friendship point every 128 tiles. Press A to change the lead or give and take held items. An unfinished evolution move choice resumes after reloading.
 
 Use the PC on the right in any Pokémon Center. All twelve terminals share one collection, sorted by Pokédex number with the lowest-level partner first within each species. Choose **Stored** or **Party** and press A to browse. Up/down selects a Pokémon and left/right turns the page. Once the collection fills more than one page, press Up on **Stored** to find a species by its initial.
 
@@ -62,7 +62,7 @@ Unown’s letter and each Pokémon’s shiny coloring follow the individual from
 
 Open **Menu → Journal** and press left or right to turn between Survey, Requests, Paths and Badges. In Requests or Paths, press up or down to select an entry, A to read it and B to return to the index. Inspect a blocked route in the field with A to record it. After the third badge, choose your next beacon on the Survey page to follow Sunspire, Cinderfall or Rimepeak in your preferred order.
 
-Saves and cartridge bytes stay in this browser's IndexedDB. **Options → Export save** downloads a portable JSON backup. On a new device, choose your cartridge and select **Restore backup** on the Dewdrop opening screen. You can also import from Options during play. If an autosave fails, Options lets you retry or export your current progress.
+Saves and cartridge bytes stay in this browser's IndexedDB. **Options → Export save** downloads a portable JSON backup. On a new device, choose your cartridge and select **Restore backup** on the Dewdrop opening screen. During play, **Options → Import save** lets you compare the backup with your current journey before restoring it. If an autosave fails, Options lets you retry or export your current progress.
 
 If a stored journey is unreadable, the recovery screen lets you export the original, restore a backup, or start over. Your previous save stays in place until the replacement has been written successfully.
 
