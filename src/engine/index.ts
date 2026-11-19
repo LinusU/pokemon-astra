@@ -22,6 +22,7 @@ export interface Pokemon {
 }
 export interface BattleMon {
   species: number;
+  dvs: number;
   moves: number[];
   pp: number[];
   level: number;
@@ -576,11 +577,11 @@ export class Engine {
       }
     return new ImageData(pixels, 16, 16);
   }
-  sprite(id: number, back = false): ImageData {
+  sprite(id: number, back = false, { form = 0, shiny = false } = {}): ImageData {
     const egg = id === 253 && !back;
     if (!egg && (id < 1 || id > 251)) throw Error("Invalid species");
     const ptr =
-      (id === 201 ? 0x124000 : 0x120000 + (id - 1) * 6) + (back ? 3 : 0);
+      (id === 201 ? 0x124000 + form * 6 : 0x120000 + (id - 1) * 6) + (back ? 3 : 0);
     const bank = this.rom[ptr] + 0x36;
     const address = this.rom[ptr + 1] | (this.rom[ptr + 2] << 8);
     const offset = bank * 0x4000 + (address & 0x3fff);
@@ -591,7 +592,7 @@ export class Engine {
     const side = egg ? 5 : back ? 6 : this.rom[0x51424 + (id - 1) * 32 + 17] >> 4;
     const size = side * 8;
     const pixels = new Uint8ClampedArray(size * size * 4);
-    const pal = 0xa8ce + id * 8;
+    const pal = 0xa8ce + id * 8 + (shiny ? 4 : 0);
     const colors = [
       [255, 255, 255],
       ...[0, 1].map((i) => {

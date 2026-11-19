@@ -1,5 +1,6 @@
 import { typeNames } from "../game/type-names";
 import { trackMenuCursor } from "./menu-cursor";
+import type { PokemonPortrait } from "../engine/appearance";
 import type { BattleMon, BattleSnapshot, Pokemon } from "../engine";
 import type { CaptureSoundState } from "../engine/battle-sound";
 import { battleStatus, mountParty } from "./party";
@@ -38,7 +39,7 @@ type Options = {
   wildEncounter?: "legendary";
   snapshot: BattleSnapshot;
   act: (index: number) => BattleSnapshot;
-  sprite: (id: number, back?: boolean) => string;
+  sprite: (mon: PokemonPortrait, back?: boolean) => string;
   species: (id: number) => { name: string; types?: number[] };
   move: (id: number) => { name: string; type?: number; pp?: number; power?: number };
   cry: (id: number) => void;
@@ -445,6 +446,7 @@ export class BattlePresenter {
   private root: HTMLElement;
   private snapshot: BattleSnapshot;
   private shown: Record<Battler, BattleMon>;
+  private sentOutDvs: Record<Battler, number>;
   private shownSlots: Record<Battler, number>;
   private expProgress: number;
   private lastMoves = new Map<number, { slot: number; id: number }>();
@@ -471,6 +473,7 @@ export class BattlePresenter {
       player: this.initialMon("player"),
       enemy: this.initialMon("enemy"),
     };
+    this.sentOutDvs = { player: this.shown.player.dvs, enemy: this.shown.enemy.dvs };
     this.expProgress = this.expAtSendOut(this.shownSlots.player, o.snapshot.events as Event[]);
     const arena = o.arena ?? (o.trainerName === "Champion Mira" ? "champion" : o.gymBackdrop ? "gym" : o.wildEncounter ?? "field");
     const trainer = o.wildEncounter ? undefined : o.trainerName;
@@ -543,9 +546,11 @@ export class BattlePresenter {
       const image = this.root.querySelector<HTMLImageElement>(
         `.battle-${side} img`,
       )!;
-      if (image.dataset.species !== String(mon.species)) {
+      const traits = `${mon.dvs}:${this.sentOutDvs[side]}`;
+      if (image.dataset.species !== String(mon.species) || image.dataset.dvs !== traits) {
+        image.dataset.dvs = traits;
         image.dataset.species = String(mon.species);
-        image.src = this.o.sprite(mon.species, side === "player");
+        image.src = this.o.sprite({ species: mon.species, dvs: mon.dvs, paletteDvs: this.sentOutDvs[side] }, side === "player");
         image.alt = this.o.species(mon.species).name;
       }
       const status = battleStatus(mon.status);
@@ -645,6 +650,7 @@ export class BattlePresenter {
       const battler = side === "Player" ? "player" : "enemy";
       this.shownSlots[battler] = slot;
       this.shown[battler] = mon;
+      this.sentOutDvs[battler] = mon.dvs;
       this.setOutOfReach(battler, false);
       if (battler === "player") this.expProgress = this.expAtSendOut(slot, this.queue);
       this.paint();
@@ -1012,7 +1018,7 @@ export class BattlePresenter {
         ? a.Item?.id === item && a.Item.target === slot
         : (a.Switch ?? a.ForcedSwitch ?? a.OfferSwitch)?.slot === slot);
       return {
-        name: this.memberName(slot), sprite: this.o.sprite(saved.species),
+        name: this.memberName(slot), sprite: this.o.sprite(saved),
         level: mon?.level ?? saved.level, status: mon?.status ?? saved.status,
         hp: mon?.hp ?? saved.hp, maxHp: mon?.max_hp ?? saved.stats[0],
         note: active ? "In battle" : undefined, disabled: action < 0, action,

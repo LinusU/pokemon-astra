@@ -61,6 +61,7 @@ import {
   type WorldObject,
   type WorldMap,
 } from "./world";
+import { pokemonAppearance, type PokemonPortrait } from "./engine/appearance";
 import type { Engine, Pokemon } from "./engine";
 import { openCartridge } from "./ui/cartridge";
 import "./styles.css";
@@ -94,11 +95,12 @@ let engine: Engine,
 const has = (r?: Requirement) =>
   meetsRequirement(save, r, (id) => engine.species(id).types);
 const spriteCache = new Map<string, string>();
-function sprite(id: number, back = false) {
-  const key = `${id}:${back}`;
+function sprite(mon: PokemonPortrait | number, back = false) {
+  const appearance = pokemonAppearance(mon);
+  const key = `${appearance.species}:${back}:${appearance.form}:${appearance.shiny}`;
   if (!spriteCache.has(key)) {
     try {
-      const pixels = engine.sprite(id, back),
+      const pixels = engine.sprite(appearance.species, back, appearance),
         c = document.createElement("canvas");
       c.width = 56;
       c.height = 56;
@@ -432,8 +434,8 @@ function fieldBasics(back: () => void) {
   );
   p.querySelector("#back")!.addEventListener("click", back);
 }
-function specimen(id: number) {
-  return { ...engine.species(id), ...engine.dexEntry(id), image: sprite(id) };
+function specimen(mon: Pokemon) {
+  return { ...engine.species(mon.species), ...engine.dexEntry(mon.species), image: sprite(mon) };
 }
 function starter(selected = 58) {
   mode = "starter";
@@ -449,7 +451,7 @@ function starter(selected = 58) {
     button.onclick = () => {
       const id = Number(button.dataset.id);
       const mon = engine.makeStarter(id);
-      const data = specimen(id);
+      const data = specimen(mon);
       const moves = mon.moves.filter(Boolean).map(move => engine.move(move).name).join(" · ");
       cry(id);
       specimenCard(layer, "Meet your partner", data, `Lv ${mon.level} · ${moves}`,
@@ -971,7 +973,7 @@ function view(v: string, pageIndex = 0) {
     mountJournal(layer, {
       save, state: fieldJournalState, permitted: has,
       typesOf: id => engine.species(id).types,
-      partner: id => ({ name: engine.species(id).name, sprite: sprite(id) }),
+      partner: mon => ({ name: engine.species(mon.species).name, sprite: sprite(mon) }),
       onSurvey: id => { save.survey = id; persist(); },
       onCancel: menu,
     });
@@ -1104,7 +1106,7 @@ function mountSaveRetry(p: HTMLElement) {
 function fieldPartyRows() {
   return save.party.map(mon => ({
     name: mon.nickname || engine.species(mon.species).name,
-    sprite: sprite(mon.species), level: mon.level, status: mon.status,
+    sprite: sprite(mon), level: mon.level, status: mon.status,
     hp: mon.hp, maxHp: mon.stats[0],
   }));
 }
@@ -1120,7 +1122,7 @@ function partyDetails(index: number) {
   const mon = save.party[index];
   mode = "menu";
   mountPartnerSummary(layer, mon, {
-    engine, image: sprite(mon.species), itemName,
+    engine, image: sprite(mon), itemName,
     onBack: () => view("party", index),
     onLead: index > 0 && mon.hp > 0 ? () => {
       [save.party[0], save.party[index]] = [mon, save.party[0]];
@@ -1368,9 +1370,9 @@ function showBattle(fishing = false) {
   const s = battle.snapshot();
   if (s.outcome && s.result) {
     const result = s.result;
-    const caughtSpecies =
-      result.caught !== null ? result.party[result.caught]?.species : undefined;
-    const firstCatch = caughtSpecies !== undefined && !save.caught.includes(caughtSpecies);
+    const caughtMon = result.caught !== null ? result.party[result.caught] : undefined;
+    const caughtSpecies = caughtMon?.species;
+    const firstCatch = caughtMon && !save.caught.includes(caughtMon.species);
     const catchDestination = (result.caught ?? -1) >= 6 ? "storage" : "party";
     save.party = result.party.slice(0, 6);
     for (const mon of result.party.slice(6)) storePokemon(save.storage, mon);
@@ -1425,10 +1427,7 @@ function showBattle(fishing = false) {
       exitLock = true;
     }
     if (won && battleObject?.id === "league_4")
-      save.hallOfFame = save.party.map(({ species, level }) => ({
-        species,
-        level,
-      }));
+      save.hallOfFame = save.party.map(({ species, level, dvs }) => ({ species, level, dvs: [...dvs] }));
     const candidates = result.may_evolve.filter(slot => save.party[slot] && levelEvolution(save.party[slot], !!save.settings.night, engine));
     if (candidates.length) save.pendingEvolutions = [...new Set(candidates)];
     persist();
@@ -1452,7 +1451,7 @@ function showBattle(fishing = false) {
     const afterCatch = receipt ? () => showReceipt(receipt, wrapUp, battleMusic) : wrapUp;
     if (firstCatch) {
       mode = "registration";
-      specimenCard(layer, "New Pokédex entry", specimen(caughtSpecies),
+      specimenCard(layer, "New Pokédex entry", specimen(caughtMon),
         `${catchDestination === "storage" ? "Sent to the Center PC" : "Joined your party"} · ${save.caught.length} / 251 caught`,
         "Continue", afterCatch);
       return;
@@ -1530,7 +1529,7 @@ function hallOfFame(done: () => void) {
   const p = panel(
     layer,
     "Hall of Fame",
-    `<p>The team that brought the dawn back to Astra.</p><div class="hall-party">${(save.hallOfFame || save.party).map((m) => `<div><img alt="" src="${sprite(m.species)}"><span>${escapeHtml(engine.species(m.species).name)}<br>Lv ${m.level}</span></div>`).join("")}</div><p class="small">The Aurora Trail is open west of Dewdrop Village.</p><button id="continue">Continue exploring</button>`,
+    `<p>The team that brought the dawn back to Astra.</p><div class="hall-party">${(save.hallOfFame || save.party).map((m) => `<div><img alt="" src="${sprite(m)}"><span>${escapeHtml(engine.species(m.species).name)}<br>Lv ${m.level}</span></div>`).join("")}</div><p class="small">The Aurora Trail is open west of Dewdrop Village.</p><button id="continue">Continue exploring</button>`,
     "champion-record",
   );
   p.querySelector("#continue")!.addEventListener("click", done);
@@ -1544,8 +1543,8 @@ function evolvePartyMember(index: number, species: number, next: () => void, con
   if (current.hp > 0 && (current.status & 0x27) === 0) cry(current.species);
 
   void playEvolution(layer, {
-    from: sprite(current.species),
-    to: sprite(species),
+    from: sprite(current),
+    to: sprite({ species, dvs: current.dvs }),
     name,
     evolvedName: engine.species(species).name,
     reveal: () => {
@@ -1666,7 +1665,7 @@ function update(dt: number) {
     mode = "hatching";
     const name = engine.species(hatch.mon.species).name;
     sound.overworld("eggCrack");
-    void showHatch(layer, sprite(253), sprite(hatch.mon.species), name,
+    void showHatch(layer, sprite(253), sprite(hatch.mon), name,
       `${name} ${hatch.stored ? "was sent to the Center PC" : "joined your party"} at Lv 5.`,
       () => { sound.overworld("eggHatch"); cry(hatch.mon.species); }, close);
     return;

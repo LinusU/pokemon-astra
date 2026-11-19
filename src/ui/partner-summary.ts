@@ -1,3 +1,4 @@
+import { portraitNumber } from "../engine/appearance";
 import type { Engine, Pokemon } from "../engine";
 import { bagKeyForItem } from "../game/items";
 import { gender } from "../game/nursery";
@@ -84,7 +85,7 @@ export function mountPartnerSummary(host: HTMLElement, mon: Pokemon, options: Op
     const managing = command !== -1;
     root.innerHTML = `<header><h2>${html(name)} <small>${sex === "—" ? "" : sex}</small></h2><span>Lv ${mon.level}</span></header>
       <nav aria-label="Summary pages">${pages.map(p => `<button data-page="${p}" aria-pressed="${p === page}">${p}</button>`).join("")}</nav>
-      <div class="partner-body"><aside><div class="partner-picture"><small>№ ${String(mon.species).padStart(3, "0")}</small><img src="${options.image}" alt="${html(data.name)}"></div>
+      <div class="partner-body"><aside><div class="partner-picture"><small>${portraitNumber(mon)}</small><img src="${options.image}" alt="${html(data.name)}"></div>
       <b>${html(data.name)}</b><span>${types}</span><div class="partner-health-readout">${line("HP", mon.hp + "/" + mon.stats[0])}
       <div class="partner-bar"><i style="width:${100 * mon.hp / Math.max(1, mon.stats[0])}%"></i></div><small>${status}</small></div></aside>
       <section class="partner-data" aria-label="${page}">${contents()}</section></div>

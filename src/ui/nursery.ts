@@ -8,7 +8,7 @@ import "./nursery.css";
 type Options = {
   save: Save;
   engine: Engine;
-  sprite: (id: number) => string;
+  sprite: (mon: Pokemon | number) => string;
   onSave: () => void;
   onClose: () => void;
 };
@@ -16,9 +16,9 @@ type Options = {
 export function openNursery(host: HTMLElement, options: Options) {
   const { save, engine, sprite } = options;
   const name = (mon: Pokemon) => mon.nickname || engine.species(mon.species).name;
-  const img = (id: number) => `<img src="${sprite(id)}" alt="">`;
+  const img = (mon: Pokemon | number) => `<img src="${sprite(mon)}" alt="">`;
   const portraits = (mons: Pokemon[]) => mons.map(mon =>
-    `<div>${img(mon.species)}<span>${html(name(mon))} ${gender(mon, engine)}</span></div>`).join("");
+    `<div>${img(mon)}<span>${html(name(mon))} ${gender(mon, engine)}</span></div>`).join("");
 
   function desk(note = "") {
     const nest = save.nursery;
@@ -47,7 +47,7 @@ export function openNursery(host: HTMLElement, options: Options) {
       const fits = first === undefined
         ? save.party.some((_, j) => canNest(save.party, i, j, engine))
         : canNest(save.party, first, i, engine);
-      return { name: name(mon), sprite: sprite(mon.species), level: mon.level, hp: mon.hp,
+      return { name: name(mon), sprite: sprite(mon), level: mon.level, hp: mon.hp,
         maxHp: mon.stats[0], status: mon.status, disabled: !fits,
         note: `${gender(mon, engine)}${i === first ? " · Selected" : !fits ? " · No match" : ""}` };
     });

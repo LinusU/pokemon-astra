@@ -4,12 +4,13 @@ import { paintGymTile, paintGymFixtures, paintGymActivity } from "./gym-art";
 import { trailPalette } from "../world/atlas";
 import { trailLandmark } from "./trail-landmarks";
 import { WORLD, isWildEncounter, type Exit, type WorldMap, type WorldObject } from "../world";
+import { pokemonAppearance, type PokemonPortrait } from "../engine/appearance";
 import type { Engine } from "../engine";
 import { interactionTarget, objectVisible } from "./actors";
 import { barrierTarget, barrierTiles, connectionOffset } from "./navigation";
 
 export interface RendererVisualState {
-  nest?: { species: number }[];
+  nest?: PokemonPortrait[];
   npcs?: Record<
     string,
     {
@@ -1887,9 +1888,10 @@ export class Renderer {
         c.fillRect(px + 1, py + 2, 30, 11);
         c.fillStyle = "#e1cb91";
         for (let n = 0; n < 7; n++) c.fillRect(px + 2 + n * 4, py + 4 + n % 3, 3, 2);
-        const id = visualState.nest?.[i]?.species;
-        if (id && this.engine) {
-          const image = this.sprite("mon:" + id, () => this.engine!.sprite(id));
+        const parent = visualState.nest?.[i];
+        if (parent && this.engine) {
+          const look = pokemonAppearance(parent);
+          const image = this.sprite(`nest:${look.species}:${look.form}:${look.shiny}`, () => this.engine!.sprite(look.species, false, look));
           if (image) c.drawImage(image, px + 5, py - 12 - Math.floor(time / 650 + i) % 2, 24, 24);
         }
       }

@@ -125,6 +125,8 @@ The same adventure reached Tideglass. After an offline restart, its PC returned 
 
 From Tideglass the player followed Canal Road to Copperwick, read the night meter in the loft and isolated the foundry feeder. The service lift reopened after the intake was restored. Beating Coil Winder Tess opened the west catwalk to Volt. After a loss, the player trained Diglett near Copperworks, beat Line Runner Dex on the east catwalk and returned to Volt with Diglett leading. The rematch ended with three badges, Flash and a level-16 Diglett in the saved party.
 
+The player used Flash on Copperwick’s north road, crossed Saffron Dunes and caught Marowak. In the Hourglass Ruins, the player read the frieze, sighted the disk from its western shadow, restored the lens and used the sand chute to return. The save recorded both gym trainers defeated, Sable’s Mirage Badge and Strength.
+
 ## Save recovery
 
 - An isolated production build distinguished an invalid cartridge, an unavailable game engine, a failed cartridge cache write and a failed save read. Retrying the engine and cache used the file already selected. Playing with an uncached cartridge wrote a working save that reopened after choosing the cartridge again.
@@ -132,3 +134,9 @@ From Tideglass the player followed Canal Road to Copperwick, read the night mete
 - Aborting an autosave left the previous battle speed on disk. A landscape viewport showed the unsaved-progress notice. The exported backup contained the new setting, and retrying saved it in the browser. The recovery screen fit at 320 pixels wide.
 - Two open game windows reproduced a lost update. One restored an Amberbank backup while the other held a Tideglass journey. After the fix, changing battle speed in Tideglass preserved Amberbank on disk. The older window exported its Tideglass progress, cancelled a reload, then opened the newer journey. Separate checks covered two simultaneous new-game starts and a full-party PC swap from an older session.
 - Automated IndexedDB tests cover competing writes to a legacy save, queued snapshots, idle autosaves and rollback of both the save and its revision on an aborted transaction.
+
+## Individual Pokémon appearances
+
+- The native encounter test caught all 26 Unown letters. Each capture retained the appearance from battle, and all letters decoded distinct front and back pictures from the local cartridge. The Magikarp check compared both sides against the normal and shiny cartridge colors.
+- An isolated Chrome save at Crown Summit showed four distinct Unown portraits, including shiny I and V. The stored partner’s summary matched its PC portrait, and the party tab distinguished ordinary and shiny Magikarp. The individual letter and shiny labels fit at 320 pixels wide.
+- Older Hall of Fame records with only species and level still open with the standard species portrait. New records include the winning partners’ DVs.

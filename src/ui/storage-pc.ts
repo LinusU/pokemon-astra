@@ -1,3 +1,4 @@
+import { portraitNumber } from "../engine/appearance";
 import type { Engine, Pokemon } from "../engine";
 import type { Action } from "../game/input";
 import { canDeposit, depositPokemon, withdrawPokemon, type Collection } from "../game/collection";
@@ -17,7 +18,7 @@ type Options = {
   state: PcState;
   engine: Engine;
   itemName: (key: string) => string;
-  sprite: (id: number) => string;
+  sprite: (mon: Pokemon) => string;
   saveTransfer: (roster: Collection) => Promise<void>;
   onClose: () => void;
 };
@@ -54,7 +55,7 @@ export function mountStoragePc(host: HTMLElement, options: Options) {
     const types = [...new Set(species.types)].map(type => typeNames[type]).join(" / ");
     const hp = Math.min(100, 100 * mon.hp / Math.max(1, mon.stats[0]));
     return `<div class="pc-profile"><div class="pc-portrait">
-      <span>№ ${String(mon.species).padStart(3, "0")}</span><img src="${options.sprite(mon.species)}" alt="${html(species.name)}">
+      <span>${portraitNumber(mon)}</span><img src="${options.sprite(mon)}" alt="${html(species.name)}">
       </div><strong>${html(name(mon))}</strong><small>${types}</small>
       <div class="pc-vitals"><div>Lv ${mon.level}<b>${condition(mon)}</b></div>
         <div class="pc-hp"><i style="width:${hp}%"></i></div><div>HP ${mon.hp}/${mon.stats[0]}</div></div></div>`;
@@ -140,7 +141,7 @@ export function mountStoragePc(host: HTMLElement, options: Options) {
       title: "Swap for " + name(incoming), confirm: "Swap",
       rows: save.party.map((mon, i) => ({
         name: name(mon), level: mon.level, status: mon.status, hp: mon.hp, maxHp: mon.stats[0],
-        sprite: options.sprite(mon.species), disabled: !canDeposit(save.party, i, incoming),
+        sprite: options.sprite(mon), disabled: !canDeposit(save.party, i, incoming),
       })),
       onSelect: i => {
         const outgoing = name(save.party[i]);
@@ -152,7 +153,7 @@ export function mountStoragePc(host: HTMLElement, options: Options) {
   function summary() {
     const mon = list()[index()];
     mountPartnerSummary(host, mon, {
-      engine, image: options.sprite(mon.species), itemName: options.itemName,
+      engine, image: options.sprite(mon), itemName: options.itemName,
       onBack: () => { host.replaceChildren(root); render(); },
     });
   }

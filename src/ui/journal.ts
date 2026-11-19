@@ -17,7 +17,7 @@ type Options = {
   state: JournalState;
   permitted: (requirement?: Requirement) => boolean;
   typesOf: (id: number) => number[];
-  partner: (id: number) => { name: string; sprite: string };
+  partner: (mon: NonNullable<Save["hallOfFame"]>[number]) => { name: string; sprite: string };
   onSurvey: (id: number) => void;
   onCancel: () => void;
 };
@@ -119,7 +119,7 @@ export function mountJournal(host: HTMLElement, options: Options) {
 
   function team() {
     return `<div class="jn-team"><h2 tabindex="-1">Hall of Fame</h2><div class="jn-roster">${save.hallOfFame!.map(mon => {
-      const partner = options.partner(mon.species);
+      const partner = options.partner(mon);
       return `<div><img alt="" src="${html(partner.sprite)}"><span>${html(partner.name)}</span><small>Lv ${mon.level}</small></div>`;
     }).join("")}</div></div>`;
   }

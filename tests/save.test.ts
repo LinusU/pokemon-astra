@@ -54,6 +54,13 @@ describe("save files", () => {
     expect(isValidSave(copy)).toBe(true);
     expect(copy).toEqual(original);
   });
+  it("opens older Hall of Fame records and validates recorded partner DVs", () => {
+    const entry = { species: 201, level: 60 };
+    for (const record of [entry, { ...entry, dvs: [0x6a, 0xaa] }])
+      expect(isValidSave({ ...populated(), hallOfFame: [record] })).toBe(true);
+    for (const dvs of [[], [32], [256, 170], 0x6aaa])
+      expect(isValidSave({ ...populated(), hallOfFame: [{ ...entry, dvs }] })).toBe(false);
+  });
   it("rejects broken native structures before they reach WebAssembly", () => {
     for (const patch of [
       { moves: [44] },

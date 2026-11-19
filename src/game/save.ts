@@ -28,7 +28,7 @@ export type Save = {
   steps: number;
   survey?: number;
   center?: string;
-  hallOfFame?: { species: number; level: number }[];
+  hallOfFame?: { species: number; level: number; dvs?: number[] }[];
   repel?: number;
   settings: { battleSpeed: number; night?: boolean; music?: boolean };
 };
@@ -156,7 +156,8 @@ export function isValidSave(x: any): x is Save {
         x.hallOfFame.length <= 6 &&
         x.hallOfFame.every(
           (m: any) =>
-            m && integer(m.species, 1, 251) && integer(m.level, 1, 100),
+            m && integer(m.species, 1, 251) && integer(m.level, 1, 100) &&
+            (m.dvs === undefined || exact(m.dvs, 2, 255)),
         ))) &&
     stringList(x.flags, 10000) &&
     stringList(x.abilities, 8) &&
