@@ -32,7 +32,6 @@ type Options = {
   layer: HTMLElement;
   trainerName?: string;
   caught?: readonly number[];
-  prizeMoney?: number;
   arena?: "league" | "champion";
   gymBackdrop?: string;
   fieldBackdrop?: string;
@@ -269,7 +268,6 @@ export function battleMessage(
   move: Options["move"],
   item: Options["itemName"],
   trainerName?: string,
-  prizeMoney = 0,
   species?: Options["species"],
 ): string {
   const plain: Record<string, string> = {
@@ -319,8 +317,6 @@ export function battleMessage(
   const d = raw && typeof raw === "object" ? { ...raw } : raw;
   if (trainerName && d?.trainer)
     d.trainer = { ...d.trainer, name: trainerName };
-  if ((kind === "GotMoney" || kind === "GotMoneySentSomeToMom") && d)
-    d.money += prizeMoney;
   if (!kind) return "";
   const n = d.user?.name || d.target?.name || d.mon || "Pokémon";
   const m = (id: number) => {
@@ -369,7 +365,7 @@ export function battleMessage(
     EnemyUsedItem: () => `${d.trainer.name} used ${item(d.item)} on ${d.mon}!`,
     PartyRecoveredHp: () => `${n} recovered ${d.hp} HP!`,
     EnemyWasDefeated: () => `${d.trainer.name} was defeated!`,
-    GotMoney: () => `${d.player} got ¥${d.money} for winning!`,
+    GotMoney: () => `${d.player} got ₽${d.money} for winning!`,
     CollectedPayDay: () => `Picked up ₽${d.money} in scattered coins!`,
     HitTimes: () => `Hit ${d.times} times!`,
     Magnitude: () => `Magnitude ${d.magnitude}!`,
@@ -649,7 +645,6 @@ export class BattlePresenter {
           this.o.move,
           this.o.itemName,
           this.o.trainerName,
-          this.o.prizeMoney,
           this.o.species,
         ),
         !/^(WantsToBattle|WildAppeared|Caught|EnemyWasDefeated|GotMoney|GotMoneySentSomeToMom|LostAgainst|TiedAgainst|AskForgetMove)$/.test(kind),

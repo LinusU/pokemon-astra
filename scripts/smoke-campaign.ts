@@ -391,11 +391,9 @@ function runCampaign(starter: number) {
   function practice(object: WorldObject, lead?: number) {
     makeLead(lead ?? 0);
     save.party = save.party.map((mon) => engine.healPokemon(mon));
-    const outcome = fight({ party: makeRoster(object) });
-    if (outcome === "win") {
-      practiceWins++;
-      save.money += Math.floor((object.trainer?.reward ?? 0) / 2);
-    }
+    const prizeMoney = Math.floor((object.trainer?.reward ?? 0) / 2);
+    const outcome = fight({ party: makeRoster(object), prizeMoney });
+    if (outcome === "win") practiceWins++;
     console.log(`Practice against ${object.trainer!.name}: ${outcome}, party levels ${save.party.map((mon) => mon.level).join(", ")}`);
   }
 
@@ -431,7 +429,8 @@ function runCampaign(starter: number) {
       const lead = training >= 0 ? training : viablePractice ?? preferred;
       makeLead(lead);
     }
-    let outcome = fight({ party: roster });
+    const opponent = { party: roster, prizeMoney: trainer.reward };
+    let outcome = fight(opponent);
     for (let retry = 0; requireVictory && save.badges < 8 && outcome !== "win" && retry < 3; retry++) {
       const lead = save.party[0];
       for (const previous of routePractice.slice(-2)) practice(previous);
@@ -440,10 +439,9 @@ function runCampaign(starter: number) {
           buy(key, 3, MEDICINE[key].price);
       save.party = save.party.map((mon) => engine.healPokemon(mon));
       makeLead(save.party.findIndex((mon) => mon.species === lead.species));
-      outcome = fight({ party: roster });
+      outcome = fight(opponent);
     }
     if (outcome === "win") {
-      save.money += trainer.reward ?? 0;
       save.flags.push(object.setsFlag ?? object.id);
       trainerWins++;
     }

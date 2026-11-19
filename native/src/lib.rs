@@ -5,7 +5,11 @@ use crystal_battle::{
 };
 use serde_json::{Value, json};
 use std::cell::RefCell;
-thread_local! { static BATTLE: RefCell<Option<Battle>> = const { RefCell::new(None) }; static OUTPUT: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) }; }
+struct Encounter {
+    battle: Battle,
+    trainer_prize: u32,
+}
+thread_local! { static BATTLE: RefCell<Option<Encounter>> = const { RefCell::new(None) }; static OUTPUT: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) }; }
 
 fn make_mon(id: u8, level: u8) -> Result<Pokemon, String> {
     let cfg = json!({"battle":{"type":"wild_encounter"},"player_party":[{"species":names::species_name(id),"level":level}],"enemy_party":[{"species":"RATTATA","level":2}]});
@@ -17,7 +21,8 @@ fn make_mon(id: u8, level: u8) -> Result<Pokemon, String> {
         .next()
         .ok_or("could not generate Pokémon".into())
 }
-fn snapshot(b: &Battle) -> Value {
+fn snapshot(encounter: &Encounter) -> Value {
+    let b = &encounter.battle;
     let (site, legal, state, mut events, outcome) = match b.status() {
         Status::Decision(d) => (
             json!(d.site),
@@ -50,12 +55,25 @@ fn snapshot(b: &Battle) -> Value {
         .map(|_| b.engine().engine().mem.rb(W_CUR_PARTY_MON));
     let mut result = b.result();
     if let Some(result) = result.as_mut() {
+        let multiplier = if engine.mem.rb(W_AMULET_COIN) != 0 { 2 } else { 1 };
+        let mut credit = |amount: u32| {
+            let received = (amount * multiplier).min(999_999u32.saturating_sub(result.money));
+            result.money += received;
+            received
+        };
+        // Custom trainer rosters bypass Crystal's class payout table. Use the
+        // same participation flag that doubles the original trainer's prize.
+        if result.outcome == Outcome::Win && encounter.trainer_prize > 0 {
+            let received = credit(encounter.trainer_prize);
+            if let Some(prize) = events.as_array_mut().unwrap().iter_mut()
+                .find_map(|event| event.pointer_mut("/Message/GotMoney/money")) {
+                *prize = json!(prize.as_u64().unwrap_or(0) + u64::from(received));
+            }
+        }
         // Crystal collects scattered coins in ExitBattle, after the battle
         // engine has returned. A capture also sets the cartridge's WIN flag.
         if matches!(result.outcome, Outcome::Win | Outcome::Caught) && result.pay_day > 0 {
-            let multiplier = if engine.mem.rb(W_AMULET_COIN) != 0 { 2 } else { 1 };
-            let collected = (result.pay_day * multiplier).min(999_999u32.saturating_sub(result.money));
-            result.money += collected;
+            let collected = credit(result.pay_day);
             if collected > 0 {
                 events.as_array_mut().unwrap().push(json!({"Message":{"CollectedPayDay":{"money":collected}}}));
             }
@@ -142,13 +160,18 @@ fn run(v: Value) -> Result<Value, String> {
                 v["training_level"].as_u64().unwrap_or(0).min(100) as u8,
             )
             .map_err(|e| e.to_string())?;
-            let out = snapshot(&b);
-            BATTLE.with(|slot| *slot.borrow_mut() = Some(b));
+            let encounter = Encounter {
+                battle: b,
+                trainer_prize: v["trainer_prize"].as_u64().unwrap_or(0).min(999_999) as u32,
+            };
+            let out = snapshot(&encounter);
+            BATTLE.with(|slot| *slot.borrow_mut() = Some(encounter));
             Ok(out)
         }
         "act" => BATTLE.with(|slot| {
             let mut slot = slot.borrow_mut();
-            let b = slot.as_mut().ok_or("No battle")?;
+            let encounter = slot.as_mut().ok_or("No battle")?;
+            let b = &mut encounter.battle;
             let index = v["index"].as_u64().ok_or("Missing action index")? as usize;
             let action = *b
                 .decision()
@@ -157,7 +180,7 @@ fn run(v: Value) -> Result<Value, String> {
                 .get(index)
                 .ok_or("Invalid action")?;
             b.step(action).map_err(|e| e.to_string())?;
-            Ok(snapshot(b))
+            Ok(snapshot(encounter))
         }),
         _ => Err("Unknown operation".into()),
     }

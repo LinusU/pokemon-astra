@@ -28,7 +28,7 @@ describe("battle presentation", () => {
   it("names the copied Pokémon and the new type in Transform and Conversion text", () => {
     const species = (id: number) => ({ name: id === 201 ? "UNOWN" : "DITTO" });
     expect(battleMessage({ Transformed: { user: { name: "DITTO" }, species: 201 } },
-      move, () => "Potion", undefined, 0, species)).toBe("DITTO TRANSFORMED into UNOWN!");
+      move, () => "Potion", undefined, species)).toBe("DITTO TRANSFORMED into UNOWN!");
     expect(battleMessage({ TransformedType: { user: { name: "PORYGON" }, kind: 23 } },
       move, () => "Potion")).toBe("PORYGON transformed into the Electric-type!");
   });
@@ -90,6 +90,44 @@ describe.skipIf(!romAvailable)("real native battle events", () => {
       if (credit) expect(battleMessage(receipt, id => engine.move(id), id => engine.itemName(id)))
         .toBe(`Picked up ₽${credit} in scattered coins!`);
       else expect(receipt).toBeUndefined();
+    }
+  });
+  it("pays the advertised trainer prize once and doubles it only when the Amulet Coin holder participated", async () => {
+    const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});
+    const engine = new Engine(instance.exports as never, readFileSync("pokecrystal11.gbc"));
+    const lead = engine.teachMove(engine.makePokemon(52, 50), 33, 0);
+    for (const [holder, switchOut, money, credit] of [
+      [0, false, 3000, 246], [0, true, 3000, 246], [1, false, 3000, 123], [0, false, 999950, 49],
+    ] as const) {
+      const battle = engine.startBattle({
+        party: [0, 1].map(slot => ({ ...lead, item: slot === holder ? 91 : 0 })),
+        money, opponent: { party: [engine.makePokemon(19, 3)], prizeMoney: 123 }, seed: 5,
+      });
+      let snap = battle.snapshot();
+      if (switchOut) snap = battle.act(snap.legal.findIndex((action: any) => action.Switch?.slot === 1));
+      snap = battle.act(snap.legal.findIndex((action: any) => action.Move?.slot === 0));
+      expect(snap.outcome).toBe("win");
+      expect(snap.result?.money).toBe(money + credit);
+      const receipt = (snap.events as any[]).find(event => event.Message?.GotMoney).Message;
+      expect(battleMessage(receipt, id => engine.move(id), id => engine.itemName(id)))
+        .toBe(`ASTRA got ₽${credit} for winning!`);
+    }
+  });
+  it("settles the trainer prize before Pay Day and reports only what fits in the wallet", async () => {
+    const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});
+    const engine = new Engine(instance.exports as never, readFileSync("pokecrystal11.gbc"));
+    const meowth = engine.teachMove(engine.makePokemon(52, 50), 6, 0);
+    for (const [money, prize, coins] of [[999700, 246, 53], [999950, 49, 0], [999999, 0, 0]]) {
+      const battle = engine.startBattle({
+        party: [{ ...meowth, item: 91 }], money, seed: 5,
+        opponent: { party: [engine.makePokemon(19, 2)], prizeMoney: 123 },
+      });
+      const snap = battle.act(battle.snapshot().legal.findIndex((action: any) => action.Move?.slot === 0));
+      const messages = (snap.events as any[]).map(event => event.Message).filter(Boolean);
+      expect(messages.find(message => message.GotMoney).GotMoney.money).toBe(prize);
+      expect(messages.find(message => message.CollectedPayDay)?.CollectedPayDay.money ?? 0).toBe(coins);
+      expect(snap.result?.money).toBe(money + prize + coins);
+      expect(snap.result?.money).toBe(999999);
     }
   });
   it("keeps a successful escape distinct from a tied battle and records the wild sighting", async () => {
@@ -500,9 +538,4 @@ it("names the specific stat and sharp change from native events", () => {
   const item = () => "Potion";
   expect(battleMessage({ StatFell: { target: { name: "Pidgey" }, stat: 3, sharply: true } }, move, item)).toBe("Pidgey's Speed fell sharply!");
   expect(battleMessage({ StatRose: { user: { name: "Pidgey" }, stat: 1, sharply: false } }, move, item)).toBe("Pidgey's Attack rose!");
-});
-
-it("includes the authored trainer reward in the native prize message", () => {
-  const text = battleMessage({ GotMoney: { player: "ASTRA", money: 20 } }, () => ({ name: "Tackle" }), () => "item", "Scout Ari", 100);
-  expect(text).toBe("ASTRA got ¥120 for winning!");
 });

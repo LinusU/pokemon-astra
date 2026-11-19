@@ -1333,6 +1333,7 @@ function startBattle(species: number, level: number, o?: WorldObject, fishing = 
     const opponent =
       o?.trainer && !isWildEncounter(o)
         ? {
+            prizeMoney: o.trainer.reward ?? 0,
             party: (o.id.startsWith("rematch_") ? o.trainer.team : fieldTeam(o, save)).map((m, i) =>
               engine.makePokemon(rivalSpecies(o, i, m.species), m.level),
             ),
@@ -1395,13 +1396,6 @@ function showBattle(fishing = false) {
         (!isWildEncounter(battleObject) && won))
     ) {
       flag(battleObject.setsFlag || battleObject.id);
-      // Custom Astra trainers have authored prizes; the native cartridge's
-      // trainer-class payout table does not describe these new teams.
-      if (won && !isWildEncounter(battleObject))
-        save.money = Math.min(
-          999999,
-          save.money + (battleObject.trainer?.reward ?? 0),
-        );
       receipt = rewardReceipt(battleObject.reward);
       applyReward(battleObject.reward);
     }
@@ -1494,7 +1488,6 @@ function showBattle(fishing = false) {
         : undefined,
     wildEncounter: battleObject?.kind === "legendary" ? "legendary" : undefined,
     caught: save.caught,
-    prizeMoney: battleObject?.trainer?.reward ?? 0,
     snapshot: s,
     act: (index) => battle.act(index),
     sprite,

@@ -67,7 +67,7 @@ export interface BattleResult {
 }
 export interface BattleOptions {
   party: Pokemon[];
-  opponent: { species: number; level: number; stationary?: boolean } | { party: Pokemon[] };
+  opponent: { species: number; level: number; stationary?: boolean } | { party: Pokemon[]; prizeMoney?: number };
   balls?: [number, number][];
   items?: [number, number][];
   money?: number;
@@ -360,6 +360,7 @@ export class Engine {
       this.call({
         op: "start",
         setup,
+        trainer_prize: "party" in options.opponent ? options.opponent.prizeMoney : undefined,
         seed: options.seed ?? Math.floor(Math.random() * 0xffffffff),
         training_level: "Trainer" in opp ? TRAINING_LEVELS[popcount(options.badges ?? 0)] : 0,
       }),
