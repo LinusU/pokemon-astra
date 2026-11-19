@@ -691,9 +691,11 @@ export class Battle {
     return (this.current = this.engine.act(index));
   }
 }
+export class UnsupportedCartridge extends Error {}
+
 export async function initEngine(rom: Uint8Array): Promise<Engine> {
   if (rom.length !== 2097152)
-    throw Error("Please choose an English Pokémon Crystal 1.1 ROM.");
+    throw new UnsupportedCartridge("Please choose an English Pokémon Crystal 1.1 ROM.");
   const hash = Array.from(
     new Uint8Array(
       await crypto.subtle.digest("SHA-1", new Uint8Array(rom).buffer),
@@ -702,7 +704,7 @@ export async function initEngine(rom: Uint8Array): Promise<Engine> {
     .map((x) => x.toString(16).padStart(2, "0"))
     .join("");
   if (hash !== "f4cd194bdee0d04ca4eac29e09b8e4e9d818c133")
-    throw Error(
+    throw new UnsupportedCartridge(
       "Unsupported ROM: Pokémon Crystal (English) version 1.1 is required.",
     );
   const response = await fetch("./astra_native.wasm");

@@ -391,6 +391,19 @@ canvas {
 .screen[data-scene="title"] canvas {
   visibility: hidden;
 }
+#save-warning {
+  position: absolute;
+  top: 14%;
+  left: 2.5%;
+  padding: 2px 7px;
+  border: 1px solid #865b3e;
+  background: #fff1cd;
+  color: #61391f;
+  font: 18px/1.1 "VT323", monospace;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.screen:not([data-scene="world"]) #save-warning { display: none; }
 .panel button[aria-current="true"] {
   outline: 2px solid #d8a94b;
   outline-offset: 2px;

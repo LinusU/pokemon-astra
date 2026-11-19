@@ -58,7 +58,9 @@ Use the PC on the right in any Pokémon Center to manage your team. Every Center
 
 Open **Menu → Journal** and press left or right to turn between Survey, Requests, Paths and Badges. In Requests or Paths, press up or down to select an entry, A to read it and B to return to the index. Inspect a blocked route in the field with A to record it. After the third badge, choose your next beacon on the Survey page to follow Sunspire, Cinderfall or Rimepeak in your preferred order.
 
-Saves and cartridge bytes stay in this browser's IndexedDB. **Options → Export save** creates a portable JSON backup; importing validates native Pokémon data and repairs positions obstructed by map revisions. Clearing browser storage removes the cached cartridge and save. Export a backup before changing devices or clearing storage. A new adventure asks for confirmation.
+Saves and cartridge bytes stay in this browser's IndexedDB. **Options → Export save** downloads a portable JSON backup. On a new device, choose your cartridge and select **Restore backup** on the Dewdrop opening screen. You can also import from Options during play. If an autosave fails, Options lets you retry or export your current progress.
+
+If a stored journey is unreadable, the recovery screen lets you export the original, restore a backup, or start over. Your previous save stays in place until the replacement has been written successfully.
 
 ## The three requested libraries
 

@@ -120,3 +120,11 @@ The synthesizer’s Gen 2 music wave channel is implemented in the vendored 0.2.
 A Chrome playthrough using the local verification cartridge followed one save from the Dewdrop doorstep onto Route 04. Growlithe caught Rattata on Dewpath and defeated Scout Ari. Rattata stayed in the Mossford PC during the orchard crossing and rejoined the party at Bramble. The journal led the player to the stranded surveyor in Lantern Wood and then to Fern’s gym.
 
 After losing to Fern, the player picked up the orchard’s Fire Stone, evolved Growlithe, fought local trainers and bought Potions with the winnings. The rematch awarded the Canopy Badge and Cut. Reloading in the gym retained both rewards. The player then used Cut on Bramble’s east road and crossed into Amberbank, where the saved game recorded the cleared tree.
+
+The same adventure reached Tideglass. After an offline restart, its PC returned Rattata with its original record. The player drained the breathing pool in Undertow Cave, crossed the shell bar and restored the fog signal. They caught Chinchou on the coast, crossed the lightship’s lowered gangway and fought both dock trainers. After the first loss to Marina, optional trainers on Amberbank and Saltwind Coast and a return to the Mart prepared the party for a rematch. The win awarded the Tidal Badge and Surf.
+
+## Save recovery
+
+- An isolated production build distinguished an invalid cartridge, an unavailable game engine, a failed cartridge cache write and a failed save read. Retrying the engine and cache used the file already selected. Playing with an uncached cartridge wrote a working save that reopened after choosing the cartridge again.
+- Both a damaged record and a working Tideglass journey exported to JSON and matched the stored originals. Backing out of a replacement, aborting its first write or aborting a backup import preserved the previous record. Retrying successfully started a new journey or restored the selected backup. A fresh browser also restored the Tideglass backup directly from the opening screen.
+- Aborting an autosave left the previous battle speed on disk. A landscape viewport showed the unsaved-progress notice. The exported backup contained the new setting, and retrying saved it in the browser. The recovery screen fit at 320 pixels wide.

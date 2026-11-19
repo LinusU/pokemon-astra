@@ -61,12 +61,13 @@ import {
   type WorldObject,
   type WorldMap,
 } from "./world";
-import { initEngine, type Engine, type Pokemon } from "./engine";
+import type { Engine, Pokemon } from "./engine";
+import { openCartridge } from "./ui/cartridge";
 import "./styles.css";
 import "./ui/region-map.css";
 
 const input = new Input(),
-  { canvas, layer } = createShell(input),
+  { canvas, layer, saveWarning } = createShell(input),
   renderer = new Renderer(canvas),
   menuInput = new MenuInput(),
   actors = new WorldActors();
@@ -193,13 +194,18 @@ function scene(): MusicScene {
 const flag = (f?: string) => {
   if (f && !save.flags.includes(f)) save.flags.push(f);
 };
+function showSaveFailure(failed: boolean) {
+  saveWarning.hidden = !failed;
+  const controls = layer.querySelector<HTMLElement>(".save-retry");
+  if (controls) controls.hidden = !failed;
+}
+async function writeJourney(next: Save) {
+  await set("save", next);
+  showSaveFailure(false);
+}
 function persist() {
   if (!journeyStarted || mode === "saving") return;
-  void set("save", save).catch(() => {
-    const status = document.querySelector(".statusbar > span");
-    if (status)
-      status.textContent = "Save unavailable · export a backup in Settings";
-  });
+  void writeJourney(save).catch(() => showSaveFailure(true));
 }
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden" && (mode === "world" || mode === "menu")) persist();
@@ -244,7 +250,7 @@ async function importJourney(file: File) {
     if (!isValidSave(data)) throw Error("Choose a valid Astra JSON save.");
     const next = prepareSave(data);
     try {
-      await set("save", next);
+      await writeJourney(next);
     } catch {
       throw Error("The browser could not store this backup. Free some space and try again.");
     }
@@ -253,6 +259,20 @@ async function importJourney(file: File) {
     layer.inert = false;
     mode = previousMode;
   }
+}
+function bindBackupPicker(p: HTMLElement, done: () => void, failed: (reason: string) => void) {
+  const input = p.querySelector<HTMLInputElement>("input[type=file]")!;
+  p.querySelector<HTMLButtonElement>("[data-backup-picker]")!.onclick = () => input.click();
+  input.onchange = async () => {
+    if (!input.files?.[0]) return;
+    try {
+      await importJourney(input.files[0]);
+      done();
+    } catch (error) {
+      input.value = "";
+      failed(error instanceof Error ? error.message : "Choose a readable Astra backup.");
+    }
+  };
 }
 function message(text: string, callback?: () => void, speaker?: string, music?: MusicScene) {
   // Keep short thoughts together and prefer a sentence break between pages.
@@ -294,81 +314,35 @@ function advance() {
   cb?.();
   sound.refreshMusic();
 }
-function welcome(error = "") {
-  mode = "welcome";
-  const p = panel(
-    layer,
-    "Pokémon Astra",
-    `<p>Choose your English Pokémon Crystal 1.1 cartridge file (.gbc) to begin.</p><div class="drop" id="drop"><button id="choose-rom">Choose ROM</button><input hidden id="rom" type="file" accept=".gbc,application/octet-stream"><span class="drop-hint small"> or drop your file here</span></div><p class="small muted">Your cartridge and save stay in this browser.</p>${error ? `<p class="error">${escapeHtml(error)}</p>` : ""}`,
-    "rom-import",
-  );
-  const file = p.querySelector<HTMLInputElement>("#rom")!;
-  p.querySelector("#choose-rom")!.addEventListener("click", () => file.click());
-  file.onchange = () => {
-    if (file.files?.[0]) void loadRom(file.files[0]);
-  };
-  const drop = p.querySelector<HTMLElement>("#drop")!;
-  drop.ondragover = (e) => {
-    e.preventDefault();
-    drop.classList.add("drag");
-  };
-  drop.ondragleave = () => drop.classList.remove("drag");
-  drop.ondrop = (e) => {
-    e.preventDefault();
-    drop.classList.remove("drag");
-    if (e.dataTransfer?.files[0]) void loadRom(e.dataTransfer.files[0]);
-  };
-}
-async function loadRom(file: File) {
-  try {
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    await start(bytes);
-    await set("rom", bytes);
-  } catch (e) {
-    welcome(
-      `Could not load this ROM: ${e instanceof Error ? e.message : String(e)}`,
-    );
-  }
-}
-async function start(bytes: Uint8Array) {
+async function readJourney() {
   mode = "loading";
-  panel(layer, "Preparing Astra", "<p>Reading your local game data…</p>");
-  engine = await initEngine(bytes);
-  renderer.setEngine(engine);
-  actors.reset();
-  glide = undefined;
-  const existing = await get<Save>("save");
+  panel(layer, "Opening your journey", "<p>Reading your browser save…</p>", "opening-panel");
+  let existing: unknown;
+  try {
+    existing = await get("save");
+  } catch {
+    mode = "recovery";
+    const p = panel(layer, "Save storage unavailable",
+      '<p>Astra could not read your journey. Allow browser storage and try again.</p><button id="retry">Read save again</button>', "opening-panel");
+    p.querySelector<HTMLButtonElement>("#retry")!.onclick = () => void readJourney();
+    return;
+  }
   if (isValidSave(existing)) {
     restoreSession(prepareSave(existing));
     title();
-  } else if (existing !== undefined) {
-    mode = "recovery";
-    const p = panel(
-      layer,
-      "Recover your journey",
-      '<p>This browser save could not be read. Export it for safekeeping or import a working backup to continue.</p><div class="buttons"><button id="export">Export current save</button><button id="choose">Choose backup</button><input hidden type="file" accept=".json"></div>',
-    );
-    p.querySelector("#export")!.addEventListener("click", () =>
-      download("pokemon-astra-recovery.json", existing),
-    );
-    const input = p.querySelector("input")!;
-    p.querySelector("#choose")!.addEventListener("click", () => input.click());
-    input.onchange = async () => {
-      try {
-        const file = input.files?.[0];
-        if (!file) return;
-        await importJourney(file);
-        title();
-      } catch (error) {
-        input.value = "";
-        p.querySelector("p")!.textContent = error instanceof Error ? error.message : "Choose another backup.";
-      }
-    };
-  } else {
-    save = freshSave();
+  } else if (existing !== undefined) recoverJourney(existing);
+  else {
     sound.attach(engine, true);
     intro();
   }
+}
+function recoverJourney(existing: unknown) {
+  mode = "recovery";
+  const p = panel(layer, "Recover your journey",
+    '<p>Astra could not read this save. Export a copy, restore a backup or begin a new journey.</p><div class="buttons"><button id="export">Export current save</button><button data-backup-picker id="choose">Choose backup</button><button class="secondary" id="new">New adventure</button><input hidden type="file" accept=".json,application/json"></div>', "opening-panel");
+  p.querySelector<HTMLButtonElement>("#export")!.onclick = () => download("pokemon-astra-recovery.json", existing);
+  p.querySelector<HTMLButtonElement>("#new")!.onclick = () => confirmNewJourney(existing, () => recoverJourney(existing));
+  bindBackupPicker(p, title, error => { p.querySelector("p")!.textContent = error; });
 }
 function title() {
   mode = "title";
@@ -385,35 +359,43 @@ function title() {
     layer.innerHTML = "";
     void sound.unlock();
   });
-  p.querySelector("#new")!.addEventListener("click", () => {
-    const confirm = panel(
-      layer,
-      "Start a new adventure?",
-      `<p>Your existing browser save will be replaced when the new adventure begins. Export a backup first if you want to keep it.</p><div class="buttons"><button class="secondary" id="cancel">Keep my journey</button><button id="confirm">Start over</button></div>`,
-    );
-    confirm.querySelector("#cancel")!.addEventListener("click", title);
-    confirm.querySelector("#confirm")!.addEventListener("click", () => {
-      restoreSession(prepareSave(freshSave()));
-      intro();
-    });
-  });
+  p.querySelector<HTMLButtonElement>("#new")!.onclick = () => confirmNewJourney(save, title);
 }
-function intro() {
+function confirmNewJourney(existing: unknown, back: () => void) {
+  mode = "title";
+  const p = panel(layer, "Start a new adventure?",
+    '<p>Begin adventure will replace your browser save. You can export a copy first.</p><div class="buttons"><button id="cancel">Keep my save</button><button class="secondary" id="export">Export save</button><button class="secondary" id="confirm">Start over</button></div>', "opening-panel");
+  p.querySelector<HTMLButtonElement>("#cancel")!.onclick = back;
+  p.querySelector<HTMLButtonElement>("#export")!.onclick = () => download("pokemon-astra-save.json", existing);
+  p.querySelector<HTMLButtonElement>("#confirm")!.onclick = () => intro(back);
+}
+function intro(back?: () => void, error = "") {
   mode = "intro";
   const p = panel(
     layer,
     "Dewdrop Village",
-    `<p>The flock over Dewdrop has circled three times this morning. Robin thinks one of the beacons has gone dark.</p><p>Meet Professor Alder at the lab in the north garden to choose your partner.</p><p class="small">Face Alder and press ${input.confirmLabel} to talk.</p><div class="buttons"><button id="begin">Begin adventure</button><button id="how" class="secondary">How to play</button></div>`,
+    `<p>The flock over Dewdrop has circled three times this morning. Robin thinks one of the beacons has gone dark.</p><p>Meet Professor Alder at the lab in the north garden to choose your partner.</p><p class="small">Face Alder and press ${input.confirmLabel} to talk.</p>${error ? `<p class="error" role="alert">${escapeHtml(error)}</p>` : ""}<div class="buttons"><button id="begin">Begin adventure</button><button id="how" class="secondary">How to play</button>${back ? '<button id="cancel" class="secondary">Keep my save</button>' : '<button data-backup-picker id="choose-save" class="secondary">Restore backup</button><input hidden id="import" type="file" accept=".json,application/json">'}</div>`,
     "opening-panel", fieldCursors.intro ??= {},
   );
-  p.querySelector("#how")!.addEventListener("click", () => fieldBasics(intro));
-  p.querySelector("#begin")!.addEventListener("click", () => {
+  if (back) p.querySelector<HTMLButtonElement>("#cancel")!.onclick = back;
+  else bindBackupPicker(p, title, reason => intro(back, reason));
+  p.querySelector<HTMLButtonElement>("#how")!.onclick = () => fieldBasics(() => intro(back, error));
+  p.querySelector<HTMLButtonElement>("#begin")!.onclick = async () => {
+    const next = prepareSave(freshSave());
+    next.settings.music = sound.enabled;
+    mode = "loading";
+    panel(layer, "Beginning your adventure", "<p>Saving in Dewdrop Village…</p>", "opening-panel");
+    try {
+      await writeJourney(next);
+    } catch {
+      return intro(back, "Your adventure could not be saved. Allow browser storage or free some space, then choose Begin adventure again.");
+    }
+    restoreSession(next);
     journeyStarted = true;
     mode = "world";
     layer.innerHTML = "";
     void sound.unlock();
-    persist();
-  });
+  };
 }
 function fieldBasics(back: () => void) {
   mode = "guide";
@@ -603,7 +585,7 @@ function interact() {
       saveTransfer: async roster => {
         mode = "saving";
         try {
-          await set("save", { ...save, ...roster });
+          await writeJourney({ ...save, ...roster });
           Object.assign(save, roster);
           sound.overworld("pcTransfer");
         } finally {
@@ -995,7 +977,7 @@ function view(v: string, pageIndex = 0) {
     }`;
   } else {
     title = "Settings & save";
-    body = `<p>Battle speed: ${save.settings.battleSpeed}×</p><div class="buttons"><button id="speed">Change speed</button><button id="time">${save.settings.night ? "Switch to day" : "Camp until night"}</button><button id="music">${sound.enabled ? "Mute sound" : "Play sound"}</button><button id="how">How to play</button><button id="export">Export save</button><button id="choose-save">Import save</button><input hidden id="import" type="file" accept="application/json,.json"></div><p class="small muted">Controller: ${escapeHtml(
+    body = `<div class="save-retry" ${saveWarning.hidden ? "hidden" : ""}><p class="error" role="alert">Progress is unsaved. Retry saving here or export a backup.</p><button id="retry-save">Retry save</button></div><p>Battle speed: ${save.settings.battleSpeed}×</p><div class="buttons"><button id="speed">Change speed</button><button id="time">${save.settings.night ? "Switch to day" : "Camp until night"}</button><button id="music">${sound.enabled ? "Mute sound" : "Play sound"}</button><button id="how">How to play</button><button id="export">Export save</button><button data-backup-picker id="choose-save">Import save</button><input hidden id="import" type="file" accept="application/json,.json"></div><p class="small muted">Controller: ${escapeHtml(
       Array.from(navigator.getGamepads?.() || [])
         .filter((p): p is Gamepad => !!p)
         .map((p) => p.id)
@@ -1044,6 +1026,18 @@ function view(v: string, pageIndex = 0) {
   p
     .querySelector("#how")
     ?.addEventListener("click", () => fieldBasics(() => view("settings")));
+  const retry = p.querySelector<HTMLButtonElement>("#retry-save");
+  if (retry) retry.onclick = async () => {
+    retry.disabled = true;
+    try {
+      await writeJourney(save);
+      p.querySelector<HTMLButtonElement>("#export")?.focus();
+    } catch {
+      p.querySelector(".save-retry p")!.textContent = "Save failed again. Free up browser storage or export your current progress.";
+    } finally {
+      retry.disabled = false;
+    }
+  };
   p.querySelector("#speed")?.addEventListener("click", () => {
     save.settings.battleSpeed = (save.settings.battleSpeed % 3) + 1;
     persist();
@@ -1064,25 +1058,10 @@ function view(v: string, pageIndex = 0) {
     ?.addEventListener("click", () =>
       download("pokemon-astra-save.json", save),
     );
-  p
-    .querySelector("#choose-save")
-    ?.addEventListener("click", () =>
-      p.querySelector<HTMLInputElement>("#import")?.click(),
-    );
-  p
-    .querySelector<HTMLInputElement>("#import")
-    ?.addEventListener("change", async (e) => {
-      try {
-        const f = (e.target as HTMLInputElement).files?.[0];
-        if (!f) return;
-        await importJourney(f);
-        message("Save imported successfully.");
-      } catch (error) {
-        message(error instanceof Error ? error.message : "This save file could not be imported.", () =>
-          view("settings"),
-        );
-      }
-    });
+  if (v === "settings") bindBackupPicker(p,
+    () => message("Save imported successfully."),
+    error => message(error, () => view("settings")),
+  );
 }
 function fieldPartyRows() {
   return save.party.map(mon => ({
@@ -1813,7 +1792,7 @@ function frame(now: number) {
     );
     if (back) back.click();
     else close();
-  } else if (mode === "title" && input.hit("b")) {
+  } else if ((mode === "title" || mode === "intro") && input.hit("b")) {
     layer.querySelector<HTMLButtonElement>("#cancel")?.click();
   } else if (mode === "menu" && input.hit("menu")) close();
   else if (mode === "battle" && input.hit("b")) battlePresenter?.back();
@@ -1825,7 +1804,7 @@ function frame(now: number) {
   }
   if (wasWorld) update(dt);
   const screen = canvas.parentElement!;
-  screen.dataset.scene = ["welcome", "title", "intro", "loading"].includes(mode)
+  screen.dataset.scene = ["welcome", "recovery", "title", "intro", "loading"].includes(mode)
     ? "title"
     : mode;
   if (screen.dataset.scene !== "title" && mode !== "battle") {
@@ -1879,6 +1858,9 @@ if ("serviceWorker" in navigator) {
       .then((rs) => Promise.all(rs.map((r) => r.unregister())));
   }
 }
-void get<Uint8Array>("rom")
-  .then((rom) => (rom ? start(rom).catch(() => welcome()) : welcome()))
-  .catch(() => welcome());
+mode = "welcome";
+openCartridge(layer, ready => {
+  engine = ready;
+  renderer.setEngine(engine);
+  void readJourney();
+});
