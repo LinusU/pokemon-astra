@@ -69,6 +69,7 @@ import {
 import { pokemonAppearance, type PokemonPortrait } from "./engine/appearance";
 import type { Engine, Pokemon } from "./engine";
 import { openCartridge } from "./ui/cartridge";
+import { removeDevelopmentWorker, setupOfflinePlay } from "./ui/offline";
 import "./styles.css";
 import "./ui/settings.css";
 import "./ui/region-map.css";
@@ -1067,6 +1068,7 @@ function view(v: string, pageIndex = 0) {
       download("pokemon-astra-save.json", save),
     );
   if (v === "settings") {
+    offlineSetup?.bindOptions(p);
     mountSaveRetry(p);
     bindBackupPicker(p, () => message("Save imported successfully."), error => message(error, () => view("settings")));
   }
@@ -1844,35 +1846,14 @@ function frame(now: number) {
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
+let offlineSetup: ReturnType<typeof setupOfflinePlay> | undefined;
 if ("serviceWorker" in navigator) {
+  const script = new URL("./sw.js", document.baseURI);
   if (import.meta.env.PROD) {
-    const status = document.createElement("span");
-    status.id = "offline-status";
-    status.setAttribute("role", "status");
-    status.textContent = "Saving for offline play…";
-    document.querySelector(".statusbar > span")?.replaceWith(status);
-    const hadController = !!navigator.serviceWorker.controller;
-    let updateReady = false;
-    navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (!hadController) return;
-      updateReady = true;
-      status.textContent = "Update ready · reload to play";
-    });
-    void navigator.serviceWorker
-      .register("./sw.js", { updateViaCache: "none" })
-      .then(async (registration) => {
-        if (hadController) void registration.update().catch(() => {});
-        await navigator.serviceWorker.ready;
-        if (!updateReady) status.textContent = "✓ Offline ready";
-      })
-      .catch((error) => {
-        status.textContent = "Offline setup unavailable — retry online";
-        console.warn("Offline setup failed", error);
-      });
+    offlineSetup = setupOfflinePlay(navigator.serviceWorker, script, document.querySelector(".statusbar > span")!);
   } else {
-    void navigator.serviceWorker
-      .getRegistrations()
-      .then((rs) => Promise.all(rs.map((r) => r.unregister())));
+    void removeDevelopmentWorker(navigator.serviceWorker, new URL("./", script).href)
+      .catch(error => console.warn("Could not remove the development worker", error));
   }
 }
 mode = "welcome";

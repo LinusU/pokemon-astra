@@ -56,6 +56,15 @@
   color: #213e32;
   background: #e5d9ad;
 }
+.settings-screen #retry-offline[hidden] { display: none; }
+#offline-status button {
+  border: 0;
+  padding: 0 .2em;
+  background: transparent;
+  color: #f3db9b;
+  font: inherit;
+  text-decoration: underline;
+}
 @container (max-width: 320px) {
   .panel.settings-screen { padding: 3px 6px; }
   .panel .preference-grid button { padding: 1px 5px; }

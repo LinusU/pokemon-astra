@@ -1,10 +1,11 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { runInNewContext } from "node:vm";
+import { removeDevelopmentWorker, waitForActivation } from "../src/ui/offline";
 
 const run = promisify(execFile);
 const generator = resolve("scripts/build-service-worker.mjs");
@@ -33,6 +34,37 @@ async function generate(root: string) {
 }
 
 describe("offline app cache", () => {
+  it("reports an unsuccessful first installation and recognizes the activated retry", async () => {
+    const worker = Object.assign(new EventTarget(), { state: "installing" });
+    const registration = { installing: worker } as unknown as ServiceWorkerRegistration;
+    const failed = waitForActivation(registration);
+    worker.state = "redundant";
+    worker.dispatchEvent(new Event("statechange"));
+    await expect(failed).rejects.toThrow();
+    await expect(waitForActivation(registration)).rejects.toThrow();
+    await expect(waitForActivation({} as ServiceWorkerRegistration)).rejects.toThrow();
+    worker.state = "installing";
+    const installed = waitForActivation(registration);
+    worker.state = "activated";
+    worker.dispatchEvent(new Event("statechange"));
+    await expect(installed).resolves.toBeUndefined();
+    await expect(waitForActivation({ active: worker } as unknown as ServiceWorkerRegistration)).resolves.toBeUndefined();
+  });
+
+  it("leaves a parent-scope worker registered when loading the development app", async () => {
+    const unregister = vi.fn();
+    const root = "https://example.test/", game = root + "astra/";
+    const registration = { scope: root, unregister };
+    const getRegistration = vi.fn().mockResolvedValue(registration);
+    const workers = { getRegistration } as unknown as ServiceWorkerContainer;
+    await removeDevelopmentWorker(workers, game);
+    expect(getRegistration).toHaveBeenCalledWith(game);
+    expect(unregister).not.toHaveBeenCalled();
+    registration.scope = game;
+    await removeDevelopmentWorker(workers, game);
+    expect(unregister).toHaveBeenCalledOnce();
+  });
+
   it("installs the whole build and serves shell, scripts, styles and WASM without network", async () => {
     const root = await fixture(),
       source = await generate(root);
