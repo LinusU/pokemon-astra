@@ -42,7 +42,7 @@ import { GameAudio } from "./game/audio";
 import { battleTheme, trainerIntroMusic, victoryTheme, type MusicScene } from "./game/music";
 import { BattlePresenter, escapeAnnounced } from "./ui/battle";
 import { playEvolution } from "./ui/evolution";
-import { get, set, download } from "./game/storage";
+import { download, JourneyConflict, JourneyStore } from "./game/storage";
 import {
   freshSave,
   isValidSave,
@@ -66,6 +66,7 @@ import { openCartridge } from "./ui/cartridge";
 import "./styles.css";
 import "./ui/region-map.css";
 
+const journeyStore = new JourneyStore();
 const input = new Input(),
   { canvas, layer, saveWarning } = createShell(input),
   renderer = new Renderer(canvas),
@@ -194,18 +195,33 @@ function scene(): MusicScene {
 const flag = (f?: string) => {
   if (f && !save.flags.includes(f)) save.flags.push(f);
 };
-function showSaveFailure(failed: boolean) {
-  saveWarning.hidden = !failed;
+let saveIssue: "storage" | "conflict" | undefined;
+function showSaveIssue(issue?: typeof saveIssue) {
+  saveIssue = issue;
+  saveWarning.hidden = !issue;
+  saveWarning.textContent = issue === "conflict" ? "Newer save · Menu → Options" : "Unsaved progress · Menu → Options";
   const controls = layer.querySelector<HTMLElement>(".save-retry");
-  if (controls) controls.hidden = !failed;
+  if (controls) {
+    controls.hidden = !issue;
+    controls.querySelector("p")!.textContent = issue === "conflict"
+      ? "Another window saved a newer journey. Export this session to keep both."
+      : "Progress is unsaved. Retry saving here or export a backup.";
+    controls.querySelector("button")!.textContent = issue === "conflict" ? "Open browser save" : "Retry save";
+  }
 }
-async function writeJourney(next: Save) {
-  await set("save", next);
-  showSaveFailure(false);
+async function writeJourney(next: Save, skipUnchanged = false) {
+  try {
+    if (await journeyStore.write(next, skipUnchanged)) showSaveIssue();
+  } catch (error) {
+    if (error instanceof JourneyConflict) showSaveIssue("conflict");
+    throw error;
+  }
 }
 function persist() {
   if (!journeyStarted || mode === "saving") return;
-  void writeJourney(save).catch(() => showSaveFailure(true));
+  void writeJourney(save, true).catch(error => {
+    if (!(error instanceof JourneyConflict)) showSaveIssue("storage");
+  });
 }
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden" && (mode === "world" || mode === "menu")) persist();
@@ -251,7 +267,8 @@ async function importJourney(file: File) {
     const next = prepareSave(data);
     try {
       await writeJourney(next);
-    } catch {
+    } catch (error) {
+      if (error instanceof JourneyConflict) throw error;
       throw Error("The browser could not store this backup. Free some space and try again.");
     }
     restoreSession(next);
@@ -270,6 +287,7 @@ function bindBackupPicker(p: HTMLElement, done: () => void, failed: (reason: str
       done();
     } catch (error) {
       input.value = "";
+      if (error instanceof JourneyConflict && !journeyStarted) return startupConflict();
       failed(error instanceof Error ? error.message : "Choose a readable Astra backup.");
     }
   };
@@ -314,12 +332,19 @@ function advance() {
   cb?.();
   sound.refreshMusic();
 }
+function startupConflict() {
+  mode = "recovery";
+  const p = panel(layer, "Your browser save changed",
+    '<p>Another window saved a journey while this screen was open. Open that save to continue.</p><button id="retry">Open browser save</button>', "opening-panel");
+  p.querySelector<HTMLButtonElement>("#retry")!.onclick = () => void readJourney();
+}
 async function readJourney() {
   mode = "loading";
   panel(layer, "Opening your journey", "<p>Reading your browser save…</p>", "opening-panel");
   let existing: unknown;
   try {
-    existing = await get("save");
+    existing = await journeyStore.read();
+    showSaveIssue();
   } catch {
     mode = "recovery";
     const p = panel(layer, "Save storage unavailable",
@@ -387,7 +412,8 @@ function intro(back?: () => void, error = "") {
     panel(layer, "Beginning your adventure", "<p>Saving in Dewdrop Village…</p>", "opening-panel");
     try {
       await writeJourney(next);
-    } catch {
+    } catch (error) {
+      if (error instanceof JourneyConflict) return startupConflict();
       return intro(back, "Your adventure could not be saved. Allow browser storage or free some space, then choose Begin adventure again.");
     }
     restoreSession(next);
@@ -977,7 +1003,7 @@ function view(v: string, pageIndex = 0) {
     }`;
   } else {
     title = "Settings & save";
-    body = `<div class="save-retry" ${saveWarning.hidden ? "hidden" : ""}><p class="error" role="alert">Progress is unsaved. Retry saving here or export a backup.</p><button id="retry-save">Retry save</button></div><p>Battle speed: ${save.settings.battleSpeed}×</p><div class="buttons"><button id="speed">Change speed</button><button id="time">${save.settings.night ? "Switch to day" : "Camp until night"}</button><button id="music">${sound.enabled ? "Mute sound" : "Play sound"}</button><button id="how">How to play</button><button id="export">Export save</button><button data-backup-picker id="choose-save">Import save</button><input hidden id="import" type="file" accept="application/json,.json"></div><p class="small muted">Controller: ${escapeHtml(
+    body = `<div class="save-retry" hidden><p class="error" role="alert"></p><button id="retry-save"></button></div><p>Battle speed: ${save.settings.battleSpeed}×</p><div class="buttons"><button id="speed">Change speed</button><button id="time">${save.settings.night ? "Switch to day" : "Camp until night"}</button><button id="music">${sound.enabled ? "Mute sound" : "Play sound"}</button><button id="how">How to play</button><button id="export">Export save</button><button data-backup-picker id="choose-save">Import save</button><input hidden id="import" type="file" accept="application/json,.json"></div><p class="small muted">Controller: ${escapeHtml(
       Array.from(navigator.getGamepads?.() || [])
         .filter((p): p is Gamepad => !!p)
         .map((p) => p.id)
@@ -1026,18 +1052,6 @@ function view(v: string, pageIndex = 0) {
   p
     .querySelector("#how")
     ?.addEventListener("click", () => fieldBasics(() => view("settings")));
-  const retry = p.querySelector<HTMLButtonElement>("#retry-save");
-  if (retry) retry.onclick = async () => {
-    retry.disabled = true;
-    try {
-      await writeJourney(save);
-      p.querySelector<HTMLButtonElement>("#export")?.focus();
-    } catch {
-      p.querySelector(".save-retry p")!.textContent = "Save failed again. Free up browser storage or export your current progress.";
-    } finally {
-      retry.disabled = false;
-    }
-  };
   p.querySelector("#speed")?.addEventListener("click", () => {
     save.settings.battleSpeed = (save.settings.battleSpeed % 3) + 1;
     persist();
@@ -1058,10 +1072,34 @@ function view(v: string, pageIndex = 0) {
     ?.addEventListener("click", () =>
       download("pokemon-astra-save.json", save),
     );
-  if (v === "settings") bindBackupPicker(p,
-    () => message("Save imported successfully."),
-    error => message(error, () => view("settings")),
-  );
+  if (v === "settings") {
+    mountSaveRetry(p);
+    bindBackupPicker(p, () => message("Save imported successfully."), error => message(error, () => view("settings")));
+  }
+}
+function mountSaveRetry(p: HTMLElement) {
+  const retry = p.querySelector<HTMLButtonElement>("#retry-save")!;
+  showSaveIssue(saveIssue);
+  retry.onclick = async () => {
+    if (saveIssue === "conflict") {
+      const choice = panel(layer, "Open the browser save?",
+        '<p>Reloading opens the newer journey. Export your current progress to keep a copy of this session.</p><div class="buttons"><button id="back">Stay here</button><button id="export">Export this session</button><button class="secondary" id="reload">Reload journey</button></div>');
+      choice.querySelector<HTMLButtonElement>("#back")!.onclick = () => view("settings");
+      choice.querySelector<HTMLButtonElement>("#export")!.onclick = () => download("pokemon-astra-save.json", save);
+      choice.querySelector<HTMLButtonElement>("#reload")!.onclick = () => location.reload();
+      return;
+    }
+    retry.disabled = true;
+    try {
+      await writeJourney(save);
+      p.querySelector<HTMLButtonElement>("#export")?.focus();
+    } catch (error) {
+      if (!(error instanceof JourneyConflict))
+        p.querySelector(".save-retry p")!.textContent = "Save failed again. Free up browser storage or export your current progress.";
+    } finally {
+      retry.disabled = false;
+    }
+  };
 }
 function fieldPartyRows() {
   return save.party.map(mon => ({

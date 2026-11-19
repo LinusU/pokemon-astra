@@ -62,6 +62,8 @@ Saves and cartridge bytes stay in this browser's IndexedDB. **Options → Export
 
 If a stored journey is unreadable, the recovery screen lets you export the original, restore a backup, or start over. Your previous save stays in place until the replacement has been written successfully.
 
+If two game windows change the same journey, the older session shows a notice in Options. You can export that session before opening the newer browser save. Reload windows left open during an update so both use the current save system.
+
 ## The three requested libraries
 
 All three run in the browser via `native/`, compiled to `public/astra_native.wasm`:

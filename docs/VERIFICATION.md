@@ -115,7 +115,7 @@ The synthesizer’s Gen 2 music wave channel is implemented in the vendored 0.2.
 - In Scout Ari’s trainer battle, the Bag offered the reserve’s depleted move for Ether and its poisoning for Antidote. Back returned to the same party member before confirming. Both items were consumed once. The lead Metapod won, reached level ten, evolved into Butterfree and learned Confusion through the production UI.
 - The production build, 152 Vitest checks and 18 seeded starter and middle-badge-order campaigns passed. The native item checks cover each of the five individual status cures, Full Heal, and move-specific PP recovery on a fainted partner.
 
-## Fresh journey to the Canopy Badge
+## Fresh browser journey
 
 A Chrome playthrough using the local verification cartridge followed one save from the Dewdrop doorstep onto Route 04. Growlithe caught Rattata on Dewpath and defeated Scout Ari. Rattata stayed in the Mossford PC during the orchard crossing and rejoined the party at Bramble. The journal led the player to the stranded surveyor in Lantern Wood and then to Fern’s gym.
 
@@ -123,8 +123,12 @@ After losing to Fern, the player picked up the orchard’s Fire Stone, evolved G
 
 The same adventure reached Tideglass. After an offline restart, its PC returned Rattata with its original record. The player drained the breathing pool in Undertow Cave, crossed the shell bar and restored the fog signal. They caught Chinchou on the coast, crossed the lightship’s lowered gangway and fought both dock trainers. After the first loss to Marina, optional trainers on Amberbank and Saltwind Coast and a return to the Mart prepared the party for a rematch. The win awarded the Tidal Badge and Surf.
 
+From Tideglass the player followed Canal Road to Copperwick, read the night meter in the loft and isolated the foundry feeder. The service lift reopened after the intake was restored. Beating Coil Winder Tess opened the west catwalk to Volt.
+
 ## Save recovery
 
 - An isolated production build distinguished an invalid cartridge, an unavailable game engine, a failed cartridge cache write and a failed save read. Retrying the engine and cache used the file already selected. Playing with an uncached cartridge wrote a working save that reopened after choosing the cartridge again.
 - Both a damaged record and a working Tideglass journey exported to JSON and matched the stored originals. Backing out of a replacement, aborting its first write or aborting a backup import preserved the previous record. Retrying successfully started a new journey or restored the selected backup. A fresh browser also restored the Tideglass backup directly from the opening screen.
 - Aborting an autosave left the previous battle speed on disk. A landscape viewport showed the unsaved-progress notice. The exported backup contained the new setting, and retrying saved it in the browser. The recovery screen fit at 320 pixels wide.
+- Two open game windows reproduced a lost update. One restored an Amberbank backup while the other held a Tideglass journey. After the fix, changing battle speed in Tideglass preserved Amberbank on disk. The older window exported its Tideglass progress, cancelled a reload, then opened the newer journey. Separate checks covered two simultaneous new-game starts and a full-party PC swap from an older session.
+- Automated IndexedDB tests cover competing writes to a legacy save, queued snapshots, idle autosaves and rollback of both the save and its revision on an aborted transaction.

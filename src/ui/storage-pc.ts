@@ -2,6 +2,7 @@ import type { Engine, Pokemon } from "../engine";
 import type { Action } from "../game/input";
 import { canDeposit, depositPokemon, withdrawPokemon, type Collection } from "../game/collection";
 import type { Save } from "../game/save";
+import { JourneyConflict } from "../game/storage";
 import { typeNames } from "../game/type-names";
 import { battleStatus, mountParty } from "./party";
 import { mountPartnerSummary } from "./partner-summary";
@@ -125,9 +126,9 @@ export function mountStoragePc(host: HTMLElement, options: Options) {
       state[tab] = index();
       mode = list().length ? "roster" : "tabs";
       receipt = text;
-    } catch {
+    } catch (error) {
       mode = "detail";
-      receipt = "Save failed. Try the transfer again.";
+      receipt = error instanceof JourneyConflict ? "Another window saved. Check Menu → Options." : "Save failed. Try the transfer again.";
     }
     writing = false;
     root.inert = false;
