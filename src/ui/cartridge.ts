@@ -9,16 +9,23 @@ export function openCartridge(layer: HTMLElement, onReady: (engine: Engine) => v
 
   function choose(error = "") {
     const p = panel(layer, "Pokémon Astra",
-      `<p>Choose your English Pokémon Crystal 1.1 cartridge file (.gbc) to begin.</p><div class="drop" id="drop"><button id="choose-rom">Choose ROM</button><input hidden id="rom" type="file" accept=".gbc,application/octet-stream"><span class="drop-hint small"> or drop your file here</span></div><p class="small muted">Your cartridge and save stay in this browser.</p>${error ? `<p role="alert" class="error">${escapeHtml(error)}</p>` : ""}`, "rom-import");
+      `<p>Open your English Pokémon Crystal 1.1 cartridge (.gbc).</p><div class="drop" id="drop"><button id="choose-rom">Choose ROM</button><input hidden id="rom" type="file" accept=".gbc,application/octet-stream"><span class="drop-hint">or drop it onto the screen</span></div>${error ? `<p role="alert" class="error">${escapeHtml(error)}</p>` : ""}<p class="cartridge-note">Your cartridge and save stay in this browser.</p>`, "rom-import arrival-card");
     const input = p.querySelector<HTMLInputElement>("#rom")!;
     p.querySelector<HTMLButtonElement>("#choose-rom")!.onclick = () => input.click();
     input.onchange = () => { if (input.files?.[0]) void loadFile(input.files[0]); };
-    const drop = p.querySelector<HTMLElement>("#drop")!;
-    drop.ondragover = event => { event.preventDefault(); drop.classList.add("drag"); };
-    drop.ondragleave = () => drop.classList.remove("drag");
-    drop.ondrop = event => {
+    const screen = p.parentElement!;
+    screen.ondragover = event => {
+      if (!event.dataTransfer?.types.includes("Files")) return;
       event.preventDefault();
-      drop.classList.remove("drag");
+      event.dataTransfer.dropEffect = "copy";
+      p.classList.add("drag");
+    };
+    screen.ondragleave = event => {
+      if (!(event.relatedTarget instanceof Node && screen.contains(event.relatedTarget))) p.classList.remove("drag");
+    };
+    screen.ondrop = event => {
+      event.preventDefault();
+      p.classList.remove("drag");
       if (event.dataTransfer?.files[0]) void loadFile(event.dataTransfer.files[0]);
     };
   }

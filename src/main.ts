@@ -375,8 +375,8 @@ function title() {
   const p = panel(
     layer,
     "Welcome back",
-    `<p>${escapeHtml(WORLD[save.map].name)} · ${save.badges}/8 badges · ${save.caught.length} caught</p><div class="objective"><strong>${escapeHtml(goal.title)}</strong><br>${escapeHtml(goal.hint)}</div><div class="buttons"><button id="continue">Continue journey</button><button class="secondary" id="new">New adventure</button></div>`,
-    "opening-panel", fieldCursors.title ??= {},
+    `<div class="journey-record">${save.party[0] ? `<img src="${sprite(save.party[0])}" alt="${escapeHtml(engine.species(save.party[0].species).name)}">` : ""}<div><strong>${escapeHtml(WORLD[save.map].name)}</strong><small>${save.badges}/8 badges · ${save.caught.length} caught</small></div></div><div class="objective"><strong>${escapeHtml(goal.title)}</strong><br>${escapeHtml(goal.hint)}</div><div class="buttons"><button id="continue">Continue journey</button><button class="secondary" id="new">New adventure</button></div>`,
+    "opening-panel arrival-card", fieldCursors.title ??= {},
   );
   p.querySelector("#continue")!.addEventListener("click", () => {
     journeyStarted = true;
@@ -389,7 +389,7 @@ function title() {
 function confirmNewJourney(existing: unknown, back: () => void) {
   mode = "title";
   const p = panel(layer, "Start a new adventure?",
-    '<p>Begin adventure will replace your browser save. You can export a copy first.</p><div class="buttons"><button id="cancel">Keep my save</button><button class="secondary" id="export">Export save</button><button class="secondary" id="confirm">Start over</button></div>', "opening-panel");
+    '<p>Begin journey will replace your browser save. You can export a copy first.</p><div class="buttons"><button id="cancel">Keep my save</button><button class="secondary" id="export">Export save</button><button class="secondary" id="confirm">Start over</button></div>', "opening-panel");
   p.querySelector<HTMLButtonElement>("#cancel")!.onclick = back;
   p.querySelector<HTMLButtonElement>("#export")!.onclick = () => download("pokemon-astra-save.json", existing);
   p.querySelector<HTMLButtonElement>("#confirm")!.onclick = () => intro(back);
@@ -399,8 +399,8 @@ function intro(back?: () => void, error = "") {
   const p = panel(
     layer,
     "Dewdrop Village",
-    `<p>The flock over Dewdrop has circled three times this morning. Robin thinks one of the beacons has gone dark.</p><p>Meet Professor Alder at the lab in the north garden to choose your partner.</p><p class="small">Face Alder and press ${input.confirmLabel} to talk.</p>${error ? `<p class="error" role="alert">${escapeHtml(error)}</p>` : ""}<div class="buttons"><button id="begin">Begin adventure</button><button id="how" class="secondary">How to play</button>${back ? '<button id="cancel" class="secondary">Keep my save</button>' : '<button data-backup-picker id="choose-save" class="secondary">Restore backup</button><input hidden id="import" type="file" accept=".json,application/json">'}</div>`,
-    "opening-panel", fieldCursors.intro ??= {},
+    `<p>The flock circles Dewdrop again. Robin thinks a beacon has gone dark.</p><div class="objective">Find Alder in the north garden lab. Press ${input.confirmLabel} to choose your partner.</div>${error ? `<p class="error" role="alert">${escapeHtml(error)}</p>` : ""}<div class="buttons"><button id="begin">Begin journey</button><button id="how" class="secondary">How to play</button>${back ? '<button id="cancel" class="secondary">Keep my save</button>' : '<button data-backup-picker id="choose-save" class="secondary">Restore backup</button><input hidden id="import" type="file" accept=".json,application/json">'}</div>`,
+    "opening-panel arrival-card", fieldCursors.intro ??= {},
   );
   if (back) p.querySelector<HTMLButtonElement>("#cancel")!.onclick = back;
   else bindBackupPicker(p, title, reason => intro(back, reason));
@@ -414,7 +414,7 @@ function intro(back?: () => void, error = "") {
       await writeJourney(next);
     } catch (error) {
       if (error instanceof JourneyConflict) return startupConflict();
-      return intro(back, "Your adventure could not be saved. Allow browser storage or free some space, then choose Begin adventure again.");
+      return intro(back, "Your adventure could not be saved. Allow browser storage or free some space, then choose Begin journey again.");
     }
     restoreSession(next);
     journeyStarted = true;

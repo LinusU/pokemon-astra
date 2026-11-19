@@ -955,3 +955,53 @@ canvas {
 @media (max-width: 370px) and (orientation: portrait) {
   .button-menu { right: 12px; top: 112px; }
 }
+
+.overlay:has(.arrival-card) {
+  container-type: inline-size;
+  align-items: flex-end;
+  justify-content: flex-start;
+  padding: 3.5%;
+  background: linear-gradient(0deg, #102b2bcc, transparent 72%);
+}
+.panel.arrival-card {
+  width: min(100%, 485px);
+  padding: 12px 16px;
+  border: 4px double #385a48;
+  border-radius: 3px;
+  background: #fbf4d9;
+  box-shadow: 3px 4px 0 #112e29af;
+}
+.arrival-card h2 { margin: 0 0 .15em; }
+.arrival-card p { margin: .2em 0; line-height: 1.05; }
+.arrival-card .objective { margin: .4em 0; padding: .25em .45em; }
+.arrival-card .buttons { gap: .25em; }
+.arrival-card button { padding: .22em .5em; line-height: 1; }
+.rom-import .drop {
+  display: flex;
+  align-items: center;
+  gap: .6em;
+  margin: .4em 0;
+  padding: 0;
+  border: 0;
+  text-align: left;
+}
+.rom-import.drag { outline: 4px dashed #f2c76c; background: #e4efcb; }
+.rom-import :is(.cartridge-note, .drop-hint) { font-size: .8em; color: #465f4f; }
+.journey-record { display: flex; align-items: center; gap: .45em; line-height: 1; }
+.journey-record img { width: 2em; height: 2em; object-fit: contain; image-rendering: pixelated; }
+.journey-record strong, .journey-record small { display: block; font-weight: 400; }
+.journey-record small { color: #486653; }
+@container (max-width: 440px) {
+  .panel.arrival-card { padding: 6px 9px; font-size: 19px; }
+  .panel.arrival-card h2 { font-size: 24px; margin: 0; }
+  .panel.arrival-card p, .panel.arrival-card .objective { font-size: 18px; line-height: 1; }
+  .panel.arrival-card button { font-size: 18px; padding: 4px 7px; }
+  .rom-import .drop { margin: .3em 0; }
+  .panel.rom-import .cartridge-note { font-size: 16px; }
+}
+@container (max-width: 310px) {
+  .panel.arrival-card { padding: 4px 6px; }
+  .panel.arrival-card p, .panel.arrival-card .objective { font-size: 16px; }
+  .panel.arrival-card button { font-size: 16px; padding: 3px 4px; }
+  .panel.arrival-card .buttons { gap: 3px; }
+}
