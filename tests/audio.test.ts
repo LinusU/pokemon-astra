@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { GameAudio, HEAL_TRACK } from "../src/game/audio";
-import { MUSIC_TRACKS, battleTheme, trainerIntroMusic, victoryTheme, type MusicScene } from "../src/game/music";
+import { MUSIC_TRACKS, battleTheme, fieldMusic, trainerIntroMusic, victoryTheme, type MusicScene } from "../src/game/music";
+import { WORLD } from "../src/world";
 import type { Engine } from "../src/engine";
 let context: FakeContext;
 class FakeNode {
@@ -273,4 +274,15 @@ it("honors saved mute and resumes explicitly without creating more audio context
   audio.setEnabled(true);
   await Promise.resolve();
   expect(context).toBe(original);
+});
+
+it("keeps each town's theme through its shop and each expedition's theme through its rooms", () => {
+  const towns = Object.values(WORLD).filter(map => map.kind === "town");
+  expect(new Set(towns.map(fieldMusic)).size).toBe(towns.length);
+  for (const town of towns) {
+    expect(fieldMusic(WORLD[town.id + "_mart"])).toBe(fieldMusic(town));
+    expect(fieldMusic(WORLD[town.id + "_center"])).toBe("center");
+  }
+  for (const room of Object.values(WORLD).filter(map => map.kind === "dungeon"))
+    expect(fieldMusic(room)).toBe(fieldMusic(WORLD[room.id.split("_")[0] + "_1"]));
 });

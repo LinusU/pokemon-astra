@@ -137,6 +137,15 @@ export function directions(
       title: goal.title,
       hint: `${save.caught.length} caught. Use the Pokédex to look up habitats.`,
     };
+  if (save.map === "gym3" && goal.object.id === "leader_3" &&
+      !save.flags.includes("gym3_1_won") && !save.flags.includes("gym3_2_won")) {
+    const roster = goal.map.objects.find(o => o.id === "gym3_roster")!;
+    return {
+      title: goal.title,
+      hint: "Tess works the west catwalk. Dex works the east. Beat either operator to cross to Volt.",
+      marker: roster,
+    };
+  }
   if (save.map === goal.map.id)
     return {
       title: goal.title,

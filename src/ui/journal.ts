@@ -34,7 +34,7 @@ const shores = [
   { id: 5, town: "Cinderfall", keeper: "Flint" },
   { id: 6, town: "Rimepeak", keeper: "Neve" },
 ];
-const badgeArt = (i: number) => `<i class="jn-badge" style="--stamp:${i}" aria-hidden="true"></i>`;
+export const badgeArt = (i: number) => `<i class="jn-badge" style="--stamp:${i}" aria-hidden="true"></i>`;
 const toolArt = (tool: "book" | "letter" | "sign") => `<i class="jn-tool jn-${tool}" aria-hidden="true"></i>`;
 const status = (note: JournalNote) => `<span class="jn-status" data-status="${note.status}">${note.status}</span>`;
 

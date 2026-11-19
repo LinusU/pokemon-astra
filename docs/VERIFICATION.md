@@ -174,3 +174,11 @@ After reloading the same journey, the player flew to Dewdrop, walked Aurora Trai
 - A separate fixture brought one injured partner to Zapdos. Defeat returned the healed party to Copperwick Center. The player withdrew a reserve at the PC, walked through Switchyard, took the reopened lift and captured Zapdos at the same perch.
 - Native battles compared an ordinary wild encounter with a fixed shrine encounter using the same species and seed. Ordinary Raikou and Entei fled on the first turn. At their shrines both took turns, fell asleep, were weakened to 1 HP and were caught in Ultra Balls.
 - Seeded Chrome checks repeated the captures at the Tidal Crossing and Old Quarry shrines with Smeargle. Raikou took three Ultra Balls and Entei took four. Both saves retained the guardian at 1 HP.
+
+## Regional map and field playtests
+
+- Chrome rendered all 25 route landmarks and all 12 settlements with the verification cartridge. A walking test for each route closes the middle of the main road and checks that the side trail still reaches both junctions, the cache and the resident Pokémon.
+- A fresh production save chose Growlithe in Alder’s lab, fought Scout Ari on Dewpath, visited Minnow Bend, caught a wild Pidgey and healed at Mossford. Chrome then reloaded the journey offline. Separate saves observed the returning Poliwag in Dewdrop, Krabby in Tideglass and Clefairy in Aster.
+- Prepared saves solved the revised Copperworks isolator, Frostvault ice plug and Starfall telescope in Chrome. Fern’s battle awarded Cut and the first badge. All eight award screens were checked at 320 pixels wide.
+- All three starters cleared the Astral League in the native battle simulation for each of the six middle-gym orders. These runs use informed team and supply choices.
+- All 123 local maps rendered at 320×660, 390×844 and 844×390 browser sizes. The D-pad scrolled a long Copperworks gate note on the smallest screen. An imported postgame save used Fly from the local map to reach Tideglass.

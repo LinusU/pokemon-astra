@@ -1,7 +1,11 @@
+import { PALETTES, type Palette } from "./field-palette";
+import { lightTownWindows, paintBuildingFront } from "./building-front";
+import { fieldLife, nightfall, paintWater } from "./field-weather";
 import { fieldArena } from "./field-arena";
 import { paintFieldObject, paintExpeditionFloor, paintReturn, expeditionActivity } from "./expedition-art";
 import { paintGymTile, paintGymFixtures, paintGymActivity } from "./gym-art";
 import { trailPalette } from "../world/atlas";
+import { paintSquareTile, paintTownFixtures } from "./town-art";
 import { trailLandmark } from "./trail-landmarks";
 import { WORLD, isWildEncounter, type Exit, type WorldMap, type WorldObject } from "../world";
 import { pokemonAppearance, type PokemonPortrait } from "../engine/appearance";
@@ -27,125 +31,6 @@ export interface RendererVisualState {
   exitOpen?: (exit: Exit) => boolean;
 }
 
-type Palette = {
-  grass: string;
-  shade: string;
-  path: string;
-  ink: string;
-  roof: string;
-  wall: string;
-  water: string;
-};
-const PALETTES: Record<string, Palette> = {
-  meadow: {
-    grass: "#a9cf86",
-    shade: "#6e9b60",
-    path: "#e2d6a9",
-    ink: "#315d4c",
-    roof: "#568daa",
-    wall: "#f0d9ae",
-    water: "#578fb9",
-  },
-  orchard: {
-    grass: "#aec981",
-    shade: "#779457",
-    path: "#e2cd98",
-    ink: "#426a48",
-    roof: "#c97c63",
-    wall: "#f0d9ae",
-    water: "#548db0",
-  },
-  autumn: {
-    grass: "#c5bf78",
-    shade: "#ad814f",
-    path: "#e6cb95",
-    ink: "#6d6044",
-    roof: "#976b64",
-    wall: "#ead1a2",
-    water: "#648ba7",
-  },
-  coast: {
-    grass: "#a2c69b",
-    shade: "#6a9c81",
-    path: "#e7d7a6",
-    ink: "#3e746e",
-    roof: "#648eaf",
-    wall: "#f1dfb4",
-    water: "#568eb7",
-  },
-  industrial: {
-    grass: "#aabf8e",
-    shade: "#798c6d",
-    path: "#d5cfac",
-    ink: "#4e6b64",
-    roof: "#879cad",
-    wall: "#d2d4bc",
-    water: "#6b9da8",
-  },
-  desert: {
-    grass: "#dec083",
-    shade: "#b59e64",
-    path: "#ead89e",
-    ink: "#877750",
-    roof: "#ca8c68",
-    wall: "#f1dda9",
-    water: "#58a69b",
-  },
-  wetland: {
-    grass: "#98b97d",
-    shade: "#638564",
-    path: "#c8bc8b",
-    ink: "#396a56",
-    roof: "#779d7a",
-    wall: "#e4d1a4",
-    water: "#568e92",
-  },
-  volcanic: {
-    grass: "#a58b79",
-    shade: "#8b786a",
-    path: "#c5b18b",
-    ink: "#62575d",
-    roof: "#a75e58",
-    wall: "#d7b79a",
-    water: "#bc6c4c",
-  },
-  snow: {
-    grass: "#dce7e5",
-    shade: "#a5bbc5",
-    path: "#c8d5d3",
-    ink: "#57788c",
-    roof: "#7195ae",
-    wall: "#eee6d3",
-    water: "#81b5cf",
-  },
-  mountain: {
-    grass: "#b3bba2",
-    shade: "#87937c",
-    path: "#d0c5a5",
-    ink: "#64726a",
-    roof: "#819c91",
-    wall: "#dfd3b6",
-    water: "#749da5",
-  },
-  violet: {
-    grass: "#b2c69a",
-    shade: "#81946f",
-    path: "#e0cead",
-    ink: "#605a78",
-    roof: "#9780ab",
-    wall: "#e8d3b7",
-    water: "#818caf",
-  },
-  night: {
-    grass: "#8cb6a1",
-    shade: "#628d82",
-    path: "#c4c8a9",
-    ink: "#3f6170",
-    roof: "#718aab",
-    wall: "#d7d3b5",
-    water: "#4d779a",
-  },
-};
 const GROVE_ART: Record<string, number> = {
   autumn: 8,
   wetland: 9,
@@ -259,6 +144,7 @@ export class Renderer {
   private grassTile = "";
   private rustles: { x: number; y: number; start: number }[] = [];
   private night = false;
+  private reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   private enteredAt = 0;
   constructor(public canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext("2d")!;
@@ -277,6 +163,7 @@ export class Renderer {
     this.terrains.clear();
   }
   setNight(night: boolean) {
+    if (night !== this.night) this.terrains.clear();
     this.night = night;
   }
   private sprite(
@@ -610,6 +497,10 @@ export class Renderer {
     const out = this.outdoor(m);
     const dungeon = DUNGEON_STONE[m.id.split("_")[0]];
     const room = dungeon ?? this.room(m);
+    if (m.kind === "town" && (ch === "+" || ch === "*")) {
+      paintSquareTile(c, m, x, y);
+      return;
+    }
     if (ch === "a" || ch === "h" || ch === "l") {
       this.arenaTile(c, m, x, y, room);
       return;
@@ -665,17 +556,7 @@ export class Renderer {
       return;
     }
     if (ch === "~") {
-      c.fillStyle = p.water;
-      c.fillRect(px, py, 16, 16);
-      c.fillStyle = "#c2e1d29c";
-      c.fillRect(px + ((y * 3) % 8), py + 4, 5, 1);
-      c.fillRect(px + 8, py + 11, 4, 1);
-      const n = (xx: number, yy: number) => !"o~".includes(m.tiles[yy]?.[xx] ?? "o");
-      c.fillStyle = p.shade;
-      if (n(x, y - 1)) c.fillRect(px, py, 16, 2);
-      if (n(x, y + 1)) c.fillRect(px, py + 14, 16, 2);
-      if (n(x - 1, y)) c.fillRect(px, py, 2, 16);
-      if (n(x + 1, y)) c.fillRect(px + 14, py, 2, 16);
+      paintWater(c, m, x, y, p, noise(x, y));
       return;
     }
     if (ch === "r") {
@@ -1008,7 +889,7 @@ export class Renderer {
     if (map.id === "tideglass" && map.tiles[15][20] === "#") return 16;
     return undefined;
   }
-  private freestandingLandmark(c: CanvasRenderingContext2D, map: WorldMap) {
+  private freestandingLandmark(c: CanvasRenderingContext2D, map: WorldMap, time: number, flags: ReadonlySet<string>) {
     if (map.id === "mossford") {
       const x = 144,
         y = 47;
@@ -1024,12 +905,20 @@ export class Renderer {
       c.fillStyle = "#835548";
       c.fillRect(x - 8, y - 15, 16, 7);
       c.fillRect(x - 5, y - 19, 10, 5);
-      c.fillStyle = "#fff0c5";
-      for (let i = 3; i <= 15; i++) {
-        c.fillRect(x + i - 1, y - 10 - i, 3, 3);
-        c.fillRect(x - i - 1, y - 10 + i, 3, 3);
-        c.fillRect(x + i - 1, y - 10 + i, 3, 3);
-        c.fillRect(x - i - 1, y - 10 - i, 3, 3);
+      // Step the cloth sails on a twelve-frame cycle per quarter turn.
+      const phase = Math.floor(time / 190) % 12;
+      for (let blade = 0; blade < 4; blade++) {
+        const angle = (phase / 12 + blade) * Math.PI / 2;
+        const dx = Math.cos(angle), dy = Math.sin(angle);
+        for (let r = 2; r <= 17; r++) {
+          const u = x + Math.round(dx * r), v = y - 10 + Math.round(dy * r);
+          c.fillStyle = "#886d51";
+          c.fillRect(u - 1, v - 1, 2, 2);
+          if (r < 6) continue;
+          c.fillStyle = r % 5 === 0 ? "#d0b388" : "#fff0c5";
+          for (let w = 1; w <= 3; w++)
+            c.fillRect(u - Math.round(dy * w), v + Math.round(dx * w), 2, 2);
+        }
       }
       c.fillStyle = "#6b574a";
       c.fillRect(x - 3, y - 13, 6, 6);
@@ -1051,8 +940,22 @@ export class Renderer {
       c.fillRect(x - 11, y - 42, 22, 3);
       c.fillRect(x - 8, y - 45, 16, 3);
       c.fillRect(x - 4, y - 48, 8, 3);
-      c.fillStyle = "#f8da8e";
+      const lit = flags.has("fog_signal");
+      c.fillStyle = lit ? "#f8da8e" : "#879da5";
       c.fillRect(x - 6, y - 37, 12, 6);
+      if (lit) {
+        const sweep = Math.round(Math.sin(time / 980) * 5);
+        c.fillStyle = "#fff4c7";
+        c.fillRect(x + sweep - 1, y - 37, 3, 6);
+        if (this.night) {
+          const length = Math.round(Math.sin(time / 980) * 31);
+          c.fillStyle = "#ffeebd30";
+          for (let i = 0; i < Math.abs(length); i++) {
+            const spread = Math.floor(i / 8);
+            c.fillRect(x + sweep + i * Math.sign(length), y - 36 - spread, 1, 4 + spread * 2);
+          }
+        }
+      }
       c.fillStyle = "#846a61";
       c.fillRect(x - 1, y - 37, 2, 6);
     }
@@ -1123,7 +1026,11 @@ export class Renderer {
         }
     if (m.kind === "dungeon") paintExpeditionFloor(ctx, m);
     if (m.kind === "gym") paintGymFixtures(ctx, m);
-    if (m.kind === "town") this.roofLandmark(ctx, m);
+    if (m.kind === "town") {
+      for (const exit of m.exits) paintBuildingFront(ctx, m, exit, p);
+      paintTownFixtures(ctx, m);
+      this.roofLandmark(ctx, m);
+    }
     for (const e of m.exits) {
       const px = e.x * 16,
         py = e.y * 16;
@@ -1239,6 +1146,10 @@ export class Renderer {
       ctx.fillStyle = "#fff4da92";
       ctx.fillRect(x - 3, y - 9, 6, 16);
       ctx.fillRect(x - 8, y - 4, 16, 6);
+    }
+    if (this.night && this.outdoor(m)) {
+      nightfall(ctx);
+      if (m.kind === "town") lightTownWindows(ctx, m);
     }
     return c;
   }
@@ -1742,21 +1653,28 @@ export class Renderer {
     c: CanvasRenderingContext2D,
     map: WorldMap,
     time: number,
+    ox = 0, oy = 0,
   ) {
+    if (this.reducedMotion.matches) return;
+    const field = map.kind === "town" || map.kind === "route";
     // Small animated highlights add movement without rebuilding the terrain cache.
     for (
-      let ty = Math.max(0, Math.floor(this.cameraY / 16));
-      ty < Math.min(map.height, Math.ceil((this.cameraY + 240) / 16));
+      let ty = Math.max(0, Math.floor((this.cameraY - oy) / 16));
+      ty < Math.min(map.height, Math.ceil((this.cameraY - oy + 240) / 16));
       ty++
     )
       for (
-        let tx = Math.max(0, Math.floor(this.cameraX / 16));
-        tx < Math.min(map.width, Math.ceil((this.cameraX + 320) / 16));
+        let tx = Math.max(0, Math.floor((this.cameraX - ox) / 16));
+        tx < Math.min(map.width, Math.ceil((this.cameraX - ox + 320) / 16));
         tx++
       ) {
         const tile = map.tiles[ty][tx];
+        const seed = noise(tx, ty);
+        if (field && (tile === "f" || seed % 13 === 0 || seed % 41 === 0 || seed % 37 === 0)) {
+          const biome = map.kind === "route" ? trailPalette(map.id, tx, ty, map.palette) : map.palette;
+          fieldLife(c, tile, biome, tx, ty, seed, time, this.night);
+        }
         if (tile === "~") {
-          const seed = noise(tx, ty);
           c.fillStyle = "#e1f4df80";
           c.fillRect(
             tx * 16 + ((Math.floor(time / 450) + (seed % 12)) % 12),
@@ -1843,6 +1761,7 @@ export class Renderer {
           }
         }
     }
+    if (this.night && this.outdoor(map)) nightfall(c);
     const done = new Set(flags);
     const isOpen = visualState.exitOpen ?? ((e: Exit) => !e.barrier);
     if (this.outdoor(map)) {
@@ -1862,9 +1781,10 @@ export class Renderer {
         c.save();
         c.translate(ox, oy);
         this.drawTerrain(c, neighbor, ox, oy);
+        this.animateGround(c, neighbor, time, ox, oy);
         this.roadBarriers(c, neighbor, isOpen);
         if (this.landmarkFoot(neighbor) !== undefined)
-          this.freestandingLandmark(c, neighbor);
+          this.freestandingLandmark(c, neighbor, time, done);
         for (const o of neighbor.objects
           .filter((o) => objectVisible(o, done))
           .sort((a, b) => a.y - b.y))
@@ -1913,7 +1833,7 @@ export class Renderer {
     sorted.sort((a, b) => a.y - b.y);
     for (const actor of sorted) {
       if (actor.landmark) {
-        this.freestandingLandmark(c, map);
+        this.freestandingLandmark(c, map, time, done);
         continue;
       }
       if (actor.object) {
@@ -1973,10 +1893,6 @@ export class Renderer {
       c.restore();
     }
     c.restore();
-    if (this.night) {
-      c.fillStyle = "#20355d22";
-      c.fillRect(0, 0, 320, 240);
-    }
     if (visualState.hideHud) return;
     c.font = "15px VT323, monospace";
     c.save();

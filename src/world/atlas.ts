@@ -514,8 +514,10 @@ export const routes: Record<string, ReturnType<typeof road>> = {
   ),
 };
 
-// Long roads have surveyed side excursions. Endpoints rejoin the main trail.
-export const excursions: Partial<Record<string, [start: number, waypoints: Point[], end: number]>> = {
+// Fractions mark the two junctions on the main road. The middle waypoint
+// locates the landmark clearing in walking tiles on both field and atlas.
+export const excursions: Record<string, [start: number, waypoints: Point[], end: number]> = {
+  "01": [0.18, [[59, 224], [64, 228], [70, 228], [72, 234], [79, 236]], 0.78],
   "02": [
     0.29,
     [
@@ -525,6 +527,9 @@ export const excursions: Partial<Record<string, [start: number, waypoints: Point
     ],
     0.7,
   ],
+  "03": [0.21, [[208, 198], [214, 192], [220, 185]], 0.74],
+  "04": [0.22, [[240, 215], [248, 219], [257, 219], [263, 211], [270, 206]], 0.78],
+  "05": [0.15, [[307, 228], [310, 235], [318, 241], [318, 249], [314, 253]], 0.86],
   "06": [
     0.24,
     [
@@ -535,6 +540,7 @@ export const excursions: Partial<Record<string, [start: number, waypoints: Point
     ],
     0.77,
   ],
+  "07": [0.18, [[444, 188], [449, 181], [458, 179], [461, 179], [461, 172]], 0.84],
   "08": [
     0.28,
     [
@@ -545,6 +551,9 @@ export const excursions: Partial<Record<string, [start: number, waypoints: Point
     ],
     0.72,
   ],
+  "09": [0.23, [[454, 85], [462, 83], [462, 78], [462, 71], [457, 67]], 0.81],
+  "10": [0.18, [[404, 77], [397, 72], [397, 67], [396, 56], [388, 48]], 0.76],
+  "11": [0.19, [[335, 22], [328, 16], [328, 8], [329, 2], [337, -2]], 0.83],
   "12": [
     0.32,
     [
@@ -555,6 +564,7 @@ export const excursions: Partial<Record<string, [start: number, waypoints: Point
     ],
     0.68,
   ],
+  "13": [0.2, [[155, 18], [164, 14], [165, 7], [167, 0], [158, -6]], 0.74],
   "14": [
     0.24,
     [
@@ -566,6 +576,12 @@ export const excursions: Partial<Record<string, [start: number, waypoints: Point
     ],
     0.77,
   ],
+  "15": [0.27, [[129, 128], [125, 124], [125, 118], [125, 113], [120, 106]], 0.78],
+  "16": [0.21, [[168, 162], [174, 166], [181, 162], [188, 154], [197, 151]], 0.75],
+  "17": [0.27, [[283, 149], [289, 146], [289, 141], [291, 132], [287, 125]], 0.77],
+  "18": [0.20, [[235, 126], [228, 120], [228, 112], [227, 104], [236, 100]], 0.74],
+  "19": [0.18, [[275, 80], [283, 76], [288, 72], [293, 73], [297, 76]], 0.8],
+  "20": [0.19, [[221, 77], [218, 74], [212, 71], [211, 72], [212, 79]], 0.9],
   "21": [
     0.3,
     [
@@ -576,6 +592,7 @@ export const excursions: Partial<Record<string, [start: number, waypoints: Point
     ],
     0.65,
   ],
+  "22": [0.3, [[337, 146], [346, 137], [350, 121], [349, 106], [339, 95]], 0.73],
   "23": [
     0.36,
     [
@@ -586,6 +603,8 @@ export const excursions: Partial<Record<string, [start: number, waypoints: Point
     ],
     0.61,
   ],
+  "24": [0.19, [[299, 179], [291, 179], [283, 181], [278, 184], [267, 183]], 0.78],
+  "25": [0.21, [[10, 209], [7, 204], [4, 205], [4, 198], [8, 192]], 0.84],
 };
 
 export function localTrail(route: (typeof routes)[string]): Point[] {
@@ -623,12 +642,10 @@ export function surveyTrail(n: string) {
     const length = Math.hypot(dx, dy) || 1;
     return constrain([x - (dy * distance) / length, y + (dx * distance) / length]);
   }
-  const excursion = excursions[n];
-  const bends = excursion
-    ? excursion[1].map(([x, y]) => constrain([x - spec.x, y - spec.y]))
-    : [beside(0.38, spec.turnout), beside(0.48, spec.turnout), beside(0.57, spec.turnout)];
+  const [start, waypoints, end] = excursions[n];
+  const bends = waypoints.map(([x, y]) => constrain([x - spec.x, y - spec.y]));
   const turnout = bends[Math.floor(bends.length / 2)];
-  const bypass = traceTrail([at(excursion?.[0] ?? 0.29), ...bends, at(excursion?.[2] ?? 0.67)]);
+  const bypass = traceTrail([at(start), ...bends, at(end)]);
   return { trail, at, beside, bypass, turnout };
 }
 

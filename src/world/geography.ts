@@ -1,9 +1,12 @@
 import type { Exit, WorldMap } from "./index";
 
 import { dungeonPlans } from "./dungeon-plans";
+import { layRouteSite } from "./route-sites";
 import { expeditionFloor, expeditions, sidePassages } from "./expeditions";
 import { gyms } from "./gyms";
-import { routes, settlements, surveyTrail, type Point } from "./atlas";
+import { routes, settlements, surveyTrail, type Point, type Town } from "./atlas";
+import { townPlans } from "./town-plans";
+
 type Patch = [
   x: number,
   y: number,
@@ -32,21 +35,6 @@ export const dimensions = (id: string, kind: WorldMap["kind"]): Point => {
 
 const walkableWithoutSurf = (ch: string | undefined) =>
   ch !== undefined && !"#orw~BCPTS".includes(ch);
-
-function resizeLayout(map: WorldMap, width: number, height: number) {
-  const point = ([x, y]: Point): Point => [
-    Math.round((x * (map.width - 1)) / (width - 1)),
-    Math.round((y * (map.height - 1)) / (height - 1)),
-  ];
-  const patch = ([x, y, w, h, tile]: Patch): Patch => {
-    const [left, top] = point([x, y]);
-    const [right, bottom] = point([x + w - 1, y + h - 1]);
-    return [left, top, right - left + 1, bottom - top + 1, tile];
-  };
-  const anchors = (points: Record<string, Point>) =>
-    Object.fromEntries(Object.entries(points).map(([id, p]) => [id, point(p)]));
-  return { point, patch, anchors };
-}
 
 function floorPlan(map: WorldMap, ground: string) {
   const { width, height } = map;
@@ -218,436 +206,29 @@ function placeObjects(
   }
 }
 
-interface TownPlan {
-  square: Point;
-  sites: [x: number, y: number, width: number][];
-  ground: Patch[];
-  anchors: Record<string, Point>;
-  /** Secondary lane or promenade. */
-  lane?: Point[];
-  house?: [x: number, y: number, width: number];
-}
-
-const towns: Record<string, TownPlan> = {
-  dewdrop: {
-    square: [12, 10],
-    sites: [
-      [2, 3, 5],
-      [17, 6, 5],
-      [9, 2, 7],
-      [2, 13, 5],
-    ],
-    ground: [
-      [1, 1, 6, 2, "#"],
-      [18, 1, 6, 3, "#"],
-      [20, 16, 4, 3, "#"],
-      [17, 13, 5, 3, "~"],
-      [18, 12, 4, 5, "~"],
-      [15, 12, 2, 4, "f"],
-      [2, 7, 5, 2, "f"],
-      [15, 2, 3, 3, "f"],
-      [8, 16, 2, 3, "#"],
-    ],
-    anchors: {
-      robin_start: [10, 8],
-      quest_hearth: [15, 13],
-      resident_dewdrop_0: [7, 6],
-      resident_dewdrop_1: [19, 10],
-    },
-    lane: [
-      [4, 16],
-      [7, 16],
-      [7, 10],
-      [12, 10],
-    ],
-  },
-  mossford: {
-    house: [3, 2, 5],
-    square: [12, 9],
-    sites: [
-      [17, 4, 6],
-      [3, 12, 6],
-    ],
-    ground: [
-      [1, 1, 3, 5, "#"],
-      [21, 1, 3, 2, "#"],
-      [2, 11, 8, 1, "~"],
-      [1, 15, 2, 4, "~"],
-      [1, 17, 10, 2, "~"],
-      [10, 16, 6, 3, "~"],
-      [15, 14, 9, 3, "~"],
-      [5, 2, 2, 2, "#"],
-      [8, 2, 2, 2, "#"],
-      [5, 5, 2, 2, "#"],
-      [8, 5, 2, 2, "#"],
-      [3, 7, 2, 2, "f"],
-      [20, 11, 4, 2, "f"],
-    ],
-    anchors: {
-      robin_mossford: [10, 9],
-      quest_parcel: [15, 9],
-      quest_pollinators: [7, 7],
-      quest_medicine: [17, 11],
-      resident_mossford_0: [8, 7],
-      resident_mossford_1: [8, 15],
-    },
-    lane: [
-      [12, 7],
-      [12, 15],
-      [6, 15],
-    ],
-  },
-  bramble: {
-    house: [15, 12, 5],
-    square: [13, 10],
-    sites: [
-      [4, 2, 7],
-      [16, 3, 5],
-      [5, 14, 5],
-    ],
-    ground: [
-      [1, 1, 6, 1, "#"],
-      [1, 1, 3, 6, "#"],
-      [7, 1, 4, 3, "#"],
-      [13, 1, 4, 5, "#"],
-      [21, 13, 4, 6, "#"],
-      [14, 14, 5, 4, "f"],
-      [2, 12, 3, 5, "#"],
-    ],
-    anchors: {
-      parcel_recipient: [6, 12],
-      resident_bramble_0: [16, 7],
-      resident_bramble_1: [7, 6],
-    },
-    lane: [
-      [6, 12],
-      [13, 12],
-      [13, 10],
-      [21, 10],
-    ],
-  },
-  tideglass: {
-    house: [9, 2, 5],
-    square: [13, 8],
-    sites: [
-      [17, 2, 7],
-      [2, 3, 5],
-      [18, 7, 5],
-    ],
-    ground: [
-      [1, 12, 24, 7, "~"],
-      [9, 11, 6, 1, "~"],
-      [18, 15, 5, 3, ","],
-      [3, 13, 5, 2, "="],
-      [18, 13, 5, 2, "="],
-      [19, 2, 5, 2, "#"],
-      [22, 17, 1, 1, "#"],
-    ],
-    anchors: {
-      quest_angler: [5, 13],
-      quest_lighthouse: [21, 15],
-      resident_tideglass_0: [12, 6],
-      resident_tideglass_1: [17, 11],
-    },
-    lane: [
-      [3, 13],
-      [5, 13],
-      [5, 11],
-      [21, 11],
-      [21, 16],
-    ],
-  },
-  copperwick: {
-    square: [15, 10],
-    sites: [
-      [2, 12, 7],
-      [18, 12, 5],
-      [17, 3, 7],
-    ],
-    ground: [
-      [10, 1, 3, 18, "~"],
-      [1, 5, 9, 2, "~"],
-      [2, 1, 6, 3, "w"],
-      [20, 1, 5, 2, "#"],
-      [2, 17, 6, 2, "f"],
-    ],
-    anchors: {
-      quest_collector: [5, 10],
-      robin_copperwick: [14, 14],
-      resident_copperwick_0: [14, 5],
-      resident_copperwick_1: [7, 8],
-    },
-    lane: [
-      [5, 15],
-      [5, 10],
-      [15, 10],
-      [20, 10],
-      [20, 15],
-    ],
-  },
-  sunspire: {
-    house: [3, 1, 5],
-    square: [13, 12],
-    sites: [
-      [17, 1, 7],
-      [3, 11, 5],
-      [17, 13, 5],
-    ],
-    ground: [
-      [4, 3, 7, 4, "~"],
-      [5, 2, 5, 6, "~"],
-      [3, 4, 1, 4, "f"],
-      [11, 4, 1, 5, "f"],
-      [3, 1, 2, 2, "#"],
-      [19, 6, 6, 3, "#"],
-      [3, 17, 6, 2, "#"],
-    ],
-    anchors: {
-      quest_oasis: [8, 8],
-      oasis_spring: [10, 7],
-      resident_sunspire_0: [5, 15],
-      resident_sunspire_1: [12, 6],
-    },
-    lane: [
-      [6, 9],
-      [14, 9],
-      [14, 5],
-      [20, 5],
-    ],
-  },
-  reedhaven: {
-    house: [14, 13, 5],
-    square: [14, 9],
-    sites: [
-      [16, 4, 7],
-      [4, 11, 5],
-    ],
-    ground: [
-      [1, 2, 9, 7, "~"],
-      [8, 7, 5, 12, "~"],
-      [14, 13, 11, 6, "~"],
-      [16, 14, 5, 3, "#"],
-      [2, 15, 4, 4, "#"],
-      [1, 1, 9, 1, "#"],
-      [4, 1, 6, 2, "#"],
-      [20, 1, 5, 2, "#"],
-    ],
-    anchors: {
-      ranger: [15, 6],
-      quest_census: [13, 13],
-      resident_reedhaven_0: [6, 14],
-      resident_reedhaven_1: [16, 10],
-    },
-    lane: [
-      [5, 14],
-      [7, 14],
-      [7, 9],
-      [17, 9],
-    ],
-  },
-  cinderfall: {
-    square: [13, 9],
-    sites: [
-      [2, 13, 7],
-      [16, 12, 5],
-      [4, 3, 7],
-    ],
-    ground: [
-      [18, 2, 6, 5, "#"],
-      [1, 1, 6, 2, "#"],
-      [15, 4, 6, 3, "~"],
-      [15, 5, 4, 3, "~"],
-      [21, 14, 4, 5, "#"],
-      [2, 10, 4, 2, "#"],
-    ],
-    anchors: {
-      quest_furnace: [18, 16],
-      resident_cinderfall_0: [15, 3],
-      resident_cinderfall_1: [20, 8],
-    },
-    lane: [
-      [6, 16],
-      [10, 16],
-      [10, 8],
-      [20, 8],
-    ],
-  },
-  rimepeak: {
-    house: [8, 11, 5],
-    square: [12, 12],
-    sites: [
-      [3, 3, 7],
-      [16, 2, 5],
-      [17, 13, 7],
-    ],
-    ground: [
-      [1, 9, 5, 8, "#"],
-      [9, 2, 4, 4, "#"],
-      [21, 4, 4, 4, "#"],
-      [6, 14, 4, 4, "~"],
-      [10, 15, 4, 3, "f"],
-      [20, 8, 5, 2, "#"],
-    ],
-    anchors: { medicine_spring: [8, 17], resident_rimepeak_0: [15, 6], resident_rimepeak_1: [9, 12] },
-    lane: [
-      [6, 6],
-      [6, 7],
-      [16, 7],
-      [16, 15],
-      [20, 15],
-    ],
-  },
-  bellweather: {
-    square: [12, 10],
-    sites: [
-      [2, 7, 7],
-      [16, 13, 5],
-      [9, 2, 7],
-    ],
-    ground: [
-      [2, 2, 4, 4, "#"],
-      [3, 14, 6, 5, "f"],
-      [17, 2, 4, 3, "w"],
-      [21, 2, 4, 3, "#"],
-      [21, 17, 4, 2, "#"],
-      [15, 8, 4, 3, "f"],
-    ],
-    anchors: {
-      meridian_director: [19, 6],
-      robin_bellweather: [9, 12],
-      resident_bellweather_0: [14, 6],
-      resident_bellweather_1: [6, 13],
-    },
-    lane: [
-      [5, 14],
-      [11, 14],
-      [11, 10],
-      [19, 10],
-      [19, 6],
-    ],
-  },
-  aster: {
-    house: [2, 11, 4],
-    square: [13, 9],
-    sites: [
-      [5, 13, 7],
-      [17, 12, 5],
-      [17, 1, 7],
-    ],
-    ground: [
-      [3, 2, 5, 5, "f"],
-      [4, 3, 3, 3, "~"],
-      [9, 2, 3, 3, "#"],
-      [22, 8, 3, 3, "f"],
-      [6, 10, 3, 2, "f"],
-      [13, 15, 3, 4, "#"],
-    ],
-    anchors: {
-      quest_chart: [7, 7],
-      quest_promise: [14, 13],
-      robin_aster: [6, 9],
-      resident_aster_0: [15, 5],
-      resident_aster_1: [21, 11],
-    },
-    lane: [
-      [4, 8],
-      [8, 8],
-      [8, 10],
-      [20, 10],
-      [20, 4],
-    ],
-  },
-  crown: {
-    square: [13, 10],
-    sites: [
-      [3, 11, 7],
-      [18, 11, 5],
-      [8, 2, 11],
-    ],
-    ground: [
-      [1, 1, 6, 7, "#"],
-      [19, 1, 6, 7, "#"],
-      [2, 15, 4, 4, "#"],
-      [20, 16, 5, 3, "#"],
-      [6, 7, 3, 3, "f"],
-      [17, 7, 3, 3, "f"],
-    ],
-    anchors: { resident_crown_0: [9, 8], resident_crown_1: [16, 8] },
-    lane: [
-      [6, 14],
-      [6, 10],
-      [20, 10],
-      [20, 14],
-    ],
-  },
-};
-
-function townLayout(world: Region, map: WorldMap, spec: TownPlan) {
-  if (map.id !== "dewdrop" && map.id !== "mossford") {
-    const { point, patch, anchors } = resizeLayout(map, 26, 20);
-    const site = ([x, y, w]: [number, number, number]): [
-      number,
-      number,
-      number,
-    ] => {
-      const [left, top, width] = patch([x, y, w, 3, "r"]);
-      return [left, top, width];
-    };
-    spec = {
-      square: point(spec.square),
-      ground: spec.ground.map(patch),
-      sites: spec.sites.map(site),
-      anchors: anchors(spec.anchors),
-      lane: spec.lane?.map(point),
-      house: spec.house && site(spec.house),
-    };
-  }
+function townLayout(world: Region, map: WorldMap) {
+  const town = map.id as Town;
+  const survey = townPlans[town];
+  const portals = map.exits.filter(exit => !exit.direction);
+  const destination = (mark: string) => portals.find(exit => {
+    if (mark === "C") return exit.to.endsWith("_center");
+    if (mark === "M") return exit.to.endsWith("_mart");
+    if (mark === "H") return exit.to === "home" || exit.to.endsWith("_house");
+    if (mark === "G") return exit.to === "league" || world[exit.to].kind === "gym";
+    if (mark === "L") return exit.to === "lab";
+    return world[exit.to].kind === "dungeon";
+  });
   const plan = floorPlan(map, ",");
-  const [cx, cy] = spec.square;
-  spec.ground.forEach(plan.patch);
-  plan.patch([cx - 2, cy - 1, 5, 3, "."]);
-  if (spec.lane) plan.trail(spec.lane);
-
-  const portals = map.exits.filter((e) => !e.direction);
-  const buildings = portals.filter((e) => world[e.to].kind !== "dungeon");
-  // Keep services together in the specification while allowing each town to
-  // put the keeper on the far side of a canal, plaza, ridge or market.
-  const priority = (e: Exit) =>
-    e.to.endsWith("_center")
-      ? 0
-      : e.to.endsWith("_mart")
-        ? 1
-        : e.to === "home" || e.to.endsWith("_house")
-          ? 3
-          : 2;
-  const site = (exit: Exit, index: number) =>
-    exit.to.endsWith("_house") ? spec.house! : spec.sites[index];
-  buildings.sort((a, b) => priority(a) - priority(b));
-  for (const e of map.exits.filter((e) => e.direction))
-    plan.trail([spec.square, roadApproach(map, e), [e.x, e.y]], 1);
-  buildings.forEach((e, i) => {
-    const [x, y, width] = site(e, i);
-    relocateExit(world, map, e, [x + Math.floor(width / 2), y + 2]);
-    const door: Point = [e.x, e.y + 1];
-    plan.trail([spec.square, [cx, door[1]], door], 1);
+  survey.plan.forEach((row, y) => {
+    plan.grid[y] = [...row].map((tile, x) => {
+      if (!"CMHGLX".includes(tile)) return tile;
+      const exit = destination(tile);
+      if (!exit) throw new Error(`Missing ${tile} entrance in ${map.name}`);
+      relocateExit(world, map, exit, [x, y]);
+      return tile === "X" ? "." : "d";
+    });
   });
-  for (const e of portals.filter((exit) => world[exit.to].kind === "dungeon")) {
-    const point: Point = map.id === "bellweather" ? [19, 5] : [21, 5];
-    relocateExit(world, map, e, point);
-    plan.trail([spec.square, [point[0], cy], point], 1);
-  }
-  buildings.forEach((e, i) => {
-    const [x, y, width] = site(e, i);
-    plan.patch([x, y, width, 2, "r"]);
-    plan.patch([x, y + 2, width, 1, "w"]);
-    plan.grid[e.y][e.x] = "d";
-  });
-  placeObjects(
-    map,
-    plan,
-    { [`sign_${map.id}`]: [cx - 2, cy + 2], ...spec.anchors },
-    [cx + 3, cy + 2],
-  );
+  placeObjects(map, plan, survey.anchors, survey.anchors["sign_" + town]);
   finish(map, plan);
 }
 
@@ -679,11 +260,11 @@ function routeLayout(world: Region, map: WorldMap) {
         if (interior(x + i, y + j) && i * i / rx ** 2 + j * j / ry ** 2 <= 1)
           grid[y + j][x + i] = tile;
   }
-  for (let i = 0; i < trail.length; i++) {
-    const radius = 4 + Math.round(1.5 + 1.5 * Math.sin(i / 8));
-    if (coast || marsh) oval(trail[i], radius + 2, radius + 1, "~");
-    oval(trail[i], radius, radius - 1, ",");
-  }
+  const bankWidth = (i: number) => 4 + Math.round(1.5 + 1.5 * Math.sin(i / 8));
+  // Lay down the whole shoal before drawing its banks. A later water ellipse
+  // must not flood the dry ground already laid for an earlier stretch of coast.
+  if (coast || marsh) trail.forEach((p, i) => oval(p, bankWidth(i) + 2, bankWidth(i) + 1, "~"));
+  trail.forEach((p, i) => oval(p, bankWidth(i), bankWidth(i) - 1, ","));
   for (const p of bypass) oval(p, 3, 3, ",");
   if (map.id === "route06") {
     for (const [x, y] of trail.slice(10, -9)) oval([x, y + 4], 3, 3, "~");
@@ -701,6 +282,9 @@ function routeLayout(world: Region, map: WorldMap) {
   if (coast || marsh || ["meadow", "snow", "night", "orchard"].includes(spec.palette))
     oval(pond, 6, 3, "~");
   if (map.id === "route02" || marsh) oval(at(0.69), 5, 4, "~");
+  if (map.id === "route05") oval(at(0.28), 6, 3, "~");
+  if (map.id === "route10") oval(at(0.25), 4, 7, "~");
+  if (map.id === "route11") oval(at(0.87), 6, 3, "~");
 
   // Orchard rows, tilted dune ridges, basalt shelves and flowering meadows
   // interrupt the shoulders without cutting through either surveyed path.
@@ -716,6 +300,7 @@ function routeLayout(world: Region, map: WorldMap) {
     }
   for (const p of bypass) oval(p, 1, 1, ",");
   for (const [x, y] of bypass) grid[y][x] = ":";
+  const site = layRouteSite(map.id.slice(5), grid, turnout);
   for (const [x, y] of trail)
     for (let j = -1; j <= 1; j++)
       for (let i = -1; i <= 1; i++) {
@@ -742,10 +327,8 @@ function routeLayout(world: Region, map: WorldMap) {
   const sign = "sign_" + map.id;
   map.objects.push({ kind: "sign", id: sign, x: 0, y: 0, name: spec.landmark, dialogue: spec.note });
   const anchors: Record<string, Point> = {
-    [sign]: turnout,
-    ["resident_" + map.id]: glade,
+    ...site,
     ["trainer_" + map.id]: beside(0.22, -2),
-    ["item_" + map.id]: bypass[Math.floor(bypass.length * 0.69)],
     [map.id + "_optional_0"]: beside(0.70, 3),
     [map.id + "_optional_1"]: bypass[Math.floor(bypass.length * 0.29)],
   };
@@ -789,10 +372,12 @@ function dungeonLayout(world: Region, map: WorldMap) {
       relocateExit(world, map, exit, [x, y]);
       if (tile === "<") {
         exit.label = expeditions[id].shortcut;
-        exit.lockedDialogue = "This return opens once you finish the expedition.";
+        exit.lockedDialogue = expeditions[id].returnHint;
       } else if (tile === ">") {
         exit.label = rooms[i + 1].name;
-        exit.lockedDialogue = expeditions[id].clue[1];
+        exit.lockedDialogue = map.id === "meridian_2"
+          ? "The director’s reader needs a signed diversion order. Check the carbon copies in night-shift records."
+          : expeditions[id].clue[1];
       } else if (i) exit.label = rooms[i - 1].name;
       return ".";
     }
@@ -997,7 +582,7 @@ function townDirections(map: WorldMap) {
 export function composeGeography(world: Region) {
   for (const map of Object.values(world)) {
     if (map.kind === "town") townDirections(map);
-    if (map.kind === "town") townLayout(world, map, towns[map.id]);
+    if (map.kind === "town") townLayout(world, map);
     if (map.kind === "route") routeLayout(world, map);
     if (map.kind === "gym") gymLayout(world, map);
     if (map.kind === "interior") {

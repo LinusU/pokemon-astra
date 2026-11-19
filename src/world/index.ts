@@ -1,9 +1,11 @@
 import { populateRequests } from "./requests";
 import { composeGeography, dimensions } from "./geography";
-import { localTrail, opposite, routes, settlements } from "./atlas";
+import { townLife } from "./town-life";
+import { localTrail, opposite, routes, settlements, type Town } from "./atlas";
 import { expeditions, expeditionCrew, finalNeeds, sidePassages, type Fieldwork } from "./expeditions";
 import { dungeonPlans } from "./dungeon-plans";
 import { gyms } from "./gyms";
+import { roadCrews } from "./road-crew";
 import { populateHabitats } from "./habitats";
 
 /** Pokémon Astra's authored campaign. Species numbers use the National Pokédex. */
@@ -717,33 +719,6 @@ leaders.forEach(([name, , , team], i) => {
 });
 const habitats = routeData.map(([n]) => WORLD[`route${n}`]);
 populateHabitats(WORLD);
-const routeTrainers = [
-  "Scout Ari",
-  "Orchard hand Bea",
-  "Surveyor Cleo",
-  "Ferry hand Dara",
-  "Deckhand Emil",
-  "Lockkeeper Nessa",
-  "Mechanic Oren",
-  "Dune guide Iona",
-  "Glass apprentice May",
-  "Wader Taran",
-  "Ranger Kestrel",
-  "Kiln hand Bran",
-  "Prospector Luz",
-  "Climber Asa",
-  "Skater Sanna",
-  "Botanist Eira",
-  "Pilgrim Sol",
-  "Nightwatcher Hala",
-  "Lab aide Nico",
-  "Mountaineer Liv",
-  "Forester Fenn",
-  "Swimmer Keo",
-  "Excavator Esti",
-  "Diver Valea",
-  "Ecologist Ren",
-];
 const trailItems = [
   [
     "potion",
@@ -756,9 +731,9 @@ const trailItems = [
     "Someone left two Potions at the foot of the orchard bridge.",
   ],
   [
-    "potion",
+    "antidote",
     "Surveyor supplies",
-    "The survey team left two spare Potions here.",
+    "The survey team left two Antidotes beside a pair of oil tins.",
   ],
   ["potion", "Ford supplies", "A watertight pouch holds two Potions."],
   [
@@ -772,14 +747,14 @@ const trailItems = [
     "You find two Great Balls left by the old lockkeeper.",
   ],
   [
-    "great_ball",
+    "parlyz_heal",
     "Yard toolbox",
-    "A disused toolbox holds two clean Great Balls.",
+    "Two Parlyz Heals sit in a dry compartment under the spanners.",
   ],
   [
-    "great_ball",
+    "repel",
     "Dune cache",
-    "You brush the sand off a box containing two Great Balls.",
+    "A piece of sailcloth shades two Repels. A Phanpy print dents the lid.",
   ],
   [
     "great_ball",
@@ -787,9 +762,9 @@ const trailItems = [
     "Two Great Balls are wrapped in cloth inside the jar.",
   ],
   [
-    "great_ball",
+    "super_potion",
     "Reed bundle",
-    "You untie a bundle of reeds and find two Great Balls.",
+    "You loosen the reed ties. Two Super Potions are wrapped in a waxed leaf.",
   ],
   [
     "great_ball",
@@ -797,34 +772,34 @@ const trailItems = [
     "A waterproof ranger pack holds two Great Balls.",
   ],
   [
-    "great_ball",
+    "ether",
     "Trail bivouac",
-    "You find two Great Balls in the shade of a lava shelf.",
+    "There are two Ethers here. Someone drew a little chimney in the ash on the lid.",
   ],
   [
-    "ultra_ball",
+    "burn_heal",
     "Miner’s pouch",
-    "A discarded ore pouch holds two Ultra Balls.",
+    "The miners left two Burn Heals on the cool side of the shelf.",
   ],
   [
-    "ultra_ball",
+    "revive",
     "Climbing tin",
-    "A small tin by the cairn contains two Ultra Balls.",
+    "Two Revives sit in a tin stamped with the mountain rescue crest.",
   ],
   [
-    "ultra_ball",
+    "ice_heal",
     "Winter stash",
-    "You lift the lid of an insulated box and find two Ultra Balls.",
+    "You shake the frost off an insulated box. Two Ice Heals sit inside.",
   ],
   [
-    "ultra_ball",
+    "hyper_potion",
     "Gardener’s spare kit",
-    "A canvas roll tucked among the flowers holds two Ultra Balls.",
+    "You unroll an oilskin beside the flower bed. It holds two Hyper Potions.",
   ],
   [
-    "ultra_ball",
+    "awakening",
     "Pilgrim’s supplies",
-    "Two Ultra Balls are tucked under a dry niche in the wall.",
+    "A violet ribbon marks the niche. Two Awakenings sit just inside.",
   ],
   [
     "ultra_ball",
@@ -832,19 +807,19 @@ const trailItems = [
     "You open a dry package in the reeds and find two Ultra Balls.",
   ],
   [
-    "ultra_ball",
+    "ether",
     "Maintenance box",
-    "Two Ultra Balls rattle in an old observatory maintenance box.",
+    "Two Ethers roll together as you tip the old brass box.",
   ],
   [
-    "ultra_ball",
+    "max_elixer",
     "Summit trail cache",
-    "A climbing party left two Ultra Balls for the next traveler.",
+    "Two Max Elixers are tucked under the cairn, with a note: “For your League run.”",
   ],
   [
-    "ultra_ball",
+    "great_ball",
     "Grove supplies",
-    "A field kit protected by the old trees holds two Ultra Balls.",
+    "Someone left two Great Balls in a hollow between the roots.",
   ],
   [
     "ultra_ball",
@@ -852,14 +827,14 @@ const trailItems = [
     "A pouch washed up on the island contains two Ultra Balls.",
   ],
   [
-    "ultra_ball",
+    "full_heal",
     "Quarry locker",
-    "You find two Ultra Balls in a dry crevice above the fossil beds.",
+    "You find two Full Heals in a dry crevice above the fossil beds.",
   ],
   [
-    "ultra_ball",
+    "full_restore",
     "Beacon offering",
-    "Two Ultra Balls rest in a weatherproof box by the shrine.",
+    "Two Full Restores rest in a weatherproof box above the sound.",
   ],
   [
     "ultra_ball",
@@ -867,10 +842,10 @@ const trailItems = [
     "The researchers left two Ultra Balls for sanctuary visitors.",
   ],
 ];
-routeData.forEach(([n, name], i) => {
+routeData.forEach(([n], i) => {
   const id = `route${n}`;
   const level = Math.min(53, 7 + i * 2);
-  const trainer = routeTrainers[i];
+  const [trainer, dialogue, victoryDialogue] = roadCrews[n].regular;
   const [item, cache, description] = trailItems[i];
   const team = habitats[i].encounters
     .slice(0, i < 4 ? 1 : 2)
@@ -879,7 +854,8 @@ routeData.forEach(([n, name], i) => {
     id: `trainer_route${n}`,
     kind: "trainer",
     name: trainer,
-    dialogue: `I know ${name} well. Let’s see how your team handles this stretch.`,
+    dialogue,
+    victoryDialogue,
     setsFlag: `trainer_route${n}_won`,
     trainer: {
       id: `trainer_route${n}`,
@@ -1159,38 +1135,22 @@ rivals.forEach(([where, id, level, bird, requires]) =>
   }),
 );
 
-const townFlavor: Record<string, string> = {
-  dewdrop:
-    "Alder’s garden points toward the lab. The first beacon watches over the village.",
-  mossford:
-    "The orchard windmills turn with the breeze. A courier prepares a delivery for Bramble.",
-  bramble: "Lanterns mark the forest path. Fern keeps the Canopy beacon.",
-  tideglass:
-    "The fog signal guides ships through the harbor. Marina tends the Tidal beacon.",
-  copperwick:
-    "Canals carry water past the workshops. The beacon dims whenever the power fails.",
-  sunspire:
-    "Glass catches the desert sun above the oasis. The old stones remember its path.",
-  reedhaven:
-    "The market and camp sit on opposite sides of the reed beds. The sanctuary is on higher ground.",
-  cinderfall:
-    "The washhouse stands below the springs. The mine trail climbs between the high roofs.",
-  rimepeak:
-    "The mountain pass glitters with snow. Travelers rest here before the ascent.",
-  bellweather:
-    "Every bell has a memory. Listen closely to learn what Meridian has hidden.",
-  aster:
-    "The observatory watches the stars while the last beacon waits for its lens.",
-  crown:
-    "Beyond the ascent, the Astral League awaits those who have restored the beacons.",
-};
-for (const [id] of townData)
+for (const [id, life] of Object.entries(townLife)) {
   obj(id, {
-    id: `sign_${id}`,
+    id: "sign_" + id,
     kind: "sign",
-    name: "Town guide",
-    dialogue: townFlavor[id],
+    name: life.square,
+    dialogue: life.directions,
   });
+  obj(id, {
+    id: "visitor_" + id,
+    kind: "sign",
+    name: life.visitor,
+    wildlife: life.species,
+    dialogue: life.observation,
+    field: { appearsAfter: life.after },
+  });
+}
 // Optional trainers provide experience between each community and its keeper.
 // Their placement is selected from open cells after the authored terrain is built.
 const firstRival = WORLD.route02.objects.find((o) => o.id === "rival_1")!;
@@ -1223,8 +1183,8 @@ for (let i = 0; i < 20; i++) {
   const m = habitats[i],
     base = Math.max(5, 5 + i * 2);
   for (let j = 0; j < 2; j++) {
-    const [x, y] = freePosition(m),
-      name = `${["Youngster", "Picnicker", "Backpacker", "Ranger"][(i + j) % 4]} ${["Nell", "Kai", "Mika", "Tess", "Ollie"][(i * 2 + j) % 5]}`;
+    const [x, y] = freePosition(m);
+    const [name, dialogue, victoryDialogue] = roadCrews[m.id.slice(5)].optional![j];
     const species = m.encounters[(j + 2) % m.encounters.length]?.species ?? 19;
     obj(m.id, {
       id: `${m.id}_optional_${j}`,
@@ -1232,7 +1192,8 @@ for (let i = 0; i < 20; i++) {
       name,
       x,
       y,
-      dialogue: "Let’s practice together before the road ahead!",
+      dialogue,
+      victoryDialogue,
       setsFlag: `${m.id}_optional_${j}_won`,
       trainer: {
         id: `${m.id}_optional_${j}`,
@@ -1286,46 +1247,54 @@ evolutionSupplies.forEach(([where, item, name], i) => {
 
 // Dialogue carries the beacon survey through each location; flags and rewards
 // remain independent from the prose so saved progression stays stable.
-const dungeonStory: Record<string, { name: string; dialogue: string }> = {
+const dungeonStory: Record<string, { name: string; dialogue: string; victoryDialogue?: string }> = {
   lantern: {
     name: "Stranded surveyor",
     dialogue:
-      "You free the surveyor from the fallen branch. “Thank you! The beacon dimmed when Meridian’s machines arrived. Fern needs to hear this.” The surveyor marks a safe trail back to Bramble.",
+      "You lift the limb off the surveyor’s boot. “The beacon dimmed the day Meridian arrived. Tell Fern!” She ties a rope from the oak to the ribbon fork.",
+    victoryDialogue: "“Put one hand on the rope. It runs straight back to the ribbon fork.”",
   },
   undertow: {
     name: "Fog signal",
     dialogue:
-      "You clear the horn mouth. Air rushes through the exposed pipe and the foghorn sounds across the quay. A clear signal sweeps the harbor. Marina discovers a Meridian intake pipe drawing water away from the cave and asks you to follow it inland.",
+      "The horn sounds. A bell answers from Marina’s ship in the fog. The keeper drops his ladder to the barnacle shelf. Beside it, a Meridian intake still pulls seawater inland.",
+    victoryDialogue: "Two short blasts carry across the quay. The ladder down to the barnacle shelf is clear.",
   },
   copperworks: {
     name: "Power regulator",
     dialogue:
-      "You reconnect the town’s power. A maintenance log shows Meridian diverted the beacon’s current to its desert installation. Robin reads the record in disbelief: “They told us the brownouts were accidents.”",
+      "Clinic lights blink on across the canal. The log shows Meridian diverted their current to the desert. “They told us it was an accident,” Robin says. The service lift rattles back to life.",
+    victoryDialogue: "The clinic feed holds steady. The service lift calls at Meter Alley again.",
   },
   hourglass: {
     name: "Ancient beacon lens",
     dialogue:
-      "The shaft of light falls across the buried lens. Its inscription says the beacons guide living migrations, not merely electricity. Sable asks you to carry that warning to the Reedhaven rangers.",
+      "Under the glass, tiny herds follow the light from beacon to beacon. Sable asks you to show the rangers. Sand spills from beneath the lens, uncovering a chute to the gnomon court.",
+    victoryDialogue: "The carved herds are visible through the glass. The sand chute leads back to the court.",
   },
   bamboo: {
     name: "Ranger report",
     dialogue:
-      "The ranger lays your nest and burrow sketches over last year’s shoreline. Both sites used to be underwater at high tide. The census agrees: Pokémon are leaving drained habitats. The report identifies a Meridian shipment bound for Ember Mine. The ranger asks you to stop it.",
+      "The ranger fits your sketches to last year’s shoreline. Both sites used to flood at high tide. “These Pokémon are losing their homes. That Meridian barge went to Ember Mine.” She whistles for the ferry.",
+    victoryDialogue: "“Give the ferryman a wave. He’ll take you to the bittern hide.”",
   },
   ember: {
     name: "Captive Pokémon",
     dialogue:
-      "Both wagons stand empty. You strike the two passengers from the manifest. The miner says Meridian wanted their heat to feed the Engine. Flint promises to shelter them and restore the city’s beacon.",
+      "You cross both passengers off the manifest. Meridian wanted their heat for the Engine. Flint has warm beds waiting instead. The driver rolls the empty ore tram onto the return line.",
+    victoryDialogue: "The transport docket is stamped EMPTY. The ore tram is running back to shift change.",
   },
   frostvault: {
     name: "Icebound pass",
     dialogue:
-      "The thawed channels carry warm water through the frozen gate. The mountain pass opens again. Neve finds a Meridian badge beside the abandoned pump: the freezing was caused by a deliberate diversion.",
+      "Warm water curls around the gate. Neve lifts a Meridian badge from the pump. “They shut it off on purpose.” Downhill, the patrol raises its flag. The toboggan run to the snow shed is clear.",
+    victoryDialogue: "Meltwater sings in the cut. The patrol’s toboggan run ends at the snow shed.",
   },
   echo: {
     name: "Beacon memory",
     dialogue:
-      "The bells replay an old keeper’s warning: the Aurora Current must change with the seasons. Robin hears it too. “I believed Meridian was protecting Astra. I was wrong.” Together you decide to confront Vale.",
+      "A keeper’s voice rises from the wax. “The current must turn with the seasons.” Robin takes off their Meridian pin. “I was wrong. They need to hear this in town.” The bell rope stair drops to the choir stalls.",
+    victoryDialogue: "The keeper’s voice survives on the cylinder. The rope stair hangs open to the choir stalls.",
   },
   meridian: {
     name: "Director Vale",
@@ -1335,17 +1304,20 @@ const dungeonStory: Record<string, { name: string; dialogue: string }> = {
   starfall: {
     name: "Final beacon lens",
     dialogue:
-      "The constellations converge on the last lens. Orion can now restore the Astral beacon. Beyond the glass, the Celestial Engine holds the currents of Lugia and Ho-Oh in a trembling artificial dawn.",
+      "The last lens slides free for Orion. Beyond the glass, Lugia and Ho-Oh’s currents strain against the Engine’s fixed dawn. The observer unlocks the spiral stair for your return.",
+    victoryDialogue: "The lens cradle is empty. The spiral stair winds down to the photographic plates.",
   },
   victory: {
     name: "Summit gate",
     dialogue:
-      "You tie your line beside the names of the trainers who climbed before you. The path to the Astral League is clear. Rest at the center, then meet the four specialists and Champion Mira when you are ready.",
+      "You tie your line beside the names of the trainers who climbed before you. The warden opens the League gate. The new rappel takes you straight back to rope school for the walk to Crown Summit.",
+    victoryDialogue: "Your line holds beside the earlier climbers’ knots. Take the summit rappel back to rope school.",
   },
   aurora: {
     name: "Restored sanctuary",
     dialogue:
-      "The researchers lay your day and night entries side by side. Both halves of the migration are back. The restored current moves through its trees in a gentle cycle. The researchers can continue their work, and Celebi’s sanctuary is open to respectful visitors.",
+      "The researchers lay your two entries side by side. Pollen by day, eggs by night. The whole migration is back. They unlash the nursery footbridge. Beyond it, Celebi stirs in the leaves.",
+    victoryDialogue: "The watches are back in the field book. The nursery footbridge is open to the meadow.",
   },
 };
 for (const id of Object.keys(expeditions)) {
@@ -1356,7 +1328,7 @@ const valeStory = WORLD.meridian_3.objects.find(
   (o) => o.id === "meridian_objective",
 )!;
 valeStory.victoryDialogue =
-  "Vale lowers his keycard. “I mistook stillness for safety. Take this; the Engine is yours to stop. I will help the communities repair what I damaged.”";
+  "Vale sets his keycard on the desk. “I mistook stillness for safety. Take it. Stop the Engine.” He calls the express lift to the lobby. “I owe those towns more than an apology.”";
 const engineStory = WORLD.starfall_3.objects.find(
   (o) => o.id === "celestial_engine",
 )!;
@@ -1406,7 +1378,7 @@ const townVoices: Record<string, [string, string][]> = {
   bramble: [
     [
       "Woodcutter",
-      "Lantern Wood used to be easy to cross. Follow the leaf trail if you go looking for the surveyor.",
+      "Lantern Wood used to be easy to cross. Look for paired moth blooms if you go after the surveyor.",
     ],
     [
       "Keeper’s apprentice",
@@ -1508,11 +1480,14 @@ for (const [id] of townData)
   townVoices[id].forEach(([name, dialogue], i) => {
     const m = WORLD[id],
       [x, y] = freePosition(m);
+    const returning = i === 1 ? townLife[id as Town] : undefined;
     obj(id, {
       id: `resident_${id}_${i}`,
       kind: "person",
       name,
-      dialogue,
+      dialogue: returning?.neighbor ?? dialogue,
+      requires: returning && { flags: [returning.after] },
+      lockedDialogue: returning && dialogue,
       x,
       y,
     });

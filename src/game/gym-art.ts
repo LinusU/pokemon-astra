@@ -565,6 +565,18 @@ export function paintGymActivity(c: Canvas, m: WorldMap, flags: ReadonlySet<stri
   if (m.id === "gym3" && flags.has("power_restored")) {
     for (let i = 0; i < 6; i++)
       rect(c, i === Math.floor(time / 170) % 6 ? "#f9dc85" : "#89ad8c", 137 + i * 7, 123, 3, 2);
+    for (const x of [4, 16]) {
+      const released = m.tiles[4][x] === "=";
+      // The striped stop bar and forward arrow are readable without color.
+      rect(c, "#34494b", x * 16 + 3, 74, 10, 6);
+      if (released) {
+        rect(c, "#d9e9ad", x * 16 + 7, 75, 2, 4);
+        rect(c, "#d9e9ad", x * 16 + 5, 77, 6, 1);
+      } else {
+        rect(c, "#edbb72", x * 16 + 4, 76, 8, 2);
+        rect(c, "#674b46", x * 16 + 7, 76, 2, 2);
+      }
+    }
   }
   if (m.id === "gym4" && flags.has("lens_restored")) {
     for (let y = 0; y < m.height; y++)

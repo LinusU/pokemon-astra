@@ -97,3 +97,17 @@ it("records an inspected path through its blocked, clearable and open states", (
   save.flags.push(exit.barrier!.flag!);
   expect(paths()[0].status).toBe("Open");
 });
+
+it("guides either Copperwick operator choice before pointing to Volt", () => {
+  const save = freshSave();
+  save.map = "gym3";
+  save.flags.push("partner", "surveyor", "badge1", "fog_signal", "badge2", "power_restored");
+  const guide = () => directions(save, req => meetsRequirement(save, req));
+  expect(guide().marker).toMatchObject({ id: "gym3_roster" });
+  expect(guide().hint).toContain("Dex");
+  for (const flag of ["gym3_1_won", "gym3_2_won"]) {
+    save.flags.push(flag);
+    expect(guide().marker).toMatchObject({ id: "leader_3" });
+    save.flags.pop();
+  }
+});

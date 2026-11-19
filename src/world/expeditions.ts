@@ -33,6 +33,7 @@ type Site = {
   actors: Actor[];
   gates?: [Requirement | undefined, Requirement | undefined];
   shortcut: string;
+  returnHint: string;
 };
 function landmark(
   id: string,
@@ -72,6 +73,7 @@ export const expeditions: Record<string, Site> = {
       "My Venonat can find its way home on a moonless night. Can yours?",
     ],
     shortcut: "Surveyor’s rope trail",
+    returnHint: "The rope ends high in the oak. Find the missing surveyor in the hollow to get a line down.",
     actors: [
       landmark(
         "lantern_tracks",
@@ -99,6 +101,7 @@ export const expeditions: Record<string, Site> = {
       "Shellder snaps shut just before the pool exhales. That’s my cue to dive.",
     ],
     shortcut: "Horn keeper’s ladder",
+    returnHint: "The horn keeper has hauled the ladder up. Clear the horn mouth so the keepers can hear each other.",
     gates: [undefined, { flags: ["low_tide"] }],
     actors: [
       landmark(
@@ -127,6 +130,7 @@ export const expeditions: Record<string, Site> = {
       "Magnemite pulls harder on a live cable. Watch which way its magnets point.",
     ],
     shortcut: "Turbine service lift",
+    returnHint: "The lift has no power. Its supply comes from the black-start turbine beyond the feeder gallery.",
     gates: [undefined, { flags: ["relay_on"] }],
     actors: [
       landmark(
@@ -139,7 +143,7 @@ export const expeditions: Record<string, Site> = {
       landmark(
         "copper_breaker",
         "Feeder isolator",
-        "The foundry meter falls to zero. The clinic lamps stay lit. Behind the false feeder, a live cable leads to Meridian’s intake.",
+        "The foundry meter drops to zero. The clinic lamps stay lit. An insulated catwalk swings across the cable trench to Meridian’s intake.",
         "relay_on",
         { device: "breaker", illustration: "meter" },
       ),
@@ -162,6 +166,7 @@ export const expeditions: Record<string, Site> = {
       "Stand where the glass casts a shadow. From there you can see straight through it.",
     ],
     shortcut: "Sand chute",
+    returnHint: "Sand has sealed the chute. A carved line runs up toward the buried aperture.",
     gates: [undefined, { flags: ["stone_aligned"] }],
     actors: [
       landmark(
@@ -194,6 +199,7 @@ export const expeditions: Record<string, Site> = {
       "Wooper’s gills tell me more about these pools than any water gauge.",
     ],
     shortcut: "Ranger’s ferry",
+    returnHint: "The ranger has the ferry at the island. Bring your nest and burrow sketches to the field station.",
     actors: [
       landmark(
         "bamboo_nest",
@@ -228,6 +234,7 @@ export const expeditions: Record<string, Site> = {
       "Slugma can keep a kiln warm all winter. The handlers here don’t deserve their help.",
     ],
     shortcut: "Empty ore tram",
+    returnHint: "The return line is still on the freight schedule. Get both passengers safely off the kiln wagons.",
     gates: [undefined, { flags: ["mine_clear"] }],
     actors: [
       {
@@ -283,6 +290,7 @@ export const expeditions: Record<string, Site> = {
       "Swinub feels the hot spring long before I see steam coming through the snow.",
     ],
     shortcut: "Patrol toboggan run",
+    returnHint: "A red patrol flag closes the run. Follow the steam groove and reopen the frozen cut.",
     gates: [undefined, { flags: ["ice_thawed"] }],
     actors: [
       landmark(
@@ -318,6 +326,7 @@ export const expeditions: Record<string, Site> = {
       "Misdreavus always sings the missing note. Listen to the room when it falls quiet.",
     ],
     shortcut: "Bell rope stair",
+    returnHint: "The rope stair is tied off at the wax archive. Follow the watch peal up there to release it.",
     gates: [undefined, { flags: ["bell_rung"] }],
     actors: [
       landmark(
@@ -346,6 +355,7 @@ export const expeditions: Record<string, Site> = {
       "Battle clearance? Beat my Porygon2 and I’ll swipe you into records myself.",
     ],
     shortcut: "Director’s express lift",
+    returnHint: "Only Vale can call the express lift. The public landings lead to the records office.",
     gates: [{ flags: ["keycard"] }, { flags: ["meridian_evidence"] }],
     actors: [
       {
@@ -383,12 +393,13 @@ export const expeditions: Record<string, Site> = {
       "Noctowl can hold a pose for an entire exposure. I’ve never managed it myself.",
     ],
     shortcut: "Observer’s spiral stair",
+    returnHint: "The observer has the stair locked while the last lens is out of its cradle. Check the equatorial mount.",
     gates: [undefined, { flags: ["stars_aligned"] }],
     actors: [
       landmark(
         "starfall_scope",
         "Equatorial telescope",
-        "Two points of light merge in the sight. The counterweight releases and the final beacon lens rolls into its cradle.",
+        "The double star settles in the sight. A counterweight turns the brass bridge across the open shaft. The lens cradle waits on the far balcony.",
         "stars_aligned",
         { device: "telescope", illustration: "scope" },
       ),
@@ -411,6 +422,7 @@ export const expeditions: Record<string, Site> = {
       "Gligar sets the high anchor. I get the job of carrying all the rope.",
     ],
     shortcut: "Summit rappel",
+    returnHint: "There’s no rope on this anchor yet. Climb to the cairn of names and fix your own summit line.",
     gates: [undefined, { flags: ["summit_open"] }],
     actors: [
       landmark(
@@ -448,6 +460,7 @@ export const expeditions: Record<string, Site> = {
       "Meganium’s breath brings the meadow into flower. Watch who shows up to feed.",
     ],
     shortcut: "Nursery footbridge",
+    returnHint: "The bridge is tied up for the nesting season. Bring both field watches to the nursery researchers.",
     actors: [
       resident(
         "aurora_pollen",
@@ -528,8 +541,11 @@ export function expeditionCrew(id: string): Actor {
 type Crossing = { flag: string; closed: string; open: string };
 const crossings: Record<string, Record<string, Crossing>> = {
   undertow_2: { "*": { flag: "low_tide", closed: "o", open: ":" } },
+  copperworks_2: { "*": { flag: "relay_on", closed: "o", open: "=" } },
   hourglass_2: { "*": { flag: "stone_aligned", closed: "#", open: "=" } },
   bamboo_3: { "*": { flag: "farfetchd_lane", closed: "o", open: "=" } },
+  frostvault_2: { "*": { flag: "ice_thawed", closed: "#", open: ":" } },
+  starfall_2: { "*": { flag: "stars_aligned", closed: "o", open: "=" } },
   victory_2: {
     "*": { flag: "west_pitch", closed: "#", open: ":" },
     "!": { flag: "east_pitch", closed: "#", open: ":" },

@@ -1,0 +1,86 @@
+.badge-award {
+  position: absolute;
+  inset: 0;
+  container-type: inline-size;
+  display: grid;
+  grid-template-rows: 12% minmax(0, 1fr) auto 15%;
+  overflow: hidden;
+  background: #254541;
+  color: #f7edca;
+  font: 400 1rem/1 "VT323", monospace;
+}
+.badge-award header, .badge-award footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1cqw;
+  padding: 0 4cqw;
+  background: #203c3d;
+}
+.badge-award header {
+  border-bottom: .5cqw solid #8f997e;
+  font-size: 4.8cqw;
+}
+.badge-award header span:last-child { color: #e6bf85; }
+.award-setting {
+  display: flex;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 6cqw;
+  padding: 1.5cqw 4cqw;
+  background: repeating-linear-gradient(135deg, #30544e 0 1.2cqw, #325650 1.2cqw 2.4cqw);
+}
+.award-mount {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 100%;
+  max-height: 23cqw;
+  aspect-ratio: 1;
+  border: .65cqw double #d4b580;
+  outline: .45cqw solid #192e30;
+  background: #24403e;
+  box-shadow: inset 0 0 0 1cqw #354c43, 1cqw 1cqw #203b35;
+}
+.award-mount .jn-badge {
+  width: 83%;
+  animation: receive-badge .45s ease-out both;
+}
+.award-heading h1 { margin: 0; font-size: 8cqw; font-weight: 400; }
+.award-heading p { margin: 1cqw 0 0; color: #f8d38e; font-size: 5cqw; }
+.badge-award blockquote {
+  margin: 0 2cqw;
+  padding: 2.3cqw 3.5cqw 2.6cqw;
+  border-top: .55cqw solid #e7ba7e;
+  background: #f6ecd0;
+  color: #263e38;
+  font-size: 4.7cqw;
+  line-height: 1.01;
+}
+.badge-award cite {
+  display: block;
+  margin-bottom: .75cqw;
+  color: #516759;
+  font-size: 3.9cqw;
+  font-style: normal;
+}
+.award-case { display: flex; align-items: center; gap: 1.35cqw; }
+.award-case .jn-badge { display: block; width: 5.7cqw; }
+.award-case span:not(.earned) { filter: grayscale(1); opacity: .27; }
+.badge-award button {
+  padding: .5cqw 1.6cqw;
+  border: 0;
+  background: #e8c48b;
+  color: #203c3d;
+  font: inherit;
+  font-size: 4.6cqw;
+}
+.badge-award button:focus-visible { outline: .4cqw dashed #e8c48b; outline-offset: .55cqw; }
+@keyframes receive-badge {
+  from { transform: translateY(-1.8cqw) scale(.82); opacity: .25; }
+  to { transform: none; opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .award-mount .jn-badge { animation: none; }
+}

@@ -12,6 +12,7 @@ import { typeNames } from "./game/type-names";
 import { openFieldwork } from "./ui/fieldwork";
 import { requestHint, updateChart } from "./world/requests";
 import { gymBattleBackdrop } from "./game/gym-art";
+import { showBadgeAward } from "./ui/badge-award";
 import { iceLanding, advanceGlide } from "./game/skating";
 import { expeditionState, pitchFlag } from "./world/expeditions";
 import { gymState } from "./world/gyms";
@@ -30,8 +31,8 @@ import {
 } from "./game/navigation";
 import { regionPosition } from "./game/region";
 import { mountRegionChart } from "./ui/region-map";
-import { campaignObjective, directions, bearings } from "./game/journal";
-import { drawFieldMap } from "./ui/field-map";
+import { campaignObjective, directions } from "./game/journal";
+import { mountFieldMap } from "./ui/field-map";
 import { mountBag, itemInfo, type BagState } from "./ui/bag";
 import { battleStatus, mountParty } from "./ui/party";
 import { mountPokedex, type DexState } from "./ui/pokedex";
@@ -39,7 +40,7 @@ import { mountJournal, type JournalState } from "./ui/journal";
 import { MenuInput } from "./ui/menu-input";
 import { MEDICINE, isMedicine, useMedicine } from "./game/medicine";
 import { GameAudio } from "./game/audio";
-import { battleTheme, trainerIntroMusic, victoryTheme, type MusicScene } from "./game/music";
+import { battleTheme, fieldMusic, trainerIntroMusic, victoryTheme, type MusicScene } from "./game/music";
 import { BattlePresenter, escapeAnnounced } from "./ui/battle";
 import { playEvolution } from "./ui/evolution";
 import { download, JourneyConflict, JourneyStore } from "./game/storage";
@@ -186,15 +187,7 @@ function scene(): MusicScene {
   const map = currentField();
   if (map?.tiles[Math.floor(save.y)]?.[Math.floor(save.x)] === "~" && save.abilities.includes("surf"))
     return "surf";
-  return map?.kind === "gym"
-    ? "gym"
-    : map?.id.endsWith("_center")
-      ? "center"
-      : map?.kind === "dungeon"
-        ? "cave"
-        : map?.kind === "route"
-          ? "route"
-          : "town";
+  return fieldMusic(map);
 }
 const flag = (f?: string) => {
   if (f && !save.flags.includes(f)) save.flags.push(f);
@@ -988,23 +981,17 @@ function view(v: string, pageIndex = 0) {
       <div class="atlas-readout"><button data-turn="-1" aria-label="Previous place">◀</button><div aria-live="polite"><strong data-place></strong><small data-links></small></div><button data-turn="1" aria-label="Next place">▶</button></div>
       <button class="atlas-fly" data-travel="" hidden>Fly here</button>`;
   } else if (v === "local-map") {
-    const map = currentField(),
-      goal = directions(save, has);
-    title = map.name;
-    body = `<div class="map-layout"><canvas class="field-map" aria-label="Local terrain map with your position and next destination"></canvas><div><div class="map-key small">● You &nbsp; <b>■</b> Objective &nbsp; ▪ Exit</div><div class="objective"><strong>${escapeHtml(goal.title)}</strong><br>${escapeHtml(goal.hint)}</div>${goal.fly ? `<button data-travel="${goal.fly}">Fly to ${escapeHtml(WORLD[goal.fly].name)}</button>` : ""}</div></div><h3>Ways out</h3><div class="journal-entries">${map.exits.map((e) => `<article><strong>${escapeHtml(WORLD[e.to].name)}</strong> · ${bearings(save.x, save.y, e)}${has(e.requires) ? "" : `<p class="small muted">${escapeHtml(e.lockedDialogue || "Currently closed.")}</p>`}</article>`).join("")}</div>${
-      save.abilities.includes("fly")
-        ? `<h3>Fly to a town</h3><div class="list">${save.visited
-            .filter(
-              (id) =>
-                WORLD[id].kind === "town" && id !== save.map && id !== goal.fly,
-            )
-            .map(
-              (id) =>
-                `<button data-travel="${id}">${escapeHtml(WORLD[id].name)}</button>`,
-            )
-            .join("")}</div>`
-        : ""
-    }`;
+    mountFieldMap(layer, currentField(), save, directions(save, has), has,
+      () => view("map"), () => view("fly"));
+    return;
+  } else if (v === "fly") {
+    title = "Fly to a town";
+    const goal = directions(save, has);
+    const towns = save.visited.filter(id => WORLD[id].kind === "town" && id !== save.map);
+    const destinations = goal.fly ? [goal.fly, ...towns.filter(id => id !== goal.fly)] : towns;
+    body = `<div class="list">${destinations.map(id =>
+      `<button data-travel="${id}">${escapeHtml(WORLD[id].name)}${id === goal.fly ? " · Journal" : ""}</button>`
+    ).join("")}</div>`;
   } else {
     title = "Settings & save";
     body = `<div class="save-retry" hidden><p class="error" role="alert"></p><button id="retry-save"></button></div><p>Battle speed: ${save.settings.battleSpeed}×</p><div class="buttons"><button id="speed">Change speed</button><button id="time">${save.settings.night ? "Switch to day" : "Camp until night"}</button><button id="music">${sound.enabled ? "Mute sound" : "Play sound"}</button><button id="how">How to play</button><button id="export">Export save</button><button data-backup-picker id="choose-save">Import save</button><input hidden id="import" type="file" accept="application/json,.json"></div><p class="small muted">Controller: ${escapeHtml(
@@ -1026,16 +1013,7 @@ function view(v: string, pageIndex = 0) {
     mountRegionChart(p, save, marker?.point);
     p.querySelector("#local-map")!.addEventListener("click", () => view("local-map"));
   }
-  const chart = p.querySelector<HTMLCanvasElement>(".field-map");
-  if (chart)
-    drawFieldMap(
-      chart,
-      currentField(),
-      save.x,
-      save.y,
-      directions(save, has).marker,
-    );
-  p.querySelector("#back")!.addEventListener("click", v === "local-map" ? () => view("map") : menu);
+  p.querySelector("#back")!.addEventListener("click", v === "fly" ? () => view("local-map") : menu);
   p.querySelectorAll<HTMLButtonElement>("[data-travel]").forEach(
     (b) =>
       (b.onclick = () =>
@@ -1440,9 +1418,15 @@ function showBattle(fishing = false) {
       else finishTraining(close);
     };
     if (won) {
-      if (earnedBadge) sound.overworld("badge");
       const afterVictory = receipt ? () => showReceipt(receipt, wrapUp, battleMusic) : wrapUp;
-      if (victory) message(victory, afterVictory, battleObject?.name, battleMusic);
+      if (earnedBadge && battleObject?.reward?.badge && victory) {
+        mode = "dialogue";
+        interactionMusic = battleMusic;
+        dialogueCallback = afterVictory;
+        sound.refreshMusic();
+        sound.overworld("badge");
+        showBadgeAward(layer, battleObject.reward.badge, badgeMask(save), battleObject.name, victory, advance);
+      } else if (victory) message(victory, afterVictory, battleObject?.name, battleMusic);
       else afterVictory();
       return;
     }

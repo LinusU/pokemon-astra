@@ -7,7 +7,10 @@ import {
   exitAt,
   exitOpen,
 } from "../src/game/navigation";
-import { WORLD } from "../src/world";
+import { WORLD, type Requirement } from "../src/world";
+import { freshSave, meetsRequirement } from "../src/game/save";
+import { directions } from "../src/game/journal";
+import { localStops } from "../src/ui/field-map";
 
 describe("continuous outdoor connections", () => {
   it("carries sub-tile positions through both directions with no inset teleport", () => {
@@ -144,4 +147,20 @@ describe("field barriers", () => {
       }
     }
   });
+});
+
+it("charts the Cut crossing as closed, clearable, then open after the field action", () => {
+  const map = WORLD.dewdrop;
+  const save = freshSave();
+  const allowed = (r?: Requirement) => meetsRequirement(save, r);
+  const exit = map.exits.find(e => e.to === "route21")!;
+  const stops = () => localStops(map, save, directions(save, allowed), allowed);
+  const crossing = () => stops().find(stop => stop.pin === exit)!;
+  expect(crossing().gate).toBe("Closed");
+  save.abilities.push("cut");
+  expect(crossing()).toMatchObject({gate: "Clearable", note: "Use Cut at the crossing."});
+  save.flags.push(exit.barrier!.flag!);
+  expect(crossing().gate).toBeUndefined();
+  expect(stops()[0].pin).toBe(map.exits.find(e => e.to === "lab"));
+  expect(stops().find(stop => stop.kind === "Landmark")?.pin).toBe(map.objects.find(o => o.id === "sign_dewdrop"));
 });

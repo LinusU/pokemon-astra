@@ -32,7 +32,7 @@ Production builds generate a versioned offline service worker covering the appli
 - Badge field abilities open return paths and hidden areas. Surf enables water traversal; Fly travels between visited settlements. Field abilities do not occupy Pokémon move slots.
 - Reedhaven’s nursery takes compatible pairs, including Ditto. The keeper gives you a woven sling for the Egg. Walking hatches a level-five partner that can inherit moves.
 - Six-member party, storage, Pokédex habitat hints, native battles/catching/experience/move decisions, evolution stones and Link Cables, friendship/time/stat evolutions, shops, fishing, repels, healing, and autosave.
-- Smooth, animated movement with diagonal normalization, solid roaming NPCs, trainer sightlines and approaches, grass rustles, and continuous outdoor map boundaries. All 25 routes follow a shared regional survey with winding roads, side trails and distinct coastlines, ridges and habitats. Centers and Marts fit in 12×9 and 11×9 rooms. Regional palettes and landmarks distinguish each leg of the trip.
+- Smooth, animated movement with diagonal normalization, solid roaming NPCs, trainer sightlines and approaches, grass rustles, and continuous outdoor map boundaries. All 25 routes follow a shared regional survey with winding roads, side trails and distinct coastlines, ridges and habitats. Centers and Marts fit in 12×9 and 11×9 rooms. Each town has its own street plan, square and music. Local Pokémon return as you help the community. Shop awnings, Center roof emblems and warm windows mark services after dark.
 - Experience goes to conscious participants and eligible Exp. Share holders. Beaten road trainers offer optional practice rematches. The Bag sorts medicine, Poké Balls and key items into pockets. Field and battle menus support the D-pad, A and B. Staged battle introductions, A-acknowledged text, animated HP/experience, move effects, send-outs, fainting, and Poké Ball throws. Encounter transitions and battle exits preserve the overworld.
 - Self-hosted VT323 game text, ROM music/cries/sound effects, saved sound controls, and an explicit day/night camp option.
 
@@ -48,7 +48,7 @@ The region plan is in [docs/DESIGN.md](docs/DESIGN.md); implemented content and 
 
 Shift runs faster. Connect the FlipPad in a browser-supported Gamepad API mode, then press a button. The last actively used controller is selected so an idle receiver does not steal input. Standard mappings are implemented and tested with simulated pad events; physical FlipPad/iOS hardware has not been tested here.
 
-Open **Menu → Map** for a zoomable regional atlas. Select towns and numbered routes to see their connections, or open **Local map** for the next exit or objective. Party details show current moves, PP and evolution methods.
+Open **Menu → Map** for a zoomable regional atlas. Select towns and numbered routes to see their connections, or open **Local map** to locate a Center, Mart, route landmark or journal destination. Tap a map symbol or press left and right to browse. A blocked crossing shows which field action can open it. Party details show current moves, PP and evolution methods.
 
 At a Mart, left/right switches departments and up/down browses stock. Choose an item, set the quantity, then press A to buy or B to cancel. Five status cures are available from the start. The second badge unlocks Ether for an individual move, and the third unlocks Full Heal.
 

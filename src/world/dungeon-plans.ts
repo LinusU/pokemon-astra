@@ -90,13 +90,13 @@ export const dungeonPlans: Record<string, DungeonRoom[]> = {
       @..0...............>.
     `),
     room("Feeder gallery", ["copper_breaker", "pickup_part_c"], `
-      ^.CC..0..CC..
-      ..CC.....CC..
-      ...tttttt....
-      ..tt..C.ttt..
-      ..t...C...t>.
-      ..t.1.C...t..
-      @.ttttt...t..
+      ^.CC..0.oo...CC..
+      ..CC....oo...CC..
+      ..tttt..oo.......
+      ..t..tt.oo...tt..
+      ..t...tt**tt.>...
+      ..t.1.CCoo..CC...
+      @.ttt...oo..CC...
     `),
     room("Black-start turbine", ["copperworks_objective", "legendary_145"], `
       ...CCCCCCC....
@@ -197,8 +197,8 @@ export const dungeonPlans: Record<string, DungeonRoom[]> = {
       .@.0.......<...
     `),
     room("Cornice traverse", ["frost_plug", "pickup_snow_herb"], `
-      ######..........>.
-      ###....###########
+      ######....***...>.
+      ###.....##########
       ##..0:::.....#####
       #######.....######
       ###..........1..##
@@ -290,12 +290,13 @@ export const dungeonPlans: Record<string, DungeonRoom[]> = {
       ##............####
     `),
     room("Equatorial mount", ["starfall_scope"], `
-      ####.....####
-      ##....0....##
-      ...CC...CC...
-      .>.........@.
-      ##...CC....##
-      ####.....####
+      ####ooo....####
+      ##..ooo...0..##
+      ....ooo..CC..##
+      .>..***......@.
+      ....ooo..CC....
+      ##..ooo......##
+      ####ooo....####
     `),
     room("Split horizon", ["starfall_objective", "celestial_engine"], `
       ####....1....####

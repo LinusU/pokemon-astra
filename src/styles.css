@@ -586,27 +586,6 @@ canvas {
 .journal-entries article p {
   margin: 3px 0;
 }
-.map-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 12px;
-  align-items: center;
-  margin-bottom: 12px;
-}
-.field-map {
-  width: 100%;
-  max-height: 190px;
-  height: auto;
-  object-fit: contain;
-  background: #d2ceaa;
-  border: 2px solid #71866a;
-}
-.map-key {
-  color: #3f5848;
-}
-.map-key b {
-  color: #a96c24;
-}
 .page-count {
   align-self: center;
 }
@@ -626,16 +605,6 @@ canvas {
   right: 10px;
   font-size: 16px;
   color: #53735c;
-}
-@media (max-width: 440px) {
-  .map-layout {
-    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-    gap: 6px;
-  }
-  .map-layout .objective {
-    font-size: 19px;
-    padding: 5px;
-  }
 }
 .hall-party {
   display: grid;

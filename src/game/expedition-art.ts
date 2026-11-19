@@ -1,7 +1,11 @@
 import type { WorldMap, WorldObject } from "../world";
+import { dungeonPlans } from "../world/dungeon-plans";
 import { paintRelief } from "./trail-landmarks";
 
 type Canvas = CanvasRenderingContext2D;
+const cornice = dungeonPlans.frostvault[1].plan;
+const grooveY = cornice.findIndex(row => row.includes("0:::"));
+const ventX = cornice[grooveY].indexOf("0:::") + 3;
 const motifs = {
   wheel: [
     "   kkkkk   ",
@@ -323,6 +327,61 @@ function architecture(c: Canvas, m: WorldMap) {
       }
   }
 }
+function paintBridgeTile(c: Canvas, m: WorldMap, x: number, y: number) {
+  const px = x * 16, py = y * 16, tile = m.tiles[y][x];
+  const brass = m.id === "starfall_2";
+  c.fillStyle = brass ? "#252a40" : "#263e43";
+  c.fillRect(px, py, 16, 16);
+  if (m.tiles[y][x - 1] !== tile) {
+    c.fillStyle = brass ? "#726279" : "#496268";
+    c.fillRect(px, py, 2, 16);
+  }
+  if (tile === "=") {
+    c.fillStyle = brass ? "#b99567" : "#899f96";
+    c.fillRect(px, py + 2, 16, 13);
+    c.fillStyle = brass ? "#ddc18a" : "#c0cdb7";
+    c.fillRect(px, py + 1, 16, 2);
+    c.fillRect(px, py + 13, 16, 1);
+    for (let k = 1; k < 16; k += 4) {
+      c.fillStyle = brass ? "#8e7159" : "#526967";
+      c.fillRect(px + k, py + 5, 2, 6);
+    }
+  } else if (brass) {
+    c.fillStyle = "#444b6b";
+    c.fillRect(px, py + 11, 16, 2);
+    c.fillStyle = "#7a8191";
+    c.fillRect(px + 4 + y % 6, py + 6, 1, 2);
+  } else {
+    for (const [k, color] of [[3, "#8a6156"], [6, "#788078"], [11, "#866947"]] as const) {
+      c.fillStyle = color;
+      c.fillRect(px + k, py, 2, 16);
+    }
+    c.fillStyle = "#526665";
+    c.fillRect(px + 1, py + 7, 14, 2);
+  }
+}
+
+function paintCorniceTile(c: Canvas, px: number, py: number, tile: string) {
+  if (tile === "#") {
+    c.fillStyle = "#63869b";
+    c.fillRect(px, py, 16, 16);
+    for (const [dx, depth] of [[0, 9], [5, 14], [10, 11], [13, 6]]) {
+      c.fillStyle = "#b5d8e1";
+      c.fillRect(px + dx, py, 3, depth);
+      c.fillStyle = "#e0f3ec";
+      c.fillRect(px + dx, py, 1, depth - 2);
+    }
+  } else {
+    c.fillStyle = "#829da4";
+    c.fillRect(px, py, 16, 16);
+    c.fillStyle = "#cae3e2";
+    c.fillRect(px, py + 2, 16, 2);
+    c.fillRect(px + 4, py + 13, 6, 1);
+    c.fillStyle = "#b6cdc7";
+    c.fillRect(px + 9, py + 6, 4, 2);
+  }
+}
+
 /** Dress traversable tiles, keeping the silhouette of each obstruction legible. */
 export function paintExpeditionFloor(c: Canvas, m: WorldMap) {
   const site = m.id.split("_")[0];
@@ -331,7 +390,11 @@ export function paintExpeditionFloor(c: Canvas, m: WorldMap) {
       const tile = m.tiles[y][x],
         px = x * 16,
         py = y * 16;
-      if (site === "copperworks" && tile === "C") {
+      if ((m.id === "copperworks_2" || m.id === "starfall_2") && (tile === "o" || tile === "=")) {
+        paintBridgeTile(c, m, x, y);
+      } else if (m.id === "frostvault_2" && cornice[y][x] === "*") {
+        paintCorniceTile(c, px, py, tile);
+      } else if (site === "copperworks" && tile === "C") {
         c.fillStyle = "#384e50";
         c.fillRect(px, py + 1, 16, 13);
         for (let coil = 1; coil < 15; coil += 3) {
@@ -417,9 +480,7 @@ export function paintExpeditionFloor(c: Canvas, m: WorldMap) {
     c.fillRect(o.x * 16 - 12, o.y * 16 + 10, 5, 1);
   }
   if (m.id === "frostvault_2") {
-    const first = m.tiles.findIndex((row) => row.includes(":::"));
-    const x = (m.tiles[first].indexOf(":::") + 2) * 16,
-      y = first * 16;
+    const x = ventX * 16, y = grooveY * 16;
     c.fillStyle = "#40616b";
     c.fillRect(x + 1, y + 3, 14, 11);
     c.fillStyle = "#c0d4c7";
@@ -443,12 +504,10 @@ export function expeditionActivity(c: Canvas, m: WorldMap, time: number, flags: 
       }
   }
   if (m.id === "frostvault_2") {
-    const row = m.tiles.findIndex((r) => r.includes(":::")),
-      col = m.tiles[row].indexOf(":::") + 2;
     for (let i = 0; i < (flags.has("ice_thawed") ? 5 : 2); i++) {
       const rise = (Math.floor(time / 120) + i * 4) % 18;
       c.fillStyle = "#e7f6f4ae";
-      c.fillRect(col * 16 + 5 + (i % 3) * 2 + Math.round(Math.sin(rise / 3) * 2), row * 16 + 5 - rise, 3, 2);
+      c.fillRect(ventX * 16 + 5 + (i % 3) * 2 + Math.round(Math.sin(rise / 3) * 2), grooveY * 16 + 5 - rise, 3, 2);
     }
   }
 }
@@ -472,35 +531,77 @@ export function paintReturn(c: Canvas, m: WorldMap, to: string, x: number, y: nu
       box(11, 10, 3, 3, "#453f43");
       return true;
     case "bamboo":
-    case "aurora":
       box(0, 1, 16, 15, "#56898c");
       for (let k = 0; k < 4; k++) box(1, 3 + k * 3, 14, 2, "#d2b77c");
       box(4, 2, 2, 12, "#847551");
       box(11, 2, 2, 12, "#847551");
       return true;
+    case "aurora":
+      box(0, 2, 16, 12, "#3d5959");
+      for (let k = 0; k < 4; k++) box(2 + k * 3, 3, 2, 11, "#b99873");
+      box(0, 2, 16, 1, "#eee0b0");
+      box(0, 12, 16, 1, "#eee0b0");
+      for (const post of [1, 13]) box(post, 1, 2, 4, "#6f805e");
+      return true;
     case "meridian":
-    case "copperworks":
       box(0, 0, 16, 16, "#485b60");
       box(2, 1, 12, 13, "#798d89");
       box(3, 2, 4, 11, "#b5bfb0");
       box(9, 2, 4, 11, "#9caea7");
       box(6, 15, 5, 1, "#ebd198");
       return true;
+    case "copperworks":
+      box(1, 0, 14, 15, "#3f5358");
+      box(2, 1, 12, 2, "#bb865f");
+      box(3, 3, 10, 10, "#73847e");
+      for (let k = 4; k < 13; k += 3) box(k, 3, 1, 11, "#394f50");
+      box(1, 14, 14, 2, "#d4af74");
+      return true;
     case "lantern":
     case "victory":
+      box(2, 0, 12, 16, site === "lantern" ? "#67533f" : "#565958");
+      box(5, 3, 9, 3, site === "lantern" ? "#ae8156" : "#a8b2a2");
+      box(7, 2, 2, 14, "#ebce8a");
+      for (let k = 1; k < 15; k += 4) box(6, k, 3, 1, "#a78657");
+      if (site === "lantern") {
+        box(9, 5, 4, 2, "#d38069");
+        box(11, 7, 3, 2, "#e9ac7a");
+      } else {
+        box(4, 1, 2, 6, "#84948c");
+        box(3, 1, 4, 2, "#d2d8b8");
+      }
+      return true;
     case "undertow":
     case "echo":
       box(2, 0, 12, 16, "#514d46");
       box(3, 0, 2, 16, "#d2ac77");
       box(11, 0, 2, 16, "#d2ac77");
       for (let k = 1; k < 16; k += 4) box(4, k, 8, 1, "#eee0b0");
+      if (site === "echo") {
+        box(12, 0, 1, 10, "#c07866");
+        box(11, 9, 3, 3, "#e2b375");
+      }
+      return true;
+    case "starfall":
+      box(0, 0, 16, 16, "#373a4d");
+      box(1, 1, 14, 13, "#82705c");
+      for (const [dx, dy, w, h] of [[3, 3, 8, 2], [10, 5, 2, 5], [5, 10, 6, 2], [4, 6, 2, 4], [6, 6, 3, 2]])
+        box(dx, dy, w, h, "#e2bc84");
       return true;
     case "hourglass":
-    case "frostvault":
-      box(1, 1, 14, 14, site === "hourglass" ? "#a6805c" : "#638ba0");
+      box(1, 1, 14, 14, "#a6805c");
       for (let k = 0; k < 3; k++) {
-        box(3 + k * 2, 3 + k * 3, 10 - k * 4, 2, site === "hourglass" ? "#f1d294" : "#cbebed");
+        box(3 + k * 2, 3 + k * 3, 10 - k * 4, 2, "#f1d294");
       }
+      return true;
+    case "frostvault":
+      box(1, 1, 14, 14, "#95b9c8");
+      box(2, 12, 12, 2, "#415a70");
+      box(1, 10, 2, 3, "#415a70");
+      for (const dx of [4, 11]) box(dx, 7, 2, 5, "#76534a");
+      box(2, 4, 12, 5, "#ac7358");
+      box(1, 2, 2, 5, "#d7a167");
+      box(3, 4, 10, 1, "#efc58b");
       return true;
     default:
       return false;

@@ -6,14 +6,14 @@ import { freshSave, restoreExpeditions, meetsRequirement } from "../src/game/sav
 import { objectVisible, interactionTarget } from "../src/game/actors";
 import { instrument } from "../src/ui/fieldwork";
 
-function walk(map: WorldMap, x: number, y: number) {
+function walk(map: WorldMap, x: number, y: number, obstacle?: { x: number; y: number }) {
   const seen = new Set<string>();
   const queue = [[x, y]];
   for (let i = 0; i < queue.length; i++) {
     const [x, y] = queue[i],
       key = [x, y].join();
     const tile = map.tiles[y]?.[x];
-    if (!tile || "#ow~BCPTS".includes(tile) || seen.has(key)) continue;
+    if (!tile || "#ow~BCPTS".includes(tile) || seen.has(key) || (x === obstacle?.x && y === obstacle.y)) continue;
     seen.add(key);
     queue.push([x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]);
   }
@@ -22,7 +22,10 @@ function walk(map: WorldMap, x: number, y: number) {
 
 it.each([
   ["undertow_2", "low_tide", "undertow_3"],
+  ["copperworks_2", "relay_on", "copperworks_3"],
   ["hourglass_2", "stone_aligned", "hourglass_3"],
+  ["frostvault_2", "ice_thawed", "frostvault_3"],
+  ["starfall_2", "stars_aligned", "starfall_3"],
   ["victory_2", "east_pitch", "victory_3"],
   ["victory_2", "west_pitch", "victory_3"],
   ["bamboo_3", "farfetchd_lane", "bamboo_bird"],
@@ -39,6 +42,15 @@ it.each([
   }
 });
 
+it("keeps both meter-loft ladders and the feeder controls accessible before isolation", () => {
+  const map = expeditionState(WORLD.copperworks_2, []);
+  const entry = map.exits.find(e => e.to === "copperworks_1")!;
+  const nearBank = walk(map, entry.x, entry.y);
+  const ladder = map.exits.find(e => e.to === "copperworks_4")!;
+  for (const point of [ladder, ...map.objects])
+    expect(nearBank.has([point.x, point.y].join()), "Feeder gallery").toBe(true);
+});
+
 it("restores moving ice and prevents a rescued passenger appearing in two places", () => {
   const origin = WORLD.frostvault_2;
   const plug = (f: string[]) => expeditionState(origin, f).objects.find((o) => o.id === "frost_plug")!;
@@ -49,6 +61,19 @@ it("restores moving ice and prevents a rescued passenger appearing in two places
   const home = WORLD.bamboo_3.objects.find((o) => o.id === "bamboo_perch")!;
   for (const flags of [new Set<string>(), new Set(["farfetchd_home"])])
     expect([bird, home].filter((o) => objectVisible(o, flags))).toEqual(flags.size ? [home] : [bird]);
+});
+
+it("lets the player get behind each ice plug position before the cornice thaws", () => {
+  const base = WORLD.frostvault_2;
+  const entrance = base.exits.find(e => e.to === "frostvault_1")!;
+  const finish = base.exits.find(e => e.to === "frostvault_3")!;
+  for (const flags of [[], ["frost_push_1"], ["frost_push_1", "frost_push_2"]]) {
+    const map = expeditionState(base, flags);
+    const plug = map.objects.find(o => o.id === "frost_plug")!;
+    const floor = walk(map, entrance.x, entrance.y, plug);
+    expect(floor.has([plug.x - 1, plug.y].join())).toBe(true);
+    expect(floor.has([finish.x, finish.y].join())).toBe(false);
+  }
 });
 
 it("lets a surfing player call Lapras from the marked shallows", () => {

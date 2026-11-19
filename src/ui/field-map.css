@@ -1,0 +1,91 @@
+.panel.local-sheet {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.local-sheet .atlas-header h2 {
+  font-size: clamp(18px, 3.6vw, 31px);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.local-sheet .atlas-header > div { flex-shrink: 0; }
+.field-paper {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background-color: #dce1c1;
+  background-image: linear-gradient(#a4b39538 1px, transparent 1px), linear-gradient(90deg, #a4b39538 1px, transparent 1px);
+  background-size: 14px 14px;
+  display: grid;
+  place-items: center;
+  container-type: size;
+}
+.field-north {
+  position: absolute;
+  top: 4px;
+  left: 7px;
+  color: #465e52;
+  font: 16px/0.8 VT323, monospace;
+  text-align: center;
+  pointer-events: none;
+}
+.local-sheet canvas.field-map {
+  width: min(100cqw, calc(100cqh * var(--chart-aspect)));
+  height: auto;
+  cursor: crosshair;
+}
+.field-key {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1em;
+  padding: 2px 0;
+  background: #ebe7c9;
+  border-block: 1px solid #a4ac8e;
+  font-size: clamp(15px, 2vw, 21px);
+  line-height: 1;
+}
+.field-key span { display: inline-flex; align-items: center; gap: 4px; }
+.field-key i { display: inline-block; width: 9px; height: 9px; }
+.field-you { background: #d98362; border: 1px solid #344d4b; border-radius: 50% 50% 40% 40%; }
+.field-key .field-journal { font: normal 16px/9px VT323, monospace; width: auto; color: #936635; }
+.field-exit { border: 2px solid #425e52; }
+.field-readout {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px;
+  font: normal clamp(16px, 2.4vw, 23px)/1 VT323, monospace;
+  background: #f5eccd;
+}
+.field-readout > div { flex: 1; min-width: 0; }
+.field-readout :is(strong, small, span) { display: block; font-weight: normal; }
+.field-readout small { text-transform: uppercase; letter-spacing: .07em; color: #5a6d5a; font-size: .8em; }
+.field-readout strong { font-size: 1.24em; }
+.field-readout span { color: #526352; }
+@media (max-width: 650px), (max-height: 550px) {
+  .field-readout { gap: 5px; padding: 3px 5px; }
+  .field-key { padding: 1px; }
+}
+/* A pocket-sized screen has room for a map beside its notes. */
+@media (max-width: 650px), (max-height: 550px) {
+  .panel.atlas-screen.local-sheet {
+    display: grid;
+    grid-template: "head head" auto "chart detail" minmax(0, 1fr) "key detail" auto / 52% minmax(0, 1fr);
+  }
+  .local-sheet .atlas-header { grid-area: head; }
+  .local-sheet .atlas-header h2 { font-size: clamp(16px, 4vw, 23px); }
+  .local-sheet .field-paper { grid-area: chart; }
+  .local-sheet .field-key { grid-area: key; gap: .4em; font-size: 13px; flex-wrap: wrap; }
+  .local-sheet .field-readout {
+    grid-area: detail;
+    display: grid;
+    grid-template: "note note" minmax(0, 1fr) "prev next" auto / 1fr 1fr;
+    align-items: stretch;
+    border-left: 1px solid #96a28d;
+  }
+  .field-readout > div { grid-area: note; overflow-y: auto; scrollbar-width: thin; }
+  .field-readout button[data-map-step="-1"] { grid-area: prev; }
+  .field-readout button[data-map-step="1"] { grid-area: next; }
+}
