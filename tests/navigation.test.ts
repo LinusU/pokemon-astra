@@ -123,6 +123,20 @@ describe("field barriers", () => {
     ).toBe(false);
   });
 
+  it("lands safely past the Cinderfall rockslide when running out of Old Quarry", () => {
+    const quarry = WORLD.route23;
+    const exit = quarry.exits.find(e => e.to === "cinderfall")!;
+    const save = freshSave();
+    save.abilities.push("strength");
+    const open = (e: typeof exit) => exitOpen(e, r => meetsRequirement(save, r), save.flags);
+    const x = quarry.width + 0.9, y = exit.y + 1.5;
+    expect(connectedBlocked(quarry, x, y, false, open)).toBe(false);
+    const arrival = crossConnection(quarry, exit, x, y, open);
+    expect(arrival.y).toBe(exit.toY + 1.5);
+    expect(connectedBlocked(WORLD.cinderfall, arrival.x, arrival.y, false, open)).toBe(false);
+    expect(connectedBlocked(WORLD.cinderfall, 0.5, arrival.y, false, open)).toBe(true);
+  });
+
   it("allows both mat tiles to exit to the same outdoor approach", () => {
     for (const map of Object.values(WORLD)) {
       for (const exit of map.exits.filter((e) => e.entrance === "mat")) {

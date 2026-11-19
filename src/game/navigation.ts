@@ -171,10 +171,11 @@ export function crossConnection(
   // A traveller leaving a shortcut may reach the far side of a closed obstacle.
   // Place their feet on the road inside the destination so the exit stays one-way.
   if (peer?.barrier && permitted && !permitted(peer)) {
-    if (exit.direction === "west") arrival.x -= 1.25;
-    if (exit.direction === "east") arrival.x += 1.25;
-    if (exit.direction === "north") arrival.y -= 1.25;
-    if (exit.direction === "south") arrival.y += 1.25;
+    const destination = WORLD[exit.to];
+    if (exit.direction === "west") arrival.x = Math.min(arrival.x, destination.width - 1.25);
+    if (exit.direction === "east") arrival.x = Math.max(arrival.x, 1.25);
+    if (exit.direction === "north") arrival.y = Math.min(arrival.y, destination.height - 1.25);
+    if (exit.direction === "south") arrival.y = Math.max(arrival.y, 1.25);
   }
   return arrival;
 }
