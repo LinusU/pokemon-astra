@@ -21,11 +21,12 @@ import {
 } from "./game/navigation";
 import { regionPosition } from "./game/region";
 import { mountRegionChart } from "./ui/region-map";
-import { campaignObjective, directions, bearings, journalPaths, journalRequests } from "./game/journal";
+import { campaignObjective, directions, bearings } from "./game/journal";
 import { drawFieldMap } from "./ui/field-map";
 import { mountBag, itemInfo, type BagState } from "./ui/bag";
 import { battleStatus, mountParty } from "./ui/party";
 import { mountPokedex, type DexState } from "./ui/pokedex";
+import { mountJournal, type JournalState } from "./ui/journal";
 import { MenuInput } from "./ui/menu-input";
 import { MEDICINE, isMedicine, useMedicine } from "./game/medicine";
 import { GameAudio } from "./game/audio";
@@ -45,7 +46,6 @@ import { createShell, panel, escapeHtml, type PanelCursor } from "./ui/shell";
 import {
   WORLD,
   isWildEncounter,
-  BADGES,
   type Exit,
   type Requirement,
   type Reward,
@@ -202,6 +202,7 @@ function restoreSession(data: Save) {
   updateChart(save.flags, save.map);
   fieldBagState = {};
   fieldDexState = {};
+  fieldJournalState = {};
   fieldCursors = {};
   journeySelection = "party";
   actors.reset();
@@ -911,6 +912,7 @@ function depart(destination: string, move: () => void) {
 let journeySelection = "party";
 let fieldBagState: BagState = {};
 let fieldDexState: DexState = {};
+let fieldJournalState: JournalState = {};
 let fieldCursors: Record<string, PanelCursor> = {};
 function menu() {
   mode = "menu";
@@ -990,17 +992,14 @@ function view(v: string, pageIndex = 0) {
     });
     return;
   } else if (v === "journal") {
-    title = "Beacon journal";
-    const goal = directions(save, has);
-    const gates = journalPaths(save, has).map(path =>
-      `<article><strong>${escapeHtml(path.title)}</strong> · ${escapeHtml(path.place)}<p class="small">${escapeHtml(path.note)}</p></article>`,
-    ).join("");
-    const entries = journalRequests(save, has, id => engine.species(id).types).map(request =>
-      `<article><strong>${request.status === "Filed" ? "✓ " : ""}${escapeHtml(request.title)}</strong><p class="small">${escapeHtml(request.note)}</p><span class="small muted">${escapeHtml(request.place)} · ${escapeHtml(request.reward)}</span></article>`,
-    ).join("");
-    const shores = save.badges >= 3 && save.badges < 6
-      ? `<h3>Choose your next beacon</h3><div class="buttons">${["Sunspire · Sable", "Cinderfall · Flint", "Rimepeak · Neve"].map((label, i) => save.flags.includes("badge" + (i + 4)) ? "" : `<button data-survey="${i + 4}" aria-pressed="${save.survey === i + 4}">${label}</button>`).join("")}</div>` : "";
-    body = `${shores}<div class="objective"><strong>${escapeHtml(goal.title)}</strong><br>${escapeHtml(goal.hint)}</div><h3>Beacon badges</h3><p>${save.badges ? BADGES.filter((_, i) => badgeMask(save) & (1 << i)).join(" · ") : "Your first keeper is Fern in Bramble."}</p>${save.hallOfFame ? '<button id="hall">Hall of Fame</button>' : ""}${gates ? `<h3>Paths to revisit</h3><div class="journal-entries">${gates}</div>` : ""}<h3>Field requests</h3><div class="journal-entries">${entries || "<p>No requests yet. Talk to people along the way.</p>"}</div>`;
+    mountJournal(layer, {
+      save, state: fieldJournalState, permitted: has,
+      typesOf: id => engine.species(id).types,
+      partner: id => ({ name: engine.species(id).name, sprite: sprite(id) }),
+      onSurvey: id => { save.survey = id; persist(); },
+      onCancel: menu,
+    });
+    return;
   } else if (v === "map") {
     title = "Astra region";
     body = `<header class="atlas-header"><h2>Astra region</h2><div><button data-zoom aria-pressed="false">Zoom +</button><button id="local-map">Local map</button><button id="back">Back</button></div></header>
@@ -1044,16 +1043,6 @@ function view(v: string, pageIndex = 0) {
     v === "map" ? body : `${body}<div class="buttons"><button class="secondary" id="back">Back</button></div>`,
     v === "map" ? "atlas-screen" : "", fieldCursors[v] ??= {},
   );
-  p
-    .querySelector("#hall")
-    ?.addEventListener("click", () => hallOfFame(() => view("journal")));
-  p.querySelectorAll<HTMLButtonElement>("[data-survey]").forEach(button => {
-    button.onclick = () => {
-      save.survey = Number(button.dataset.survey);
-      persist();
-      view("journal");
-    };
-  });
   if (v === "map") {
     const objective = campaignObjective(save);
     const marker = objective && regionPosition(objective.map.id, objective.object.x + 0.5, objective.object.y + 0.5);
