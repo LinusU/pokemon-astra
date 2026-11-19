@@ -374,7 +374,7 @@ const leaders: [string, string, string, TeamMember[]][] = [
 leaders.forEach(([name, type, town], i) => {
   const id = `gym${i + 1}`;
   map(id, `${gyms[id].name} · ${type} Gym`, "gym", WORLD[town].palette);
-  connect(town, `gym${i + 1}`, `${name}'s Gym`, town);
+  connect(town, `gym${i + 1}`, `${name}'s Gym`, WORLD[town].name);
 });
 const serviceVisitors: Record<string, [[string, string], [string, string]]> = {
   dewdrop: [
@@ -531,7 +531,7 @@ for (const [id, name, town] of [
   ["league", "Astral League", "crown"],
 ] as const) {
   map(id, name, "interior", WORLD[town].palette);
-  connect(town, id, name, town);
+  connect(town, id, name, WORLD[town].name);
 }
 for (const [town, title, host, dialogue] of [
   [

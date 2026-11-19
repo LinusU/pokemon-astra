@@ -11,7 +11,7 @@ import { WORLD, isWildEncounter, type Exit, type WorldMap, type WorldObject } fr
 import { pokemonAppearance, type PokemonPortrait } from "../engine/appearance";
 import type { Engine } from "../engine";
 import { interactionTarget, objectVisible } from "./actors";
-import { barrierTarget, barrierTiles, connectionOffset } from "./navigation";
+import { barrierTarget, barrierTiles, connectionOffset, nearbyExitHint } from "./navigation";
 
 export interface RendererVisualState {
   nest?: PokemonPortrait[];
@@ -82,7 +82,6 @@ const BUILDING_ACCENTS: Record<string, string> = {
   mart: "#658bac",
   gym: "#82688e",
 };
-const DIRECTION_ARROW = { east: "→", west: "←", north: "↑", south: "↓" };
 const SWITCH_SYMBOLS: Record<string, string[]> = {
   autumn: ["00011", "00111", "01110", "11100", "10000"],
   coast: ["00100", "01110", "01110", "11111", "01110"],
@@ -1921,19 +1920,13 @@ export class Renderer {
       (o) => visualState.npcs?.[o.id] ?? { x: o.x + 0.5, y: o.y + 0.5 },
     );
     const barrier = barrierTarget(map, { x, y, facing }, isOpen);
-    const exit = map.exits
-      .filter(isOpen)
-      .map((e) => ({ e, distance: Math.hypot(e.x + 0.5 - x, e.y + 0.5 - y) }))
-      .filter(({ distance }) => distance < 2.25)
-      .sort((a, b) => a.distance - b.distance)[0]?.e;
-    if (barrier || target || visualState.canFish || exit) {
-      const confirm = visualState.confirmLabel ?? "A";
-      const hint = barrier
-        ? `${confirm} · Inspect ${barrier.label}`
-        : target
-          ? `${confirm} · ${target.name}`
-          : visualState.canFish ? `${confirm} · Fish`
-          : `${exit!.direction ? DIRECTION_ARROW[exit!.direction] : "→"} ${exit!.label}`;
+    const confirm = visualState.confirmLabel ?? "A";
+    const hint = barrier
+      ? `${confirm} · Inspect ${barrier.label}`
+      : target
+        ? `${confirm} · ${target.name}`
+        : visualState.canFish ? `${confirm} · Fish` : nearbyExitHint(map, x, y, isOpen);
+    if (hint) {
       const w = Math.ceil(Math.min(300, c.measureText(hint).width + 16));
       const left = Math.floor((WIDTH - w) / 2);
       c.fillStyle = "#263a36e8";

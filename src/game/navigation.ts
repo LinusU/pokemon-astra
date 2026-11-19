@@ -149,6 +149,38 @@ export function exitAt(map: WorldMap, x: number, y: number) {
   );
 }
 
+const roadArrow = { north: "↑", south: "↓", east: "→", west: "←" };
+const compassArrows = ["→", "↘", "↓", "↙", "←", "↖", "↑", "↗"];
+
+/** Guide the player toward the nearest part of an open doorway or road mouth. */
+export function nearbyExitHint(map: WorldMap, x: number, y: number, permitted: (exit: Exit) => boolean) {
+  let distance = 2.25;
+  let hint: string | undefined;
+  for (const exit of map.exits) {
+    if (!permitted(exit)) continue;
+    const verticalRoad = exit.direction === "north" || exit.direction === "south";
+    const horizontalRoad = exit.direction === "east" || exit.direction === "west";
+    const halfWidth = verticalRoad ? exit.span ?? 1 : 0;
+    const halfHeight = horizontalRoad ? exit.span ?? 1 : 0;
+    const cx = exit.x + 0.5, cy = exit.y + 0.5;
+    const right = cx + halfWidth + (exit.width ?? 1) - 1;
+    const dx = Math.max(cx - halfWidth, Math.min(x, right)) - x;
+    const dy = Math.max(cy - halfHeight, Math.min(y, cy + halfHeight)) - y;
+    const reach = Math.hypot(dx, dy);
+    if (reach >= distance) continue;
+    distance = reach;
+    if (exit.direction) {
+      hint = roadArrow[exit.direction] + " " + exit.label;
+    } else if (reach < 0.2) {
+      hint = exit.label;
+    } else {
+      const bearing = Math.round(Math.atan2(dy, dx) / (Math.PI / 4));
+      hint = compassArrows[(bearing + 8) % compassArrows.length] + " " + exit.label;
+    }
+  }
+  return hint;
+}
+
 /** Preserve the exact sub-tile position across connected map coordinates. */
 export function crossConnection(
   map: WorldMap,

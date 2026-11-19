@@ -6,11 +6,30 @@ import {
   crossConnection,
   exitAt,
   exitOpen,
+  nearbyExitHint,
 } from "../src/game/navigation";
 import { WORLD, type Requirement } from "../src/world";
 import { freshSave, meetsRequirement } from "../src/game/save";
 import { directions } from "../src/game/journal";
 import { localStops } from "../src/ui/field-map";
+
+it("points toward the full width of doors and names the town outside", () => {
+  for (const map of Object.values(WORLD)) {
+    for (const exit of map.exits.filter(e => e.entrance === "mat")) {
+      for (let i = 0; i < (exit.width ?? 1); i++) {
+        expect(nearbyExitHint(map, exit.x + i + 0.5, exit.y - 0.5, () => true), map.id)
+          .toBe("↓ " + WORLD[exit.to].name);
+      }
+    }
+  }
+  const map = WORLD.dewdrop;
+  const door = map.exits.find(e => e.to === "home")!;
+  expect(nearbyExitHint(map, door.x + 0.5, door.y + 1.5, () => true)).toBe("↑ Your home");
+  expect(nearbyExitHint(map, door.x + 1.5, door.y + 1.5, () => true)).toBe("↖ Your home");
+  expect(nearbyExitHint(map, door.x + 0.5, door.y + 1.5, () => false)).toBeUndefined();
+  const road = map.exits.find(e => e.to === "route01")!;
+  expect(nearbyExitHint(map, road.x - 1.6, road.y + 1.5, () => true)).toBe("→ " + road.label);
+});
 
 describe("continuous outdoor connections", () => {
   it("carries sub-tile positions through both directions with no inset teleport", () => {
