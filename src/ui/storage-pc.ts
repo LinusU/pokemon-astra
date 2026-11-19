@@ -1,17 +1,16 @@
 import { portraitNumber } from "../engine/appearance";
 import type { Engine, Pokemon } from "../engine";
-import type { Action } from "../game/input";
 import { canDeposit, depositPokemon, withdrawPokemon, type Collection } from "../game/collection";
 import type { Save } from "../game/save";
 import { JourneyConflict } from "../game/storage";
 import { typeNames } from "../game/type-names";
 import { battleStatus, mountParty } from "./party";
 import { mountPartnerSummary } from "./partner-summary";
+import { mountStorageIndex, type PcControl } from "./storage-index";
 import { escapeHtml as html } from "./shell";
 import "./storage-pc.css";
 
 type Tab = "storage" | "party";
-type Control = Extract<Action, "up" | "down" | "left" | "right" | "a">;
 export type PcState = { tab?: Tab; storage?: number; party?: number };
 type Options = {
   save: Save;
@@ -23,7 +22,7 @@ type Options = {
   onClose: () => void;
 };
 
-const controllers = new WeakMap<Element, { input: (action: Control) => void }>();
+const controllers = new WeakMap<Element, { input: (action: PcControl) => void }>();
 export function pcController(layer: HTMLElement) {
   const root = layer.querySelector(".storage-pc");
   return root ? controllers.get(root) : undefined;
@@ -47,6 +46,7 @@ export function mountStoragePc(host: HTMLElement, options: Options) {
   const name = (mon: Pokemon) => mon.nickname || engine.species(mon.species).name;
   const condition = (mon: Pokemon) => mon.hp === 0 ? "FNT" : battleStatus(mon.status)?.[0] ?? "";
   const action = () => tab === "party" ? "Deposit" : save.party.length < 6 ? "Withdraw" : "Swap";
+  const canFind = () => tab === "storage" && mode === "tabs" && save.storage.length > pageSize;
   const eligible = () => tab === "party" ? canDeposit(save.party, index())
     : save.party.length < 6 || save.party.some((_, i) => canDeposit(save.party, i, list()[index()]));
 
@@ -102,6 +102,7 @@ export function mountStoragePc(host: HTMLElement, options: Options) {
       <button data-tab="party" aria-pressed="${tab === "party"}">Party <b>${save.party.length}/6</b></button></nav>
       ${roster()}<p class="pc-tip" role="status">${html(receipt || tip)}</p>
       <footer class="pc-foot">${primary}
+      ${canFind() ? '<button data-find><kbd>↑</kbd> Find species</button>' : ""}
       <button id="back"><kbd>B</kbd> ${mode === "tabs" ? "Log off" : "Back"}</button></footer>`;
     const target = detail ? ".pc-action, [data-summary]" : mode === "tabs" ? '[aria-pressed="true"]' : '[aria-current="true"]';
     root.querySelector<HTMLButtonElement>(target)?.focus({ preventScroll: true });
@@ -112,6 +113,16 @@ export function mountStoragePc(host: HTMLElement, options: Options) {
     mode = "tabs";
     receipt = "";
     render();
+  }
+  function findSpecies() {
+    const restore = () => { host.replaceChildren(root); render(); };
+    const finder = mountStorageIndex(host, save.storage, index(), id => engine.species(id).name, i => {
+      state.storage = i;
+      mode = "roster";
+      receipt = "";
+      restore();
+    }, restore);
+    controllers.set(finder.root, finder);
   }
   async function transfer(change: (roster: Collection) => boolean, text: string) {
     if (writing) return;
@@ -183,7 +194,7 @@ export function mountStoragePc(host: HTMLElement, options: Options) {
     state[tab] = Math.max(0, Math.min(index() + delta, list().length - 1));
     render();
   }
-  function input(action: Control) {
+  function input(action: PcControl) {
     if (writing) return;
     if (action === "a") return confirm();
     if (mode === "detail") {
@@ -193,6 +204,7 @@ export function mountStoragePc(host: HTMLElement, options: Options) {
     const horizontal = action === "left" || action === "right";
     if (mode === "tabs") {
       if (horizontal) selectTab(tab === "party" ? "storage" : "party");
+      else if (action === "up" && canFind()) findSpecies();
       else if (action === "down" && list().length) move(0);
     } else if (action === "up" && index() === 0) back();
     else if (horizontal) {
@@ -204,6 +216,7 @@ export function mountStoragePc(host: HTMLElement, options: Options) {
     const b = event.target instanceof Element ? event.target.closest("button") : null;
     if (!b || b.disabled) return;
     if (b.id === "back") back();
+    else if (b.hasAttribute("data-find")) findSpecies();
     else if (b.hasAttribute("data-summary")) summary();
     else if (b.dataset.tab) selectTab(b.dataset.tab as Tab);
     else if (b.dataset.jump) move(Number(b.dataset.jump) * pageSize);

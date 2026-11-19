@@ -95,6 +95,7 @@ The synthesizer’s Gen 2 music wave channel is implemented in the vendored 0.2.
 - On a subsequent production build, unplugging and reconnecting a simulated pad with its stick held kept the PC cursor in place. Pressing right on the D-pad with the stick held up advanced one page. The release passed 146 Vitest checks.
 - On a fresh adventure, Growlithe caught a Rattata on Dewpath. The player deposited Rattata at the Mossford PC, crossed the orchard and withdrew it at the Bramble PC.
 - With a 251-species save at Crown Summit, the D-pad opened a stored Wartortle’s summary, displayed its held Potion, moves and growth, and returned to its transfer screen. Pressing left on the first page kept the selected row. A full-party swap, deposit and withdrawal persisted through an offline reload. The detail and growth screens fit at 320 pixels wide.
+- In a separate Crown Summit save, the species finder listed all 251 species across the 26 initials. The simulated D-pad found Celebi under C and showed three stored partners. Locate returned to the first Celebi in Pokédex order, a level-five partner nicknamed Spruce. A full-party swap preserved its native record. Cancelling the finder returned to the original cursor. The initials and names fit on a 320-pixel-wide screen.
 
 ## Wild encounters and Reedhaven nursery
 
@@ -132,6 +133,10 @@ The player used Flash on Copperwick’s north road, crossed Saffron Dunes and ca
 The Sunspire glassworker accepted the repaired offering bowl and awarded a Moon Stone and a Sun Stone. From Reedhaven the player inspected the nest and the burrow in Bamboo Sanctuary, filed the ranger report, and crossed Ashen Trail to the Cinderfall Center.
 
 After several losses on Ember Slope, the party defeated the freight dispatcher and freed Cyndaquil and Slugma in the mine. Flint won the first gym challenge. At the Cinderfall PC the player exchanged Rattata and Tentacool for the Magcargo and Golduck caught earlier. Magcargo led the team against Robin and the kiln trainers, then reached level 36 in the rematch that awarded the fifth badge and Rock Smash.
+
+At the Cinderfall forge the player heated, hammered and quenched the salvaged ore for a Metal Coat and Link Cable. The team crossed High Pass, pushed the Frostvault ice plug three times and reopened the pass. They picked silverleaf on the traverse and steeped it at the spa. After battling both rink trainers, the player skated five stretches to Neve. Arcanine led the team to the Rime Badge and Whirlpool.
+
+Whirlpool opened Bellflower Way. At Echo Bell Tower the player rang the three-rope watch peal, heard the recording and took a rubbing to the historian, who introduced Unown. Robin’s testimony opened the way to Lyra. After winning the seventh badge, the player collected the night clerk’s pass, found the signed diversion order and defeated Director Vale in his office.
 
 ## Save recovery
 
