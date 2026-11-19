@@ -1,6 +1,15 @@
-import type { Pokemon } from "../engine";
+import type { BattleResult, Pokemon } from "../engine";
 
 export type Collection = { party: Pokemon[]; storage: Pokemon[] };
+
+export const surveyStipend = 600;
+
+export function captureRegistration(registered: readonly number[], result: Pick<BattleResult, "caught" | "party" | "money">) {
+  const mon = result.caught === null ? undefined : result.party[result.caught];
+  const first = !!mon && !registered.includes(mon.species);
+  const grant = first ? Math.max(0, Math.min(surveyStipend, 999999 - result.money)) : 0;
+  return { mon, first, grant };
+}
 
 /** One register, in National Pokédex order. Equal species and levels keep arrival order. */
 export function sortCollection(storage: Pokemon[]) {

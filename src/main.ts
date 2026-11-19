@@ -5,7 +5,7 @@ import { mountPartnerSummary } from "./ui/partner-summary";
 import { bagKeyForItem, ballIds, giveFromBag, nativeItemId, stoneIds } from "./game/items";
 import { hatchEgg } from "./game/nursery";
 import { openNursery, showHatch } from "./ui/nursery";
-import { sortCollection, storePokemon } from "./game/collection";
+import { captureRegistration, sortCollection, storePokemon, surveyStipend } from "./game/collection";
 import { mountStoragePc, type PcState } from "./ui/storage-pc";
 import { specimenCard } from "./ui/specimen";
 import { typeNames } from "./game/type-names";
@@ -432,7 +432,7 @@ function fieldBasics(back: () => void) {
   const p = panel(
     layer,
     "Field basics",
-    `<div class="journal-entries"><article><strong>Find your way</strong><p>Walk with the D-pad, arrows or WASD. Face a person or object and press A or Z. Open Menu with Start or M to see your next stop on the map.</p></article><article><strong>Build your team</strong><p>Walk through tall grass to find Pokémon. Weaken a wild Pokémon, then choose Bag and throw a Poké Ball. Extra catches go to the PC in every Pokémon Center.</p></article><article><strong>Train and recover</strong><p>Pokémon that fight earn experience. A teammate holding Exp. Share can earn some too. Talk to a road trainer again for a practice battle. Walking together raises friendship. Open Party and read Growth to see how a partner evolves. A Center heals your whole party.</p></article><article><strong>Follow the beacons</strong><p>Your journal follows the survey and records blocked paths. Each badge unlocks a field ability you can use without teaching a move.</p></article></div><button class="secondary" id="back">Back</button>`,
+    `<div class="journal-entries"><article><strong>Find your way</strong><p>Walk with the D-pad, arrows or WASD. Face a person or object and press A or Z. Open Menu with Start or M to see your next stop on the map.</p></article><article><strong>Build your team</strong><p>Walk through tall grass to find Pokémon. Weaken a wild Pokémon, then choose Bag and throw a Poké Ball. Alder pays ₽${surveyStipend} when a wild catch adds a species to your Pokédex. Extra catches go to the PC in every Pokémon Center.</p></article><article><strong>Train and recover</strong><p>Pokémon that fight earn experience. A teammate holding Exp. Share can earn some too. Talk to a road trainer again for a practice battle. Walking together raises friendship. Open Party and read Growth to see how a partner evolves. A Center heals your whole party.</p></article><article><strong>Follow the beacons</strong><p>Your journal follows the survey and records blocked paths. Each badge unlocks a field ability you can use without teaching a move.</p></article></div><button class="secondary" id="back">Back</button>`,
   );
   p.querySelector("#back")!.addEventListener("click", back);
 }
@@ -471,7 +471,7 @@ function starter(selected = 58) {
           flag("partner");
           persist();
           message(`${data.name} joined your party! Alder packed 10 Poké Balls and 5 Potions in your Bag. Take the east road to Mossford.`);
-        }, () => starter(id));
+        }, { back: () => starter(id) });
     };
   }
 }
@@ -1372,13 +1372,12 @@ function showBattle(fishing = false) {
   const s = battle.snapshot();
   if (s.outcome && s.result) {
     const result = s.result;
-    const caughtMon = result.caught !== null ? result.party[result.caught] : undefined;
+    const { mon: caughtMon, first: firstCatch, grant } = captureRegistration(save.caught, result);
     const caughtSpecies = caughtMon?.species;
-    const firstCatch = caughtMon && !save.caught.includes(caughtMon.species);
     const catchDestination = (result.caught ?? -1) >= 6 ? "storage" : "party";
     save.party = result.party.slice(0, 6);
     for (const mon of result.party.slice(6)) storePokemon(save.storage, mon);
-    save.money = result.money;
+    save.money = result.money + grant;
     for (const [key, id] of Object.entries(ballIds))
       save.items[key] =
         result.bag.balls.find((v: [number, number]) => v[0] === id)?.[1] || 0;
@@ -1452,11 +1451,11 @@ function showBattle(fishing = false) {
       return;
     }
     const afterCatch = receipt ? () => showReceipt(receipt, wrapUp, battleMusic) : wrapUp;
-    if (firstCatch) {
+    if (firstCatch && caughtMon) {
       mode = "registration";
       specimenCard(layer, "New Pokédex entry", specimen(caughtMon),
-        `${catchDestination === "storage" ? "Sent to the Center PC" : "Joined your party"} · ${save.caught.length} / 251 caught`,
-        "Continue", afterCatch);
+        `${catchDestination === "storage" ? "Sent to PC" : "Joined party"} · ${save.caught.length}/251 caught`,
+        "Continue", afterCatch, { grant });
       return;
     }
     if (blackout) sound.heal();

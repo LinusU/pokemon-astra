@@ -1,4 +1,4 @@
-import { depositPokemon, sortCollection, storePokemon, withdrawPokemon } from "../src/game/collection";
+import { captureRegistration, depositPokemon, sortCollection, storePokemon, withdrawPokemon } from "../src/game/collection";
 import { describe, expect, it } from "vitest";
 import {
   freshSave,
@@ -177,6 +177,17 @@ it("recovers an old save on a newly planted Cut tree without awarding the badge 
 });
 
 describe("Center PC", () => {
+  it("funds a new wild registration in either destination and respects the wallet limit", () => {
+    const fullParty = Array(6).fill({ ...pokemon, species: 19 });
+    for (const party of [[pokemon], [...fullParty, pokemon]]) {
+      const result = { money: 3500, party, caught: party.length - 1 };
+      expect(captureRegistration([19], result)).toEqual({ mon: pokemon, first: true, grant: 600 });
+      expect(captureRegistration([58], result).grant).toBe(0);
+      expect(captureRegistration([], { ...result, money: 999950 }).grant).toBe(49);
+      expect(captureRegistration([], { ...result, money: 999999 })).toMatchObject({ first: true, grant: 0 });
+      expect(captureRegistration([], { ...result, caught: null })).toEqual({ mon: undefined, first: false, grant: 0 });
+    }
+  });
   it("orders old saves, new captures and deposits by species, retaining each individual", () => {
     const save = populated();
     const young = { ...pokemon, level: 4, nickname: "Juniper" };

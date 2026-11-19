@@ -8,6 +8,7 @@ import { parseArgs } from "node:util";
 import { Engine, type BattleMon, type BattleOptions, type BattleSnapshot } from "../src/engine";
 import { levelEvolution, queueEvolutionMoves, resolveEvolutionMove } from "../src/game/training";
 import { MEDICINE, useMedicine } from "../src/game/medicine";
+import { captureRegistration } from "../src/game/collection";
 import { freshSave, isValidSave, normalizeSavePosition, type Save } from "../src/game/save";
 import { awardBadge, badgeMask, fieldHabitats, fieldTeam } from "../src/game/badges";
 import { WORLD, isWildEncounter, type WorldObject } from "../src/world";
@@ -351,7 +352,7 @@ function runCampaign(starter: number) {
         const result = snapshot.result;
         save.party = result.party.slice(0, 6);
         save.storage.push(...result.party.slice(6));
-        save.money = result.money;
+        save.money = result.money + captureRegistration(save.caught, result).grant;
         save.caught = result.world.caught;
         save.seen = result.world.seen;
         for (const [key, item] of Object.entries(MEDICINE))

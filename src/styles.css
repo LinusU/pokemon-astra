@@ -945,6 +945,7 @@ canvas {
 .specimen-notes small { display: block; color: #506b52; font-size: 0.78em; }
 .panel .specimen-notes h3 { margin: 0; }
 .panel .specimen-notes p { margin: 6px 0 0; }
+.specimen-grant { align-self: center; margin-left: auto; color: #31583d; font-size: .85em; }
 .panel .specimen-detail {
   padding-top: 7px;
   border-top: 1px solid #b6c0a0;
@@ -970,11 +971,14 @@ canvas {
   .panel:is(.opening-panel, .partner-lab) p, .opening-panel .objective { margin: 4px 0; font-size: 17px; }
   .panel.opening-panel .small { font-size: 16px !important; }
   .panel:is(.opening-panel, .specimen-card) button { padding: 4px 5px; font-size: 16px; line-height: 1; }
-  .panel .specimen-notes h3 { font-size: 21px; }
-  .specimen-notes small { font-size: 14px; }
+  .panel .specimen-notes h3 { display: inline; margin-right: .3em; font-size: 21px; }
+  .specimen-notes small { display: inline-block; font-size: 14px; }
   .panel .specimen-notes p, .panel .specimen-detail { font-size: 16px; line-height: 1; }
   .panel.specimen-card { padding-block: 3px; }
-  .panel .specimen-detail { margin-block: 3px; }
+  .specimen-plate { padding-block: 1px; }
+  .specimen-card .eyebrow { display: none; }
+  .specimen-grant { font-size: 16px; }
+  .panel .specimen-detail { margin-block: 2px; padding-top: 0; }
   .panel .specimen-notes p { margin-top: 3px; }
   .panel.partner-lab .partner-choices button { font-size: 16px; }
 }

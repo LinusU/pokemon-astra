@@ -11,7 +11,7 @@ type Specimen = {
 };
 
 export function specimenCard(layer: HTMLElement, heading: string, mon: Specimen, detail: string,
-  action: string, confirm: () => void, back?: () => void) {
+  action: string, confirm: () => void, { back, grant }: { back?: () => void; grant?: number } = {}) {
   const types = [...new Set(mon.types)].map(type => typeNames[type]).join(" / ");
   const card = panel(layer, heading, `
     <div class="specimen-body">
@@ -27,7 +27,8 @@ export function specimenCard(layer: HTMLElement, heading: string, mon: Specimen,
       </div>
     </div>
     <p class="specimen-detail">${escapeHtml(detail)}</p>
-    <div class="buttons"><button id="specimen-confirm">${escapeHtml(action)}</button>${back ? '<button class="secondary" id="back">Meet the others</button>' : ""}</div>`, "specimen-card");
+    <div class="buttons"><button id="specimen-confirm">${escapeHtml(action)}</button>${back ? '<button class="secondary" id="back">Meet the others</button>' : ""}
+      ${grant === undefined ? "" : `<small class="specimen-grant">${grant ? "Survey grant +₽" + grant : "Wallet full"}</small>`}</div>`, "specimen-card");
   const button = card.querySelector<HTMLButtonElement>("#specimen-confirm")!;
   button.onclick = confirm;
   button.focus({ preventScroll: true });

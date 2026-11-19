@@ -96,6 +96,8 @@ The synthesizer’s Gen 2 music wave channel is implemented in the vendored 0.2.
 - On a fresh adventure, Growlithe caught a Rattata on Dewpath. The player deposited Rattata at the Mossford PC, crossed the orchard and withdrew it at the Bramble PC.
 - With a 251-species save at Crown Summit, the D-pad opened a stored Wartortle’s summary, displayed its held Potion, moves and growth, and returned to its transfer screen. Pressing left on the first page kept the selected row. A full-party swap, deposit and withdrawal persisted through an offline reload. The detail and growth screens fit at 320 pixels wide.
 - In a separate Crown Summit save, the species finder listed all 251 species across the 26 initials. The simulated D-pad found Celebi under C and showed three stored partners. Locate returned to the first Celebi in Pokédex order, a level-five partner nicknamed Spruce. A full-party swap preserved its native record. Cancelling the finder returned to the original cursor. The initials and names fit on a 320-pixel-wide screen.
+- Two seeded native surveys used copies of the same eight-badge Crown Summit save. Each started with 13 living species, captured 211 additional partners and finished with 224 distinct species in the party and PC. Both used False Swipe, sleep moves, regular shops and repeat road battles to pay for supplies. With the ₽600 grant for first wild registrations, the survey needed 43 funding rematches. The previous economy took 254. Travel and Center visits were simulated.
+- In Chrome, a full-party fishing catch sent Magikarp to the PC and credited ₽600. A wallet with room for ₽29 received exactly ₽29, and a full wallet stayed at ₽999,999. Each balance survived a reload and a repeat catch. All 251 native species descriptions, names, categories and type combinations fit the first-catch card at 320 pixels wide. All 164 Vitest checks, the native cartridge checks and 18 seeded League campaigns passed.
 
 ## Wild encounters and Reedhaven nursery
 
@@ -137,6 +139,10 @@ After several losses on Ember Slope, the party defeated the freight dispatcher a
 At the Cinderfall forge the player heated, hammered and quenched the salvaged ore for a Metal Coat and Link Cable. The team crossed High Pass, pushed the Frostvault ice plug three times and reopened the pass. They picked silverleaf on the traverse and steeped it at the spa. After battling both rink trainers, the player skated five stretches to Neve. Arcanine led the team to the Rime Badge and Whirlpool.
 
 Whirlpool opened Bellflower Way. At Echo Bell Tower the player rang the three-rope watch peal, heard the recording and took a rubbing to the historian, who introduced Unown. Robin’s testimony opened the way to Lyra. After winning the seventh badge, the player collected the night clerk’s pass, found the signed diversion order and defeated Director Vale in his office.
+
+At Bellweather’s PC, the player withdrew the Dewgong caught on High Pass. Waterfall opened Route 18. The player aligned the Starfall telescope, defeated Aster’s three gym trainers and won the eighth badge from Orion. After shutting down the Celestial Engine, the team took the west pitch of Victory Ascent, defeated Rope Captain Tor and signed the summit register.
+
+At Crown Summit, the player used the PC to exchange Diglett for Noctowl and stocked up for the League. The team beat Rowan, Petra and Nyx before falling to Gale. The party woke up healed at Crown Summit and the League challenge reset.
 
 ## Save recovery
 

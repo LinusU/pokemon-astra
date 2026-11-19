@@ -54,11 +54,11 @@ At a Mart, left/right switches departments and up/down browses stock. Choose an 
 
 Open **Party**, choose a Pokémon and use left/right to read **Stats**, **Moves** and **Growth**. Up/down selects a move or cycles through evolution paths. Growth shows the experience needed for the next level and the current friendship value. Traveling partners gain a friendship point every 128 tiles. Press A to change the lead or give and take held items. When evolution offers a move and all four slots are full, you can review the moves before replacing one. An unfinished choice resumes after reloading.
 
-Use the PC on the right in any Pokémon Center to manage your team. Every Center shares one collection, sorted by Pokédex number and then by level. Select **Stored** or **Party** and press A to browse. Up/down selects a Pokémon, left/right turns the page, and A opens its details. From there, press right to inspect its stats, moves, growth and held item, or A to deposit, withdraw or swap. B returns to the previous screen.
+Use the PC on the right in any Pokémon Center. All twelve terminals share one collection, sorted by Pokédex number with the lowest-level partner first within each species. Choose **Stored** or **Party** and press A to browse. Up/down selects a Pokémon and left/right turns the page. Once the collection fills more than one page, press Up on **Stored** to find a species by its initial.
+
+Press A on a partner to open its details. From there, press right to inspect its stats, moves, growth and held item, or A to deposit, withdraw or swap. B goes back one screen. A catch joins the PC automatically when all six party slots are occupied. When a wild catch adds a new species to your Pokédex, Professor Alder pays a ₽600 survey grant.
 
 Unown’s letter and each Pokémon’s shiny coloring follow the individual from battle to the Center PC. The PC and party summary identify the letter and mark shiny partners. New Hall of Fame records preserve those appearances.
-
-Every Pokémon Center shares one PC register. It sorts partners by Pokédex number, with lower levels first within a species. Once the register spans more than one page, press Up on the Stored tab to find a species by its initial. Choose a name to jump to its first partner, then browse its neighbors or swap it into your party.
 
 Open **Menu → Journal** and press left or right to turn between Survey, Requests, Paths and Badges. In Requests or Paths, press up or down to select an entry, A to read it and B to return to the index. Inspect a blocked route in the field with A to record it. After the third badge, choose your next beacon on the Survey page to follow Sunspire, Cinderfall or Rimepeak in your preferred order.
 
