@@ -13,6 +13,8 @@ export type Save = {
   facing: string;
   party: Pokemon[];
   storage: Pokemon[];
+  pendingEvolutions?: number[];
+  pendingMoves?: { slot: number; moves: number[] };
   nursery?: { parents: [Pokemon, Pokemon]; readyAt: number };
   egg?: { mon: Pokemon; hatchAt: number };
   flags: string[];
@@ -138,6 +140,11 @@ export function isValidSave(x: any): x is Save {
     x.party.every(pokemon) &&
     Array.isArray(x.storage) &&
     x.storage.every(pokemon) &&
+    (x.pendingEvolutions === undefined || (Array.isArray(x.pendingEvolutions) &&
+      x.pendingEvolutions.length <= 6 && new Set(x.pendingEvolutions).size === x.pendingEvolutions.length &&
+      x.pendingEvolutions.every((slot: unknown) => integer(slot, 0, x.party.length - 1)))) &&
+    (x.pendingMoves === undefined || (integer(x.pendingMoves?.slot, 0, x.party.length - 1) &&
+      Array.isArray(x.pendingMoves.moves) && x.pendingMoves.moves.length > 0 && dex(x.pendingMoves.moves))) &&
     (x.nursery === undefined || (Array.isArray(x.nursery?.parents) &&
       x.nursery.parents.length === 2 && x.nursery.parents.every(pokemon) &&
       Number.isFinite(x.nursery.readyAt) && x.nursery.readyAt >= 0)) &&

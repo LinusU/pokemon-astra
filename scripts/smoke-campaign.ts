@@ -6,6 +6,7 @@ import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { Engine, type BattleMon, type BattleOptions, type BattleSnapshot } from "../src/engine";
+import { levelEvolution, queueEvolutionMoves, resolveEvolutionMove } from "../src/game/training";
 import { MEDICINE, useMedicine } from "../src/game/medicine";
 import { freshSave, isValidSave, normalizeSavePosition, type Save } from "../src/game/save";
 import { awardBadge, badgeMask, fieldHabitats, fieldTeam } from "../src/game/badges";
@@ -81,6 +82,12 @@ function move(id: number) {
   return moves.get(id)!;
 }
 
+function moveRating(species: number, id: number) {
+  const info = move(id);
+  return info.power * (types(species).includes(info.type) ? 1.35 : 1)
+    + (id === 95 || id === 47 ? 44 : 0); // Hypnosis and Sing
+}
+
 type Combatant = BattleMon & { stats: number[] };
 type LegalAction = "Fight" | "Run" | {
   Move?: { slot: number };
@@ -148,17 +155,12 @@ function chooseAction(
       .find((event) => event.Message?.AskForgetMove)?.Message?.AskForgetMove;
     assert(request, "Move learning decision is missing a requested move");
     const mon = party[snap.learning_slot ?? player.active_slot];
-    const rating = (id: number) => {
-      const info = move(id);
-      return info.power * (types(mon.species).includes(info.type) ? 1.35 : 1)
-        + (id === 95 || id === 47 ? 44 : 0); // Hypnosis and Sing
-    };
     return indexed
       .flatMap(({ action, index }) => typeof action === "object" && action.LearnMove ? [{
         index,
         rating: action.LearnMove.slot == null
-          ? rating(request.mv) - 0.01
-          : rating(mon.moves[action.LearnMove.slot]),
+          ? moveRating(mon.species, request.mv) - 0.01
+          : moveRating(mon.species, mon.moves[action.LearnMove.slot]),
       }] : [])
       .sort((a, b) => a.rating - b.rating)[0].index;
   }
@@ -310,6 +312,17 @@ function runCampaign(starter: number) {
   function evolve(slot: number, species: number) {
     save.party[slot] = engine.evolvePokemon(save.party[slot], species);
     record(species);
+    queueEvolutionMoves(save, slot, engine);
+    while (save.pendingMoves) {
+      const mon = save.party[slot], pending = save.pendingMoves.moves[0];
+      let replace = mon.moves.indexOf(0);
+      if (replace < 0) {
+        const scores = mon.moves.map(id => moveRating(species, id));
+        const least = Math.min(...scores);
+        if (moveRating(species, pending) > least) replace = scores.indexOf(least);
+      }
+      resolveEvolutionMove(save, replace < 0 ? undefined : replace, engine);
+    }
   }
 
   function buy(key: string, quantity: number, price: number) {
@@ -351,10 +364,8 @@ function runCampaign(starter: number) {
         }
         for (const slot of result.may_evolve) {
           const mon = save.party[slot];
-          const evolution = engine.evolutionData(mon.species).evolutions.find(
-            (entry) => entry.method === 1 && mon.level >= entry.parameter,
-          );
-          if (evolution) evolve(slot, evolution.species);
+          const target = levelEvolution(mon, !!save.settings.night, engine);
+          if (target) evolve(slot, target);
         }
         return result.outcome;
       }

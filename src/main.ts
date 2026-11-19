@@ -1,3 +1,5 @@
+import { chooseEvolutionMove } from "./ui/learn-move";
+import { levelEvolution, queueEvolutionMoves, resolveEvolutionMove, finishEvolutionChoice, recordTravel } from "./game/training";
 import { mountPartnerSummary } from "./ui/partner-summary";
 import { bagKeyForItem, ballIds, giveFromBag, nativeItemId, stoneIds } from "./game/items";
 import { hatchEgg } from "./game/nursery";
@@ -417,7 +419,7 @@ function fieldBasics(back: () => void) {
   const p = panel(
     layer,
     "Field basics",
-    `<div class="journal-entries"><article><strong>Find your way</strong><p>Walk with the D-pad, arrows or WASD. Face a person or object and press A or Z. Open Menu with Start or M to see your next stop on the map.</p></article><article><strong>Build your team</strong><p>Walk through tall grass to find Pokémon. Weaken a wild Pokémon, then choose Bag and throw a Poké Ball. Extra catches go to the PC in every Pokémon Center.</p></article><article><strong>Train and recover</strong><p>Pokémon that fight earn experience. A teammate holding Exp. Share can earn some too. Talk to a road trainer again for a practice battle. A Center heals your whole party.</p></article><article><strong>Follow the beacons</strong><p>Your journal follows the survey and records blocked paths. Each badge unlocks a field ability you can use without teaching a move.</p></article></div><button class="secondary" id="back">Back</button>`,
+    `<div class="journal-entries"><article><strong>Find your way</strong><p>Walk with the D-pad, arrows or WASD. Face a person or object and press A or Z. Open Menu with Start or M to see your next stop on the map.</p></article><article><strong>Build your team</strong><p>Walk through tall grass to find Pokémon. Weaken a wild Pokémon, then choose Bag and throw a Poké Ball. Extra catches go to the PC in every Pokémon Center.</p></article><article><strong>Train and recover</strong><p>Pokémon that fight earn experience. A teammate holding Exp. Share can earn some too. Talk to a road trainer again for a practice battle. Walking together raises friendship. Open Party and read Growth to see how a partner evolves. A Center heals your whole party.</p></article><article><strong>Follow the beacons</strong><p>Your journal follows the survey and records blocked paths. Each badge unlocks a field ability you can use without teaching a move.</p></article></div><button class="secondary" id="back">Back</button>`,
   );
   p.querySelector("#back")!.addEventListener("click", back);
 }
@@ -1304,7 +1306,7 @@ function useItem(item: string) {
             .evolutions.find(
               (e) =>
                 (e.method === 2 && e.parameter === stoneIds[item]) ||
-                (e.method === 3 &&
+                (e.method === 3 && mon.item !== 112 &&
                   item === "link_cable" &&
                   (e.parameter === 255 || e.parameter === mon.item)),
             )
@@ -1479,12 +1481,14 @@ function showBattle(fishing = false) {
         species,
         level,
       }));
+    const candidates = result.may_evolve.filter(slot => save.party[slot] && levelEvolution(save.party[slot], !!save.settings.night, engine));
+    if (candidates.length) save.pendingEvolutions = [...new Set(candidates)];
     persist();
     const victory = won ? battleObject?.victoryDialogue : undefined;
     const wrapUp = () => {
       if (won && battleObject?.id === "league_4")
-        hallOfFame(() => postBattle(result.may_evolve));
-      else postBattle(result.may_evolve);
+        hallOfFame(() => finishTraining(close));
+      else finishTraining(close);
     };
     if (won) {
       if (earnedBadge) sound.overworld("badge");
@@ -1599,6 +1603,7 @@ function evolvePartyMember(index: number, species: number, next: () => void, con
     reveal: () => {
       save.party[index] = evolved;
       consume?.();
+      queueEvolutionMoves(save, index, engine);
       if (!save.seen.includes(species)) save.seen.push(species);
       if (!save.caught.includes(species)) save.caught.push(species);
       persist();
@@ -1610,52 +1615,51 @@ function evolvePartyMember(index: number, species: number, next: () => void, con
     next: () => {
       layer.replaceChildren();
       mode = "world";
-      next();
+      finishTraining(next);
       sound.refreshMusic();
     },
   });
 }
-function postBattle(evolvable: number[]) {
-  const tasks: (() => void)[] = [];
-  save.party.forEach((mon, index) => {
-    const data = engine.evolutionData(mon.species);
-    if (evolvable.includes(index)) {
-      const evolution = data.evolutions.find(
-        (e) =>
-          (e.method === 1 && mon.level >= e.parameter) ||
-          (e.method === 4 &&
-            mon.happiness >= 220 &&
-            (e.parameter === 1 ||
-              (e.parameter === 2 && !save.settings.night) ||
-              (e.parameter === 3 && !!save.settings.night))) ||
-          (e.method === 5 &&
-            mon.level >= e.parameter &&
-            ((e.condition === 1 && mon.stats[1] > mon.stats[2]) ||
-              (e.condition === 2 && mon.stats[1] < mon.stats[2]) ||
-              (e.condition === 3 && mon.stats[1] === mon.stats[2]))),
-      );
-      if (evolution)
-        tasks.push(() => {
-          const current = save.party[index];
-          const p = panel(
-            layer,
-            "Evolution",
-            `<p>${escapeHtml(engine.species(current.species).name)} is ready to evolve into ${escapeHtml(engine.species(evolution.species).name)}!</p><div class="buttons"><button id="evolve">Evolve</button><button class="secondary" id="later">Not now</button></div>`,
-          );
-          mode = "menu";
-          p.querySelector("#evolve")!.addEventListener("click", () =>
-            evolvePartyMember(index, evolution.species, next),
-          );
-          p.querySelector("#later")!.addEventListener("click", next);
-        });
+function finishTraining(done: () => void): void {
+  const lesson = save.pendingMoves;
+  if (lesson) {
+    const mon = save.party[lesson.slot], move = lesson.moves[0];
+    const eligible = engine.evolutionData(mon.species).learnset.some(entry => entry.level === mon.level && entry.move === move);
+    if (!eligible || mon.moves.includes(move)) {
+      resolveEvolutionMove(save, undefined, engine);
+      persist();
+      return finishTraining(done);
     }
-  });
-  function next() {
-    const task = tasks.shift();
-    if (task) task();
-    else close();
+    const learn = (slot?: number) => {
+      resolveEvolutionMove(save, slot, engine);
+      persist();
+      if (slot === undefined) return finishTraining(done);
+      sound.overworld("item");
+      message(`${mon.nickname || engine.species(mon.species).name} learned ${engine.move(move).name}!`, () => finishTraining(done));
+    };
+    const empty = mon.moves.indexOf(0);
+    if (empty !== -1) return learn(empty);
+    mode = "training";
+    chooseEvolutionMove(layer, mon, move, engine, learn);
+    return;
   }
-  next();
+  const index = save.pendingEvolutions?.[0];
+  if (index === undefined) return done();
+  const mon = save.party[index];
+  const species = levelEvolution(mon, !!save.settings.night, engine);
+  const skip = () => {
+    finishEvolutionChoice(save);
+    persist();
+    finishTraining(done);
+  };
+  if (!species) return skip();
+  mode = "training";
+  const p = panel(layer, "Evolution",
+    `<p>${escapeHtml(mon.nickname || engine.species(mon.species).name)} is ready to evolve into ${escapeHtml(engine.species(species).name)}!</p>
+    <div class="buttons"><button id="evolve">Evolve</button><button class="secondary" id="later">Not now</button></div>`);
+  p.querySelector<HTMLButtonElement>("#evolve")!.onclick = () =>
+    evolvePartyMember(index, species, done, () => finishEvolutionChoice(save));
+  p.querySelector<HTMLButtonElement>("#later")!.onclick = skip;
 }
 function blocked(x: number, y: number) {
   const map = currentField();
@@ -1687,10 +1691,16 @@ function update(dt: number) {
     bumpLatched = false;
     return;
   }
+  if (save.pendingMoves || save.pendingEvolutions?.length) {
+    finishTraining(close);
+    return;
+  }
   const currentMap = currentField();
   actors.update(currentMap, dt, save);
   if (glide) {
+    const oldX = save.x, oldY = save.y;
     if (advanceGlide(save, glide, dt)) glide = undefined;
+    countTravel(Math.hypot(save.x - oldX, save.y - oldY));
     return;
   }
   if (actors.approaching) {
@@ -1787,6 +1797,7 @@ function update(dt: number) {
     return;
   }
   bumpLatched = false;
+  countTravel(moved);
   const map = currentField();
   const exit = exitAt(map, save.x, save.y);
   if (!exit) exitLock = false;
@@ -1849,7 +1860,9 @@ function update(dt: number) {
       );
     }
   }
-  save.steps += moved;
+}
+function countTravel(distance: number) {
+  recordTravel(save, distance);
   if (save.steps - lastAutosave >= 10) {
     lastAutosave = save.steps;
     persist();
@@ -1863,7 +1876,7 @@ function frame(now: number) {
   if (mode === "dialogue" && (input.hit("a") || input.hit("b"))) advance();
   else if (mode === "hatching" && input.hit("b")) layer.querySelector<HTMLButtonElement>("#hatch-done:enabled")?.click();
   else if (mode === "registration" && input.hit("b")) layer.querySelector<HTMLButtonElement>("#specimen-confirm")?.click();
-  else if ((mode === "menu" || mode === "guide" || mode === "starter") && input.hit("b")) {
+  else if ((mode === "menu" || mode === "guide" || mode === "starter" || mode === "training") && input.hit("b")) {
     const back = layer.querySelector<HTMLButtonElement>(
       "[data-bag-cancel], #back, #later",
     );
