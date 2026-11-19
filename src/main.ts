@@ -47,7 +47,9 @@ import {
   freshSave,
   isValidSave,
   normalizeSavePosition,
+  recordVisit,
   restoreExpeditions,
+  restoreVisits,
   meetsRequirement,
   type Save,
 } from "./game/save";
@@ -230,7 +232,7 @@ document.addEventListener("visibilitychange", () => {
 });
 function prepareSave(data: Save) {
   const ready = normalizeSavePosition(restoreExpeditions(data));
-  updateChart(ready.flags, ready.map);
+  restoreVisits(ready);
   sortCollection(ready.storage);
   return ready;
 }
@@ -1419,6 +1421,7 @@ function showBattle(fishing = false) {
         save.flags = save.flags.filter((f) => !/^league_[0-3]_won$/.test(f));
       save.map =
         save.center && WORLD[save.center] ? save.center : "dewdrop_center";
+      recordVisit(save);
       const door = WORLD[save.map].exits[0];
       save.x = door.x + 0.5;
       save.y = door.y - 0.5;
@@ -1755,7 +1758,7 @@ function update(dt: number) {
         sound.overworld(exit.entrance === "door" ? "door" : "exit");
       const arrival = crossConnection(map, exit, save.x, save.y, isExitOpen);
       save.map = exit.to;
-      updateChart(save.flags, save.map);
+      recordVisit(save);
       save.x = arrival.x;
       save.y = arrival.y;
       if (exit.entrance === "mat") save.facing = "down";
@@ -1767,9 +1770,6 @@ function update(dt: number) {
         save.facing = "up";
       actors.enter(currentField());
       if (!exit.direction) save = normalizeSavePosition(save);
-      if (!save.visited.includes(save.map) && WORLD[save.map].kind === "town")
-        save.visited.push(save.map);
-
       persist();
     });
     return;

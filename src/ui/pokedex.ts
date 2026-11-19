@@ -100,7 +100,7 @@ export function mountPokedex(host: HTMLElement, options: Options) {
     const record = records[site - Number(hasNotes)];
     return `<div class="dex-register dex-record">
       <div class="dex-subhead"><span>Habitat</span>${pager}</div>
-      ${record ? `<div class="dex-location"><small>${record.map.id === save.map ? "Current location" : save.visited.includes(record.map.id) ? "Visited" : "Unvisited"}</small>
+      ${record ? `<div class="dex-location"><small>${record.map.id === save.map ? "Current location" : save.visited.includes(record.map.id) ? "Visited" : "No visit recorded"}</small>
         <h3>${escapeHtml(record.map.name)}</h3></div>
         <div class="dex-method"><strong>${escapeHtml(record.method)} · Lv ${record.level}</strong><span>${escapeHtml(record.note)}</span></div>` : '<p class="dex-empty">No recorded habitat.</p>'}
     </div>`;

@@ -4,7 +4,9 @@ import {
   freshSave,
   isValidSave,
   normalizeSavePosition,
+  recordVisit,
   restoreQuestItems,
+  restoreVisits,
 } from "../src/game/save";
 import { WORLD } from "../src/world";
 import type { Pokemon } from "../src/engine";
@@ -38,6 +40,32 @@ function populated() {
   };
 }
 describe("save files", () => {
+  it("keeps route and room visits across a return journey and save round trip", () => {
+    const save = freshSave();
+    for (const id of ["route01", "lantern_3", "route01", "dewdrop"]) {
+      save.map = id;
+      recordVisit(save);
+    }
+    const copy = JSON.parse(JSON.stringify(save));
+    expect(isValidSave(copy)).toBe(true);
+    expect(copy.visited).toEqual(["dewdrop", "route01", "lantern_3"]);
+    expect(copy.flags).toContain("chart_lantern");
+  });
+
+  it("recovers documented stops from a town-only journal without guessing optional detours", () => {
+    const save = freshSave();
+    save.map = "gym5";
+    save.center = "cinderfall_center";
+    save.flags.push("trainer_route01_won", "evolution_supply_0_found", "chart_copperworks", "keycard");
+    restoreVisits(save);
+    const visits = [...save.visited];
+    expect(visits).toEqual(expect.arrayContaining(["route01", "route02", "copperworks_3", "cinderfall_center", "gym5"]));
+    expect(visits).not.toContain("route25");
+    expect(visits).not.toContain("meridian_4");
+    restoreVisits(save);
+    expect(save.visited).toEqual(visits);
+  });
+
   it("restores the Key Item for a legacy parcel handoff in progress", () => {
     const save = freshSave();
     save.flags.push("found_parcel");

@@ -1,4 +1,4 @@
-import { updateChart } from "../world/requests";
+import { chartVisit, updateChart } from "../world/requests";
 import { expeditionState } from "../world/expeditions";
 import { gymState } from "../world/gyms";
 import { ABILITIES, WORLD, type Ability, type Requirement } from "../world";
@@ -51,6 +51,29 @@ export const freshSave = (): Save => ({
   steps: 0,
   settings: { battleSpeed: 1, music: true },
 });
+
+export function recordVisit(save: Save) {
+  if (!save.visited.includes(save.map)) save.visited.push(save.map);
+  updateChart(save.flags, save.map);
+}
+
+/** Older journals kept only town names. Recover visits attested by the player's field records. */
+export function restoreVisits(save: Save) {
+  const flags = new Set(save.flags);
+  const visits = new Set(save.visited);
+  if (save.center) visits.add(save.center);
+  for (const map of Object.values(WORLD)) {
+    const site = chartVisit(map.id);
+    if ((site && flags.has("chart_" + site)) || map.objects.some(o =>
+      o.setsFlag && flags.has(o.setsFlag) && (
+        o.kind === "leader" || o.kind === "legendary" ||
+        (o.kind === "trainer" && o.setsFlag.endsWith("_won")) ||
+        (o.kind === "item" && o.setsFlag.endsWith("_found"))
+      ))) visits.add(map.id);
+  }
+  save.visited = [...visits];
+  recordVisit(save);
+}
 
 /** Earlier saves recorded the courier handoff without adding a Key Item. */
 export function restoreQuestItems(save: Save): Save {

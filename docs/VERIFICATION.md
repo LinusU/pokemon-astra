@@ -117,6 +117,8 @@ The synthesizer’s Gen 2 music wave channel is implemented in the vendored 0.2.
 
 ## Fresh browser journey
 
+A five-badge save had a trainer win on Dewpath, but Rattata’s habitat record still labelled Dewpath “Unvisited.” After updating, an isolated copy of that save showed “Visited” for Dewpath. Walking onto High Pass, returning to Cinderfall and reloading retained the new route alongside the recovered ones.
+
 A Chrome playthrough using the local verification cartridge followed one save from the Dewdrop doorstep onto Route 04. Growlithe caught Rattata on Dewpath and defeated Scout Ari. Rattata stayed in the Mossford PC during the orchard crossing and rejoined the party at Bramble. The journal led the player to the stranded surveyor in Lantern Wood and then to Fern’s gym.
 
 After losing to Fern, the player picked up the orchard’s Fire Stone, evolved Growlithe, fought local trainers and bought Potions with the winnings. The rematch awarded the Canopy Badge and Cut. Reloading in the gym retained both rewards. The player then used Cut on Bramble’s east road and crossed into Amberbank, where the saved game recorded the cleared tree.
