@@ -194,6 +194,15 @@ export class WorldActors {
         object.roam ??
         (object.kind === "person" && map.kind === "town" ? 2 : 0);
       actor.wait -= dt;
+      const postX = object.x + 0.5, postY = object.y + 0.5;
+      const returning = object.kind === "trainer" && radius === 0 &&
+        (actor.x !== postX || actor.y !== postY);
+      if (returning && !actor.moving && actor.wait <= 0) {
+        actor.targetX = postX;
+        actor.targetY = postY;
+        actor.facing = facingToward(postX - actor.x, postY - actor.y);
+        actor.moving = true;
+      }
       if (actor.moving) {
         const distance = Math.hypot(
           actor.targetX - actor.x,
@@ -204,10 +213,9 @@ export class WorldActors {
           actor.x + ((actor.targetX - actor.x) / (distance || 1)) * step;
         const ny =
           actor.y + ((actor.targetY - actor.y) / (distance || 1)) * step;
-        if (
-          Math.hypot(nx - player.x, ny - player.y) < 0.8 ||
-          this.solid(map, nx, ny, object.id)
-        ) {
+        const gap = Math.hypot(nx - player.x, ny - player.y);
+        const crowdsPlayer = gap < 0.8 && gap <= Math.hypot(actor.x - player.x, actor.y - player.y);
+        if (crowdsPlayer || terrainBlocked(map, nx, ny) || this.solid(map, nx, ny, object.id)) {
           actor.targetX = actor.x;
           actor.targetY = actor.y;
           actor.moving = false;
@@ -216,6 +224,9 @@ export class WorldActors {
           actor.x = nx;
           actor.y = ny;
           if (distance <= step + 0.001) {
+            actor.x = actor.targetX;
+            actor.y = actor.targetY;
+            if (returning && object.facing) actor.facing = object.facing;
             actor.moving = false;
             actor.wait = 1.4 + this.random() * 3.2;
           }
@@ -273,8 +284,7 @@ export class WorldActors {
         continue;
       const distance = Math.hypot(dx, dy);
       let clear = true;
-      const afloat = map.tiles[Math.floor(player.y)]?.[Math.floor(player.x)] === "~";
-  for (let d = 0.25; d < distance; d += 0.25) {
+      for (let d = 0.25; d < distance; d += 0.25) {
         const x = actor.x + dx * d / distance;
         const y = actor.y + dy * d / distance;
         if (
@@ -320,7 +330,7 @@ export class WorldActors {
     }
     if (Math.hypot(dx, dy) <= 1.0) {
       actor.moving = false;
-      actor.wait = 3;
+      actor.wait = 0.35;
       this.pursuit = undefined;
       return map.objects.find((o) => o.id === pursuit.id);
     }

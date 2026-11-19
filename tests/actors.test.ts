@@ -4,7 +4,7 @@ import {
   interactionTarget,
   terrainBlocked,
 } from "../src/game/actors";
-import type { WorldMap, WorldObject } from "../src/world";
+import { WORLD, type WorldMap, type WorldObject } from "../src/world";
 const person: WorldObject = {
   id: "walker",
   kind: "person",
@@ -139,6 +139,27 @@ describe("living overworld actors", () => {
     actors.update(m, 0.1, { x: 4.2, y: 3.5 });
     expect(a.x).toBe(3.5);
     expect(a.moving).toBe(false);
+  });
+
+  it("clears the one-tile Rope School corridor after the trainer challenge", () => {
+    const room = WORLD.victory_1;
+    const coach = room.objects.find(o => o.id === "victory_guardian_trainer")!;
+    const actors = new WorldActors();
+    const player = { x: coach.x + 4.5, y: coach.y + 0.5 };
+    actors.enter(room);
+    expect(actors.spotTrainer(room, player, () => true)).toBe(coach);
+    let challenger: WorldObject | undefined;
+    for (let i = 0; i < 200 && !challenger; i++)
+      challenger = actors.approach(room, 0.02, player);
+    expect(challenger).toBe(coach);
+    expect(actors.solid(room, player.x - 1, player.y)).toBe(true);
+
+    // The player is free to walk back through the passage after the battle.
+    for (let i = 0; i < 200; i++) actors.update(room, 0.02, player);
+    expect(actors.solid(room, player.x - 1, player.y)).toBe(false);
+    expect(actors.position(coach)).toMatchObject({
+      x: coach.x + 0.5, y: coach.y + 0.5, facing: coach.facing, moving: false,
+    });
   });
 });
 
