@@ -137,7 +137,7 @@ const nativeTemplates: Record<string, [string, string[]]> = {
   Transformed: ["… TRANSFORMED into …!", ["user", "species"]],
   TransformedType: ["… transformed into the …-type!", ["user", "kind"]],
   Spite: ["…'s … was reduced by …!", ["target", "mv", "amount"]],
-  Stole: ["… stole … from its foe!", ["item", "user"]],
+  Stole: ["… stole the …!", ["user", "item"]],
   CoinsScattered: ["Coins scattered everywhere!", []],
   BellChimed: ["A bell chimed!", []],
   BellyDrum: ["… cut its HP and maximized ATTACK!", ["user"]],
@@ -319,6 +319,11 @@ export function battleMessage(
   if (trainerName && d?.trainer)
     d.trainer = { ...d.trainer, name: trainerName };
   if (!kind) return "";
+  for (const role of ["user", "target"]) {
+    const mon = d[role];
+    if (mon?.side === "Enemy")
+      d[role] = { ...mon, name: `${trainerName ? "Foe" : "Wild"} ${mon.name}` };
+  }
   const n = d.user?.name || d.target?.name || d.mon || "Pokémon";
   const m = (id: number) => {
     try {
@@ -412,7 +417,7 @@ export function battleMessage(
       if (field === "stat") value = statName(value);
       if (field === "species") value = species?.(value).name ?? "another Pokémon";
       if (field === "kind") value = typeNames[value] ?? "???";
-      text = text.replace("…", String(value ?? "Pokémon"));
+      text = text.replace("…", () => String(value ?? "Pokémon"));
     }
     return text;
   }

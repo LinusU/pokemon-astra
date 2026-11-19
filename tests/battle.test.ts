@@ -32,6 +32,16 @@ describe("battle presentation", () => {
     expect(battleMessage({ TransformedType: { user: { name: "PORYGON" }, kind: 23 } },
       move, () => "Potion")).toBe("PORYGON transformed into the Electric-type!");
   });
+  it("distinguishes matching names and assigns a stolen item to the acting Pokémon", () => {
+    const player = { side: "Player", name: "MEOWTH" }, foe = { side: "Enemy", name: "MEOWTH" };
+    const item = () => "Berry";
+    expect(battleMessage({ UsedMove: { user: player, mv: 85 } }, move, item)).toBe("MEOWTH used Thunderbolt!");
+    expect(battleMessage({ UsedMove: { user: foe, mv: 85 } }, move, item)).toBe("Wild MEOWTH used Thunderbolt!");
+    expect(battleMessage({ CopiedStats: { user: player, target: foe } }, move, item, "Robin"))
+      .toBe("MEOWTH copied the stat changes of Foe MEOWTH!");
+    expect(battleMessage({ Stole: { user: foe, item: 173 } }, move, item, "Robin"))
+      .toBe("Foe MEOWTH stole the Berry!");
+  });
   it("has an authored effect for every move in the native catalog", () => {
     const source = readFileSync(new URL("../vendor/crystal-battle/src/data/names.rs", import.meta.url), "utf8");
     const table = source.match(/const MOVE_NAMES: &\[&str\] = &\[([\s\S]*?)\];/)![1];
@@ -193,7 +203,7 @@ describe.skipIf(!romAvailable)("real native battle events", () => {
       .toHaveProperty("Message.UsedMove.mv", 111);
     const message = events.find((event) => event.Message?.StatRose)?.Message;
     expect(battleMessage(message, (id) => engine.move(id), () => "Potion")).toBe(
-      "JIGGLYPUFF's Defense rose!",
+      "Wild JIGGLYPUFF's Defense rose!",
     );
   });
 
