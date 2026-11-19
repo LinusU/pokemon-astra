@@ -1,12 +1,30 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
 import { isWildEncounter, WORLD } from "../src/world";
+import { bagKeyForItem, nativeItemId } from "../src/game/items";
 import { Engine } from "../src/engine";
 import { HEAL_TRACK, OVERWORLD_SOUNDS } from "../src/game/audio";
 import { MUSIC_TRACKS } from "../src/game/music";
 const available =
   existsSync("pokecrystal11.gbc") && existsSync("public/astra_native.wasm");
 describe.skipIf(!available)("Crystal ROM native bridge", () => {
+  it("uses native level thresholds and keeps the IDs of taken held items across the Bag round trip", async () => {
+    const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});
+    const engine = new Engine(instance.exports as never, readFileSync("pokecrystal11.gbc"));
+    for (const id of [1, 35, 58, 133, 236]) {
+      const mon = engine.makePokemon(id, 20), next = engine.makePokemon(id, 21);
+      expect(engine.training(mon)).toEqual({ percent: 0, next: next.exp });
+      const midpoint = Math.ceil((mon.exp + next.exp) / 2);
+      expect(engine.training({ ...mon, exp: midpoint }).percent).toBe(50);
+      expect(engine.training(engine.makePokemon(id, 100))).toEqual({ percent: 100, next: null });
+    }
+    for (let id = 1; id <= 255; id++) expect(nativeItemId(bagKeyForItem(id))).toBe(id);
+    expect(engine.itemName(173)).toBe("BERRY");
+    expect(bagKeyForItem(143)).toBe("metal_coat");
+    expect(bagKeyForItem(8)).toBe("moon_stone");
+    expect(nativeItemId("held_256")).toBeUndefined();
+    expect(nativeItemId("friendship_charm")).toBeUndefined();
+  });
   it("captures every species in the authored habitats and records the camp time", async () => {
     const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});
     const engine = new Engine(instance.exports as never, readFileSync("pokecrystal11.gbc"));

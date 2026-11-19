@@ -573,8 +573,7 @@ canvas {
 .journal-entries article p {
   margin: 3px 0;
 }
-.stock-count,
-.move-list span {
+.stock-count {
   float: right;
 }
 .map-layout {
@@ -617,24 +616,6 @@ canvas {
   right: 10px;
   font-size: 16px;
   color: #53735c;
-}
-.party-summary {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-  margin-bottom: 12px;
-}
-.party-portrait {
-  width: 84px;
-  height: 84px;
-  image-rendering: pixelated;
-}
-.move-list {
-  margin: 0 0 14px;
-}
-.move-list div {
-  border-bottom: 1px solid #c1c2a2;
-  padding: 3px 0;
 }
 @media (max-width: 440px) {
   .map-layout {

@@ -99,3 +99,8 @@ The synthesizer’s Gen 2 music wave channel is implemented in the vendored 0.2.
 - A cartridge integration check started a native wild battle for each of the 251 species using its authored habitat or guardian encounter. Each fixture supplied a Master Ball. Both day and night catches recorded the field clock, and Route 09 Unown completed its battle introduction and capture.
 - In an isolated Chrome profile, Raichu and Clefairy stayed in the Reedhaven cabin after a reload. Walking ripened their egg, the keeper returned both parents, and the Key Items pocket showed the egg until Pichu hatched with Encore. Its record survived a second reload. The hatch screen and Continue button fit at 320 pixels wide.
 - All 144 Vitest checks, three Rust tests, the native cartridge smoke check, the production build and all three starter campaign simulations passed.
+
+## Party summaries and held items
+
+- In a 320-pixel-wide Chrome session, the party cards showed Eevee’s five evolution paths and Tyrogue’s three Attack/Defense branches. A level-100 Crobat showed the level cap. The card showed all five battle stats, move PP and friendship. A fainted party member had no Make lead command.
+- A nicknamed Eevee’s Berry was taken into the Bag, given back, and retained when Eevee moved to the lead and the save reloaded. The native bridge tests compare the summary’s experience thresholds to freshly generated Pokémon and round-trip all 255 held-item IDs through the Bag.

@@ -1,3 +1,5 @@
+import { mountPartnerSummary } from "./ui/partner-summary";
+import { bagKeyForItem, ballIds, giveFromBag, nativeItemId, stoneIds } from "./game/items";
 import { hatchEgg } from "./game/nursery";
 import { openNursery, showHatch } from "./ui/nursery";
 import { sortCollection, storePokemon } from "./game/collection";
@@ -28,7 +30,7 @@ import { mountRegionChart } from "./ui/region-map";
 import { campaignObjective, directions, bearings } from "./game/journal";
 import { drawFieldMap } from "./ui/field-map";
 import { mountBag, itemInfo, type BagState } from "./ui/bag";
-import { battleStatus, mountParty } from "./ui/party";
+import { mountParty } from "./ui/party";
 import { mountPokedex, type DexState } from "./ui/pokedex";
 import { mountJournal, type JournalState } from "./ui/journal";
 import { MenuInput } from "./ui/menu-input";
@@ -84,12 +86,6 @@ let engine: Engine,
   lastAutosave = 0,
   journeyStarted = false,
   encounterTarget = 6;
-const ballIds: Record<string, number> = {
-  master_ball: 1,
-  ultra_ball: 2,
-  great_ball: 4,
-  poke_ball: 5,
-};
 const has = (r?: Requirement) =>
   meetsRequirement(save, r, (id) => engine.species(id).types);
 const spriteCache = new Map<string, string>();
@@ -465,6 +461,10 @@ function starter(selected = 58) {
   }
 }
 function itemName(key: string) {
+  if (key.startsWith("held_")) {
+    const id = nativeItemId(key);
+    if (id) return engine.itemName(id);
+  }
   const name =
     itemInfo(key).name ??
     (
@@ -1171,13 +1171,6 @@ function view(v: string, pageIndex = 0) {
       }
     });
 }
-const heldItems: Record<string, number> = {
-  exp_share: 57,
-  metal_coat: 143,
-  dragon_scale: 151,
-  kings_rock: 82,
-  up_grade: 172,
-};
 function fieldPartyRows() {
   return save.party.map(mon => ({
     name: mon.nickname || engine.species(mon.species).name,
@@ -1195,67 +1188,41 @@ function showFieldParty(initialSlot: number) {
 }
 function partyDetails(index: number) {
   const mon = save.party[index];
-  const name = engine.species(mon.species).name;
-  const held = Object.keys(heldItems).find(
-    (key) => heldItems[key] === mon.item,
-  );
-  const status = mon.hp === 0 ? "Fainted" : battleStatus(mon.status)?.[1] ?? "Healthy";
-  const evolutions = engine.evolutionData(mon.species).evolutions.map((e) => {
-    const stones: Record<number, string> = {
-      8: "Moon Stone",
-      22: "Fire Stone",
-      23: "Thunder Stone",
-      24: "Water Stone",
-      34: "Leaf Stone",
-      169: "Sun Stone",
-    };
-    const heldName = Object.keys(heldItems).find(
-      (key) => heldItems[key] === e.parameter,
-    );
-    const method =
-      e.method === 1
-        ? "Lv " + e.parameter
-        : e.method === 2
-          ? stones[e.parameter]
-          : e.method === 3
-            ? "Link Cable" +
-              (heldName ? " while holding " + itemName(heldName) : "")
-            : e.method === 4
-              ? "High friendship" +
-                (e.parameter === 2
-                  ? " by day"
-                  : e.parameter === 3
-                    ? " at night"
-                    : "")
-              : "Lv " +
-                e.parameter +
-                " · Attack " +
-                ({ 1: ">", 2: "<", 3: "=" }[e.condition as 1 | 2 | 3] || "=") +
-                " Defense";
-    return escapeHtml(engine.species(e.species).name + " · " + method);
+  mode = "menu";
+  mountPartnerSummary(layer, mon, {
+    engine, image: sprite(mon.species), itemName, canLead: index > 0 && mon.hp > 0,
+    onBack: () => view("party", index),
+    onLead: () => {
+      [save.party[0], save.party[index]] = [mon, save.party[0]];
+      persist();
+      view("party");
+    },
+    onItem: () => {
+      if (mon.item) {
+        const key = bagKeyForItem(mon.item);
+        if ((save.items[key] || 0) >= 99)
+          return message("Your Bag already holds 99 of those.", () => partyDetails(index));
+        mon.item = 0;
+        save.items[key] = (save.items[key] || 0) + 1;
+        persist();
+        return partyDetails(index);
+      }
+      const items = Object.entries(save.items).filter(([key, count]) => count > 0 && nativeItemId(key));
+      if (!items.length) return message("Your Bag has no items a Pokémon can hold.", () => partyDetails(index));
+      layer.replaceChildren();
+      mountBag(layer, {
+        state: {}, pockets: ["items"],
+        items: items.map(([key, count]) => ({ key, count, name: itemName(key), pocket: "items", action: "Give" })),
+        onCancel: () => partyDetails(index),
+        onUse: item => {
+          mon.item = nativeItemId(item.key)!;
+          save.items[item.key]--;
+          persist();
+          partyDetails(index);
+        },
+      });
+    },
   });
-  const p = panel(
-    layer,
-    name,
-    `<div class="party-summary"><img class="party-portrait" src="${sprite(mon.species)}" alt=""><div>Lv ${mon.level} · ${status}<br>HP ${mon.hp} / ${mon.stats[0]}${held ? "<br>Holding " + itemName(held) : ""}</div></div><h3>Moves</h3><div class="move-list">${mon.moves.map((id, i) => (id ? `<div>${escapeHtml(engine.move(id).name)} <span>${mon.pp[i] & 63} PP</span></div>` : "")).join("")}</div>${evolutions.length ? `<h3>Evolution</h3><p class="small">${evolutions.join("<br>")}</p>` : ""}<div class="buttons">${index ? '<button id="lead">Make lead</button>' : ""}${held ? '<button id="take">Take held item</button>' : ""}<button class="secondary" id="back">Back</button></div>`,
-  );
-  p.querySelector("#lead")?.addEventListener("click", () => {
-    [save.party[0], save.party[index]] = [mon, save.party[0]];
-    persist();
-    view("party");
-  });
-  p.querySelector("#take")?.addEventListener("click", () => {
-    if (!held) return;
-    if ((save.items[held] || 0) >= 99) {
-      message("Your bag already holds 99 of those.", () => partyDetails(index));
-      return;
-    }
-    mon.item = 0;
-    save.items[held] = (save.items[held] || 0) + 1;
-    persist();
-    partyDetails(index);
-  });
-  p.querySelector("#back")!.addEventListener("click", () => view("party", index));
 }
 function rivalSpecies(o: WorldObject, slot: number, original: number) {
   if (!o.id.startsWith("rival_") || slot !== o.trainer!.team.length - 1)
@@ -1325,25 +1292,18 @@ function useItem(item: string) {
     );
     return;
   }
-  const stones: Record<string, number> = {
-    fire_stone: 22,
-    water_stone: 24,
-    thunder_stone: 23,
-    leaf_stone: 34,
-    moon_stone: 8,
-    sun_stone: 169,
-  };
+  const held = giveFromBag(item) ? nativeItemId(item) : undefined;
   const targets = save.party.map((mon) => {
     const healed = isMedicine(item)
       ? useMedicine(item, mon, engine)
       : undefined;
     const evo =
-      !heldItems[item] && !isMedicine(item) && item !== "friendship_charm"
+      !held && !isMedicine(item) && item !== "friendship_charm"
         ? engine
             .evolutionData(mon.species)
             .evolutions.find(
               (e) =>
-                (e.method === 2 && e.parameter === stones[item]) ||
+                (e.method === 2 && e.parameter === stoneIds[item]) ||
                 (e.method === 3 &&
                   item === "link_cable" &&
                   (e.parameter === 255 || e.parameter === mon.item)),
@@ -1351,7 +1311,7 @@ function useItem(item: string) {
         : undefined;
     const eligible = isMedicine(item)
       ? !!healed
-      : heldItems[item]
+      : held
         ? !mon.item
         : item === "friendship_charm"
           ? mon.happiness < 255
@@ -1364,9 +1324,9 @@ function useItem(item: string) {
     title: itemName(item),
     rows: fieldPartyRows().map((row, i) => ({
       ...row, disabled: !targets[i].eligible,
-      note: targets[i].eligible ? undefined : heldItems[item] ? "Holding item" : "No effect",
+      note: targets[i].eligible ? undefined : held ? "Holding item" : "No effect",
     })),
-    confirm: heldItems[item] ? "Give item" : "Use item", onBack: () => view("bag"),
+    confirm: held ? "Give item" : "Use item", onBack: () => view("bag"),
     onSelect: index => {
       const mon = save.party[index];
       const { healed, evo, eligible } = targets[index];
@@ -1381,8 +1341,8 @@ function useItem(item: string) {
         );
         return;
       }
-      if (heldItems[item]) {
-        mon.item = heldItems[item];
+      if (held) {
+        mon.item = held;
         save.items[item]--;
         persist();
         message(

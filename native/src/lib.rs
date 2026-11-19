@@ -63,6 +63,30 @@ fn run(v: Value) -> Result<Value, String> {
             let id = v["id"].as_u64().unwrap_or(0) as u8;
             Ok(json!({"id":id,"name":names::move_name(id),"pp":move_pp::max_pp(id,0)}))
         }
+        "training" => {
+            let species = v["species"]
+                .as_u64()
+                .filter(|n| (1..=251).contains(n))
+                .ok_or("Invalid species")? as u8;
+            let level = v["level"]
+                .as_u64()
+                .filter(|n| (1..=100).contains(n))
+                .ok_or("Invalid level")? as u8;
+            let exp = v["exp"]
+                .as_u64()
+                .filter(|n| *n <= 0xffffff)
+                .ok_or("Invalid experience")? as u32;
+            let data = GameData::crystal();
+            let next = (level < 100).then(|| data.experience_at_level(species, level + 1));
+            Ok(json!({"next":next, "percent":data.experience_progress(species, level, exp)}))
+        }
+        "item_name" => {
+            let id = v["id"]
+                .as_u64()
+                .filter(|n| (1..=255).contains(n))
+                .ok_or("Invalid item")? as u8;
+            Ok(json!(names::item_name(id)))
+        }
         "make" => {
             let id = v["id"].as_u64().unwrap_or(0) as u8;
             let level = v["level"].as_u64().unwrap_or(1) as u8;

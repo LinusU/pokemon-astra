@@ -171,6 +171,12 @@ export class Engine {
     const offset = 0x41afb + (id - 1) * 7;
     return { ...move, power: this.rom[offset + 2], type: this.rom[offset + 3] };
   }
+  training({ species, level, exp }: Pokemon) {
+    return this.call<{ next: number | null; percent: number }>({ op: "training", species, level, exp });
+  }
+  itemName(id: number) {
+    return this.call<string>({ op: "item_name", id });
+  }
   /** Original Crystal evolution records and level-up moves, read from the imported ROM. */
   evolutionData(id: number): {
     evolutions: {

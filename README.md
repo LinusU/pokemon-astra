@@ -50,6 +50,8 @@ Shift runs faster. Connect the FlipPad in a browser-supported Gamepad API mode, 
 
 Open **Menu → Map** for a zoomable regional atlas. Select towns and numbered routes to see their connections, or open **Local map** for the next exit or objective. Party details show current moves, PP and evolution methods.
 
+Open **Party**, choose a Pokémon and use left/right to read **Stats**, **Moves** and **Growth**. Up/down selects a move or cycles through evolution paths. Growth shows the experience needed for the next level and the current friendship value. Press A to change the lead or give and take held items.
+
 Use the PC on the right in any Pokémon Center to manage your team. It keeps one collection in Pokédex order. Select **Stored** or **Party**, press A to browse, and use up/down to select a Pokémon or left/right to skip six entries. A opens its details. Withdraw into an open party slot or swap directly when traveling with six. B returns one screen.
 
 Open **Menu → Journal** and press left or right to turn between Survey, Requests, Paths and Badges. In Requests or Paths, press up or down to select an entry, A to read it and B to return to the index. Inspect a blocked route in the field with A to record it. After the third badge, choose your next beacon on the Survey page to follow Sunspire, Cinderfall or Rimepeak in your preferred order.

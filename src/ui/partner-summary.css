@@ -1,0 +1,49 @@
+.partner-card {
+  position: absolute; inset: 0; container-type: size; color: #263d36; background: #f2efd8;
+  display: grid; grid-template-rows: 13% 12% minmax(0,1fr) 9% 10%;
+  font: normal 5cqw/1 "VT323", monospace;
+}
+.partner-card :is(h2,h3,p) { margin: 0; font: inherit; }
+.partner-card :is(b,strong) { font-weight: normal; }
+.partner-card button { color: inherit; background: transparent; border: 0; padding: 0; font: inherit; }
+.partner-card :is(header,nav,footer,.partner-held,.partner-line,h3,.partner-moves button) { display: flex; align-items: center; justify-content: space-between; }
+.partner-card header, .partner-card footer { padding-inline: 3cqw; background: #294c40; color: #fff7d6; }
+.partner-card header { border-bottom: .8cqh solid #bf9e5e; gap: 2cqw; }
+.partner-card header h2 { font-size: 6.8cqw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.partner-card header > span { white-space: nowrap; }
+.partner-card header small { color: #d4e4ce; font-size: 4.8cqw; }
+.partner-card nav { justify-content: start; padding: 0 2cqw; gap: 2cqw; background: #d8e3c7; border-bottom: 1px solid #9aaf95; }
+.partner-card nav button { min-width: 20%; height: 82%; }
+.partner-card nav [aria-pressed=true] { color: #fff6d8; background: #3e6050; }
+.partner-card button:focus { outline: none; }
+.partner-body { display: grid; grid-template-columns: 33% minmax(0,1fr); gap: 2cqw; padding: 1.6cqw 2.3cqw; min-height: 0; }
+.partner-body aside { display: grid; grid-template-rows: minmax(0,1fr) auto auto auto; gap: .3cqh; min-height: 0; text-align: center; }
+.partner-body aside > b { font-size: 5.3cqw; }
+.partner-body aside > span, .partner-health-readout small { font-size: 4.1cqw; }
+.partner-picture { position: relative; min-height: 0; background: repeating-linear-gradient(0deg,#dce6cf 0 1.8cqh,#d5dfc6 1.8cqh 2.2cqh); border: 1px solid #91a28a; }
+.partner-picture small { position: absolute; top: .5cqh; left: .8cqw; font-size: 3.8cqw; }
+.partner-picture img { position: absolute; inset: 12% 3% 1%; width: 94%; height: 87%; object-fit: contain; image-rendering: pixelated; }
+.partner-health-readout { text-align: left; font-size: 4.3cqw; }
+.partner-bar { height: 1.8cqh; border: 1px solid #75816d; background: #d2d9ba; }
+.partner-bar i { display: block; height: 100%; background: #477854; }
+.partner-data { display: flex; flex-flow: column; min-height: 0; border: .45cqw solid #4d6855; background: #fffae2; box-shadow: .6cqw .6cqw #b6c4aa; }
+.partner-card h3 { padding: .8cqh 1.5cqw; font-size: 4.6cqw; background: #dce6c8; }
+.partner-stats, .partner-moves { display: grid; grid-auto-rows: minmax(0,1fr); flex: 1; min-height: 0; }
+.partner-stats .partner-line, .partner-moves button { padding-inline: 2cqw; font-size: 4.9cqw; }
+.partner-stats .partner-line:nth-child(even), .partner-moves button:nth-child(even) { background: #f1efd6; }
+.partner-moves button[aria-pressed=true] { box-shadow: inset 2px 0 #4e7655; background: #d8e6be; }
+.partner-moves small { font-size: 4cqw; }
+.partner-card .move-readout { background: #e4e8cf; padding: 1cqh 1.6cqw; font-size: 4.4cqw; }
+.partner-growth { display: flex; flex-flow: column; gap: .7cqh; font-size: 4.6cqw; padding: 1.1cqh 1.6cqw; min-height: 0; }
+.partner-growth > small { font-size: 3.9cqw; color: #4e6655; }
+.partner-growth .exp i { background: #567b8e; }
+.partner-evo { border-top: 1px solid #a5b6a0; margin-top: .4cqh; }
+.partner-evo h3 { padding: .5cqh 0; background: transparent; color: #516b54; font-size: 4.2cqw; }
+.partner-evo button { padding: .4cqh 1.2cqw; background: #e1e9ce; }
+.partner-evo p { font-size: 4.15cqw; }
+.partner-held { padding: 0 3cqw; border-top: 1px solid #9dae95; background: #dce5ca; font-size: 4.4cqw; }
+.partner-card footer { font-size: 4.4cqw; }
+.partner-card kbd { background: #e3e6c8; color: #294c40; font: inherit; padding: 0 1cqw; }
+.partner-popup { position: absolute; bottom: 12%; right: 3%; display: grid; padding: 1cqw; border: .8cqw double #324f41; background: #fff9df; box-shadow: 1cqw 1cqw #69806a; min-width: 43%; }
+.partner-popup button { text-align: left; padding: 1.5cqh 3cqw; }
+.partner-popup [aria-current=true] { color: #fff8d8; background: #3e6050; }

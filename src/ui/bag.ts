@@ -1,5 +1,6 @@
 import { trackMenuCursor } from "./menu-cursor";
 import type { Action } from "../game/input";
+import { giveFromBag } from "../game/items";
 import { MEDICINE } from "../game/medicine";
 import { escapeHtml } from "./shell";
 import "./bag.css";
@@ -55,13 +56,6 @@ const descriptions: Record<string, string> = {
     "Professor Alder’s award for recording every species in Astra.",
   courier_parcel: "A sealed delivery from Mossford. Take it to the courier in Bramble.",
 };
-const heldItems = [
-  "exp_share",
-  "metal_coat",
-  "dragon_scale",
-  "kings_rock",
-  "up_grade",
-];
 const names: Record<string, string> = {
   master_ball: "Master Ball",
   ultra_ball: "Ultra Ball",
@@ -105,7 +99,7 @@ export function itemInfo(key: string): ItemInfo {
       : key.endsWith("_stone")
         ? "Evolves certain Pokémon. Check their evolution details in your party."
         : undefined,
-    action: heldItems.includes(key) ? "Give" : "Use",
+    action: giveFromBag(key) ? "Give" : "Use",
   };
 }
 
