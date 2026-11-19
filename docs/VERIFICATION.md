@@ -85,3 +85,9 @@ The synthesizer’s Gen 2 music wave channel is implemented in the vendored 0.2.
 - A prepared fishing save exercised a move, a first capture, a repeat capture with six occupied party slots, and a successful escape. The first catch opened its species record. The second showed the caught marker in battle and went to storage. Escaping returned to the pond after the native escape text. The saved journey then resumed offline.
 - At 1100×700, the screen and keyboard legend fit together. The partner card fit at 320 and 390 pixels wide. A simulated touch steered from up through a diagonal to right and released. Portrait and landscape were inspected in Chrome.
 - The production build, 136 Vitest checks, three Rust tests and the native cartridge smoke test passed. The ROM checks read both description pages for all 251 species. All three starter campaigns cleared the League in the seeded simulation.
+
+## Pokémon Center storage
+
+- All twelve Centers have a solid PC with a clear interaction tile in front. The field menu no longer offers remote storage. Tests cover transfers with duplicate species, a full party, a fainted Pokémon and the last healthy partner.
+- An isolated Chrome session imported a legacy save containing all 251 species in reverse order. At the Crown Summit terminal, simulated gamepad input browsed the sorted register, paged through it, cancelled a full-party swap, then completed a swap, deposit and withdrawal. The party and collection matched the saved native Pokémon records after an offline reload.
+- Compact portrait screenshots at 320 and 390 pixels wide were inspected. The production build, 141 Vitest checks, native Rust and cartridge smoke checks, and the three starter campaign simulations passed.

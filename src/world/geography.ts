@@ -965,6 +965,8 @@ function interiorLayout(world: Region, map: WorldMap) {
   const [person, visitor] = map.objects;
   const anchors = { [person.id]: clerk };
   if (visitor) anchors[visitor.id] = type === "center" ? [2, 5] : [8, 5];
+  const pc = map.objects.find(o => o.kind === "pc");
+  if (pc) anchors[pc.id] = [9, 2];
   placeObjects(map, plan, anchors, [x, 5]);
   person.facing = "down";
   if (visitor) visitor.facing = "left";

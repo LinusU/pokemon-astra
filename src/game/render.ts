@@ -1530,6 +1530,19 @@ export class Renderer {
       }
       return;
     }
+    if (o.kind === "pc" && this.engine) {
+      // The upright Center terminal spans the top and bottom right cells of block 08.
+      for (const [cell, top] of [[0x21, y - 24], [0x23, y - 8]]) {
+        const tile = this.sprite("center-pc:" + cell, () => this.engine!.cell("center", cell));
+        if (!tile) continue;
+        // Crop the original room's wallpaper and floor away from the cabinet.
+        const inset = cell === 0x21 ? 2 : 1;
+        const cropY = cell === 0x21 ? 7 : 0;
+        c.drawImage(tile, inset, cropY, 16 - 2 * inset, 16 - cropY,
+          x - 8 + inset, top + cropY, 16 - 2 * inset, 16 - cropY);
+      }
+      return;
+    }
     if (o.kind === "item") {
       if (!done) this.npc(c, "item", x, y);
       return;

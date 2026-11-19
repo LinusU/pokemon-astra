@@ -7,7 +7,7 @@ import {
   type WorldMap,
 } from "../src/world";
 import { regionPosition } from "../src/game/region";
-import { interactionTarget } from "../src/game/actors";
+import { interactionTarget, WorldActors } from "../src/game/actors";
 import { routes, localTrail, traceTrail, settlements } from "../src/world/atlas";
 import { barrierAt, connectionOffset, exitOpen } from "../src/game/navigation";
 
@@ -558,6 +558,23 @@ it("makes every field service accessible over its own counter", () => {
     ).toBe(clerk);
     expect(map.width).toBeLessThanOrEqual(13);
     expect(map.exits[0].entrance, map.id).toBe("mat");
+  }
+});
+
+it("provides a solid, usable storage terminal inside every Pokémon Center", () => {
+  const centers = maps.filter(map => map.id.endsWith("_center"));
+  expect(maps.filter(map => map.objects.some(o => o.kind === "pc"))).toEqual(centers);
+  expect(centers).toHaveLength(12);
+  for (const center of centers) {
+    const terminals = center.objects.filter(object => object.kind === "pc");
+    expect(terminals).toHaveLength(1);
+    const pc = terminals[0], actors = new WorldActors();
+    actors.enter(center);
+    const x = pc.x + 0.5, y = pc.y + 0.5;
+    expect(actors.solid(center, x, y)).toBe(true);
+    expect(actors.solid(center, x, y + 1)).toBe(false);
+    expect(interactionTarget(center, { x, y: y + 1, facing: "up" }, new Set(),
+      object => actors.position(object)), center.id).toBe(pc);
   }
 });
 

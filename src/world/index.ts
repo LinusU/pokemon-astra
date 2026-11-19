@@ -57,6 +57,7 @@ export type ObjectKind =
   | "legendary"
   | "healer"
   | "shop"
+  | "pc"
   | "starter"
   | "gate";
 export type Direction = "north" | "south" | "east" | "west";
@@ -435,7 +436,7 @@ const serviceVisitors: Record<string, [[string, string], [string, string]]> = {
   reedhaven: [
     [
       "Field ranger",
-      "You can carry six partners. Look under Storage in the menu if you want to rotate in a new catch.",
+      "Traveling with six? Your next catch goes to the PC. That terminal on the right connects every Pokémon Center in Astra.",
     ],
     [
       "Bird watcher",
@@ -514,6 +515,10 @@ for (const [town, name] of townData) {
     const [visitor, dialogue] =
       serviceVisitors[town][suffix === "center" ? 0 : 1];
     obj(id, { id: `${id}_visitor`, kind: "person", name: visitor, dialogue });
+    if (suffix === "center") obj(id, {
+      id: `${id}_pc`, kind: "pc", name: "Pokémon Storage PC",
+      dialogue: "The terminal connects to your Pokémon.",
+    });
   }
 }
 for (const [id, name, town] of [
@@ -553,7 +558,7 @@ for (const [town, title, host, dialogue] of [
     "reedhaven",
     "Ranger Cabin",
     "Field researcher",
-    "An extra catch goes to Storage when you already travel with six. It still counts in our habitat census.",
+    "An extra catch goes to the Pokémon Center PC when you already travel with six. It still counts in our habitat census.",
   ],
   [
     "rimepeak",

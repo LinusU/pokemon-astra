@@ -26,7 +26,7 @@ Production builds generate a versioned offline service worker covering the appli
 ## The adventure
 
 - Growlithe, Poliwag, or Bellsprout as your partner. Alder tutors Growlithe in Ember, Poliwag in Water Gun, or Bellsprout in Tackle. Robin raises the partner with a type advantage.
-- 12 settlements, 25 routes, 12 dungeons with three rooms each, eight gyms, and 119 connected maps in total, including five League chambers.
+- 12 settlements, 25 routes, 12 dungeons with 40 rooms, eight gyms, and 123 connected maps in total, including five League chambers.
 - Professor Alder's beacon survey, Robin's changing relationship with Meridian, Director Vale's Celestial Engine, eight beacon keepers, the Elite Four, and Champion Mira.
 - 12 regional expeditions across 40 rooms, 16 field requests with journal progress, optional trainers, evolution-item rewards, a postgame reserve, and retryable legendary encounters. All 251 species have an obtainable habitat, gift, or static encounter; no trade or event service is necessary.
 - Badge field abilities open return paths and hidden areas. Surf enables water traversal; Fly travels between visited settlements. Field abilities do not occupy Pokémon move slots.
@@ -48,6 +48,8 @@ The region plan is in [docs/DESIGN.md](docs/DESIGN.md); implemented content and 
 Shift runs faster. Connect the FlipPad in a browser-supported Gamepad API mode, then press a button. The last actively used controller is selected so an idle receiver does not steal input. Standard mappings are implemented and tested with simulated pad events; physical FlipPad/iOS hardware has not been tested here.
 
 Open **Menu → Map** for a zoomable regional atlas. Select towns and numbered routes to see their connections, or open **Local map** for the next exit or objective. Party details show current moves, PP and evolution methods.
+
+Use the PC on the right in any Pokémon Center to manage your team. It keeps one collection in Pokédex order. Select **Stored** or **Party**, press A to browse, and use up/down to select a Pokémon or left/right to skip six entries. A opens its details. Withdraw into an open party slot or swap directly when traveling with six. B returns one screen.
 
 Open **Menu → Journal** and press left or right to turn between Survey, Requests, Paths and Badges. In Requests or Paths, press up or down to select an entry, A to read it and B to return to the index. Inspect a blocked route in the field with A to record it. After the third badge, choose your next beacon on the Survey page to follow Sunspire, Cinderfall or Rimepeak in your preferred order.
 

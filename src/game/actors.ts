@@ -169,7 +169,7 @@ export class WorldActors {
   }
   solid(map: WorldMap, x: number, y: number, ignoreId?: string) {
     return map.objects.some((object) => {
-      if (object.id === ignoreId || !PEOPLE.has(object.kind)) return false;
+      if (object.id === ignoreId || (!PEOPLE.has(object.kind) && object.kind !== "pc")) return false;
       const other = this.position(object);
       return Math.abs(x - other.x) < 0.56 && Math.abs(y - other.y) < 0.52;
     });

@@ -1,4 +1,5 @@
 import type { Input } from "../game/input";
+import { pcController } from "./storage-pc";
 import { journalController } from "./journal";
 import { dexController } from "./pokedex";
 import { bagController } from "./bag";
@@ -56,7 +57,7 @@ export class MenuInput {
     now: number,
     battle: boolean,
   ) {
-    const controller = bagController(layer) ?? dexController(layer) ?? journalController(layer);
+    const controller = bagController(layer) ?? dexController(layer) ?? journalController(layer) ?? pcController(layer);
     const party = layer.querySelector<HTMLElement>(".party-screen");
     const scroller =
       layer.querySelector<HTMLElement>(

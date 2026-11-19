@@ -4,7 +4,7 @@
 
 The regional survey in [`src/world/atlas.ts`](../src/world/atlas.ts) places settlements, roads, side paths and dungeon entrances in walking tiles. Each outdoor area owns a local collision map. Its footprint can include inaccessible headlands, deep water or forest. Gaps between roads leave room for those landscapes. Dewdrop and Mossford occupy 25×20 tiles and the other settlements occupy 24×18. The numbered trails range from 41 to 208 tile centers along their main paths.
 
-Buildings open onto compact rooms with a mat at the south threshold. The Centers have a healing station, benches and a local visitor. Marts place their clerk behind a counter and reserve browsing space by the shelves. Face the clerk across the counter to heal or shop. The lab, home and seven local buildings also have furnished interiors.
+Buildings open onto compact rooms with a mat at the south threshold. The Centers have a healing station, benches, a local visitor and a shared storage PC against the right wall. Face the terminal and press A to deposit, withdraw or swap a partner. Marts place their clerk behind a counter and reserve browsing space by the shelves. Face the clerk across the counter to heal or shop. The lab, home and seven local buildings also have furnished interiors.
 
 ## Travel around Astra
 

@@ -91,7 +91,7 @@ function pokemon(m: any): m is Pokemon {
     !!m &&
     integer(m.species, 1, 251) &&
     integer(m.item, 0, 255) &&
-    exact(m.moves, 4, 255) &&
+    exact(m.moves, 4, 251) &&
     integer(m.ot_id, 0, 65535) &&
     integer(m.exp, 0, 0xffffff) &&
     exact(m.stat_exp, 5, 65535) &&
@@ -218,7 +218,7 @@ export function normalizeSavePosition(save: Save): Save {
   const safe = (x: number, y: number) =>
     !map.objects.some(
       (o) =>
-        (["person", "trainer", "leader", "healer", "shop", "starter"].includes(o.kind) ||
+        (["person", "trainer", "leader", "healer", "shop", "starter", "pc"].includes(o.kind) ||
           (o.field?.solid && !save.flags.includes(o.setsFlag!))) &&
         Math.abs(o.x + 0.5 - x) < 0.6 &&
         Math.abs(o.y + 0.5 - y) < 0.6,

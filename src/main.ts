@@ -1,3 +1,5 @@
+import { sortCollection, storePokemon } from "./game/collection";
+import { mountStoragePc, type PcState } from "./ui/storage-pc";
 import { specimenCard } from "./ui/specimen";
 import { typeNames } from "./game/type-names";
 import { openFieldwork } from "./ui/fieldwork";
@@ -201,6 +203,8 @@ function restoreSession(data: Save) {
   save = normalizeSavePosition(restoreExpeditions(data));
   updateChart(save.flags, save.map);
   fieldBagState = {};
+  sortCollection(save.storage);
+  pcState = {};
   fieldDexState = {};
   fieldJournalState = {};
   fieldCursors = {};
@@ -385,7 +389,7 @@ function fieldBasics(back: () => void) {
   const p = panel(
     layer,
     "Field basics",
-    `<div class="journal-entries"><article><strong>Find your way</strong><p>Walk with the D-pad, arrows or WASD. Face a person or object and press A or Z. Open Menu with Start or M to see your next stop on the map.</p></article><article><strong>Build your team</strong><p>Walk through tall grass to find Pokémon. Weaken a wild Pokémon, then choose Bag and throw a Poké Ball. Extra catches go to Storage.</p></article><article><strong>Train and recover</strong><p>Pokémon that fight earn experience. A teammate holding Exp. Share can earn some too. Talk to a road trainer again for a practice battle. A Center heals your whole party.</p></article><article><strong>Follow the beacons</strong><p>Your journal follows the survey and records blocked paths. Each badge unlocks a field ability you can use without teaching a move.</p></article></div><button class="secondary" id="back">Back</button>`,
+    `<div class="journal-entries"><article><strong>Find your way</strong><p>Walk with the D-pad, arrows or WASD. Face a person or object and press A or Z. Open Menu with Start or M to see your next stop on the map.</p></article><article><strong>Build your team</strong><p>Walk through tall grass to find Pokémon. Weaken a wild Pokémon, then choose Bag and throw a Poké Ball. Extra catches go to the PC in every Pokémon Center.</p></article><article><strong>Train and recover</strong><p>Pokémon that fight earn experience. A teammate holding Exp. Share can earn some too. Talk to a road trainer again for a practice battle. A Center heals your whole party.</p></article><article><strong>Follow the beacons</strong><p>Your journal follows the survey and records blocked paths. Each badge unlocks a field ability you can use without teaching a move.</p></article></div><button class="secondary" id="back">Back</button>`,
   );
   p.querySelector("#back")!.addEventListener("click", back);
 }
@@ -457,7 +461,7 @@ function rewardReceipt(r?: Reward) {
   if (r.species)
     lines.push(
       engine.species(r.species).name +
-        (save.party.length >= 6 ? " joined storage" : " joined your party"),
+        (save.party.length >= 6 ? " went to the Center PC" : " joined your party"),
     );
   return lines.join(" · ");
 }
@@ -481,7 +485,8 @@ function applyReward(r?: Reward) {
     );
   if (r.species) {
     const mon = engine.makePokemon(r.species, r.level || 5);
-    (save.party.length < 6 ? save.party : save.storage).push(mon);
+    if (save.party.length < 6) save.party.push(mon);
+    else storePokemon(save.storage, mon);
     if (!save.caught.includes(r.species)) save.caught.push(r.species);
     if (!save.seen.includes(r.species)) save.seen.push(r.species);
   }
@@ -547,6 +552,16 @@ function interact() {
       return;
     }
     // A stray confirm while walking should leave movement uninterrupted.
+    return;
+  }
+  if (o.kind === "pc") {
+    sound.overworld("bootPc");
+    mode = "menu";
+    mountStoragePc(layer, {
+      save, state: pcState, engine, sprite,
+      onTransfer: () => { persist(); sound.overworld("pcTransfer"); },
+      onClose: () => { sound.overworld("shutDownPc"); close(); },
+    });
     return;
   }
   sound.overworld("interact");
@@ -911,6 +926,7 @@ function depart(destination: string, move: () => void) {
 }
 let journeySelection = "party";
 let fieldBagState: BagState = {};
+let pcState: PcState = {};
 let fieldDexState: DexState = {};
 let fieldJournalState: JournalState = {};
 let fieldCursors: Record<string, PanelCursor> = {};
@@ -922,7 +938,6 @@ function menu() {
     ["dex", "Pokédex"],
     ["map", "Map"],
     ["journal", "Journal"],
-    ["storage", "Storage"],
     ["settings", "Options"],
     ["close", "Exit"],
   ].filter(
@@ -956,13 +971,6 @@ function menu() {
 }
 function view(v: string, pageIndex = 0) {
   mode = "menu";
-  if (v === "storage" && duringLeagueChallenge()) {
-    message(
-      "Your League team is registered. Storage reopens when you leave the challenge.",
-      menu,
-    );
-    return;
-  }
   let title = "",
     body = "";
   if (v === "party") {
@@ -1025,9 +1033,6 @@ function view(v: string, pageIndex = 0) {
             .join("")}</div>`
         : ""
     }`;
-  } else if (v === "storage") {
-    title = "Pokémon storage";
-    body = `<p class="small">Deposit a party member to make room for captures. Select a stored Pokémon to withdraw it.</p><strong>Party</strong><div class="list">${save.party.map((m, i) => `<button data-deposit="${i}">Deposit ${escapeHtml(engine.species(m.species).name)} · Lv ${m.level}</button>`).join("")}</div><strong>Storage</strong><div class="list">${save.storage.map((m, i) => `<button data-store="${i}">Withdraw ${escapeHtml(engine.species(m.species).name)} · Lv ${m.level}</button>`).join("") || "<p>No Pokémon in storage yet.</p>"}</div>`;
   } else {
     title = "Settings & save";
     body = `<p>Battle speed: ${save.settings.battleSpeed}×</p><div class="buttons"><button id="speed">Change speed</button><button id="time">${save.settings.night ? "Switch to day" : "Camp until night"}</button><button id="music">${sound.enabled ? "Mute sound" : "Play sound"}</button><button id="how">How to play</button><button id="export">Export save</button><button id="choose-save">Import save</button><input hidden id="import" type="file" accept="application/json,.json"></div><p class="small muted">Controller: ${escapeHtml(
@@ -1059,37 +1064,6 @@ function view(v: string, pageIndex = 0) {
       directions(save, has).marker,
     );
   p.querySelector("#back")!.addEventListener("click", v === "local-map" ? () => view("map") : menu);
-  p.querySelectorAll<HTMLButtonElement>("[data-deposit]").forEach(
-    (b) =>
-      (b.onclick = () => {
-        if (
-          save.party.length <= 1 ||
-          !save.party.some(
-            (m, i) => i !== Number(b.dataset.deposit) && m.hp > 0,
-          )
-        ) {
-          message("Keep at least one healthy Pokémon in your party.", () =>
-            view("storage"),
-          );
-          return;
-        }
-        save.storage.push(save.party.splice(Number(b.dataset.deposit), 1)[0]);
-        persist();
-        view("storage");
-      }),
-  );
-  p.querySelectorAll<HTMLButtonElement>("[data-store]").forEach(
-    (b) =>
-      (b.onclick = () => {
-        if (save.party.length >= 6) {
-          message("Your party is full.", () => view("storage"));
-          return;
-        }
-        save.party.push(save.storage.splice(Number(b.dataset.store), 1)[0]);
-        persist();
-        view(v);
-      }),
-  );
   p.querySelectorAll<HTMLButtonElement>("[data-travel]").forEach(
     (b) =>
       (b.onclick = () =>
@@ -1438,7 +1412,7 @@ function showBattle(fishing = false) {
     const firstCatch = caughtSpecies !== undefined && !save.caught.includes(caughtSpecies);
     const catchDestination = (result.caught ?? -1) >= 6 ? "storage" : "party";
     save.party = result.party.slice(0, 6);
-    if (result.party.length > 6) save.storage.push(...result.party.slice(6));
+    for (const mon of result.party.slice(6)) storePokemon(save.storage, mon);
     save.money = result.money;
     for (const [key, id] of Object.entries(ballIds))
       save.items[key] =
@@ -1516,14 +1490,14 @@ function showBattle(fishing = false) {
     if (firstCatch) {
       mode = "registration";
       specimenCard(layer, "New Pokédex entry", specimen(caughtSpecies),
-        `${catchDestination === "storage" ? "Sent to storage" : "Joined your party"} · ${save.caught.length} / 251 caught`,
+        `${catchDestination === "storage" ? "Sent to the Center PC" : "Joined your party"} · ${save.caught.length} / 251 caught`,
         "Continue", afterCatch);
       return;
     }
     if (blackout) sound.heal();
     message(
       caughtSpecies
-        ? `${engine.species(caughtSpecies).name} ${catchDestination === "storage" ? "was sent to storage" : "joined your party"}!`
+        ? `${engine.species(caughtSpecies).name} ${catchDestination === "storage" ? "was sent to the Center PC" : "joined your party"}!`
         : blackout
           ? `Your team was exhausted. You returned to ${WORLD[save.map].name}, where your Pokémon were healed.`
           : s.outcome.toLowerCase() === "draw"

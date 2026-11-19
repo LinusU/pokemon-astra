@@ -1,0 +1,177 @@
+import type { Engine, Pokemon } from "../engine";
+import type { Action } from "../game/input";
+import { canDeposit, depositPokemon, withdrawPokemon } from "../game/collection";
+import type { Save } from "../game/save";
+import { typeNames } from "../game/type-names";
+import { battleStatus, mountParty } from "./party";
+import { escapeHtml as html } from "./shell";
+import "./storage-pc.css";
+
+type Tab = "storage" | "party";
+type Control = Extract<Action, "up" | "down" | "left" | "right" | "a">;
+export type PcState = { tab?: Tab; storage?: number; party?: number };
+type Options = {
+  save: Save;
+  state: PcState;
+  engine: Pick<Engine, "species" | "move">;
+  sprite: (id: number) => string;
+  onTransfer: () => void;
+  onClose: () => void;
+};
+
+const controllers = new WeakMap<Element, { input: (action: Control) => void }>();
+export function pcController(layer: HTMLElement) {
+  const root = layer.querySelector(".storage-pc");
+  return root ? controllers.get(root) : undefined;
+}
+
+const pageSize = 6;
+export function mountStoragePc(host: HTMLElement, options: Options) {
+  const { save, state, engine } = options;
+  let tab: Tab = state.tab ?? (save.storage.length ? "storage" : "party");
+  let mode: "tabs" | "roster" | "detail" = "tabs";
+  let receipt = "";
+  const root = host.ownerDocument.createElement("section");
+  root.className = "storage-pc";
+  root.setAttribute("role", "dialog");
+  root.setAttribute("aria-label", "Pokémon Storage PC");
+  host.replaceChildren(root);
+
+  const list = () => save[tab];
+  const index = () => Math.max(0, Math.min(state[tab] ?? 0, list().length - 1));
+  const name = (mon: Pokemon) => mon.nickname || engine.species(mon.species).name;
+  const condition = (mon: Pokemon) => mon.hp === 0 ? "FNT" : battleStatus(mon.status)?.[0] ?? "";
+  const action = () => tab === "party" ? "Deposit" : save.party.length < 6 ? "Withdraw" : "Swap";
+  const eligible = () => tab === "party" ? canDeposit(save.party, index())
+    : save.party.length < 6 || save.party.some((_, i) => canDeposit(save.party, i, list()[index()]));
+
+  function profile(mon: Pokemon) {
+    const species = engine.species(mon.species);
+    const types = [...new Set(species.types)].map(type => typeNames[type]).join(" / ");
+    const hp = Math.min(100, 100 * mon.hp / Math.max(1, mon.stats[0]));
+    return `<div class="pc-profile"><div class="pc-portrait">
+      <span>№ ${String(mon.species).padStart(3, "0")}</span><img src="${options.sprite(mon.species)}" alt="${html(species.name)}">
+      </div><strong>${html(name(mon))}</strong><small>${types}</small>
+      <div class="pc-vitals"><div>Lv ${mon.level}<b>${condition(mon)}</b></div>
+        <div class="pc-hp"><i style="width:${hp}%"></i></div><div>HP ${mon.hp}/${mon.stats[0]}</div></div></div>`;
+  }
+
+  function roster() {
+    const mons = list(), i = index(), start = Math.floor(i / pageSize) * pageSize;
+    if (!mons.length) return `<div class="pc-empty"><i class="pc-terminal" aria-hidden="true"></i>
+      <h2>${tab === "storage" ? "Storage is empty" : "No partners yet"}</h2>
+      <p>${tab === "storage" ? "Choose Party to deposit a Pokémon. Extra catches arrive here when your party is full." : "Visit Professor Alder in Dewdrop to choose a partner."}</p></div>`;
+    const detail = mode === "detail";
+    const mon = mons[i];
+    const pages = Math.ceil(mons.length / pageSize);
+    const heading = detail ? "Known moves" : tab === "storage" ? "Pokédex order" : "Party order";
+    const content = detail
+      ? `<div class="pc-moves">${mon.moves.map((id, slot) => id ? `<div>${html(engine.move(id).name)}<small>${mon.pp[slot] & 63} PP</small></div>` : "").join("")}</div>
+        ${eligible() ? `<button class="pc-action" data-command="confirm">▸ ${action()}${action() === "Swap" ? " with party" : ""}</button>`
+          : '<p class="pc-locked">Keep one healthy Pokémon in your party.</p>'}`
+      : `<div class="pc-rows">${mons.slice(start, start + pageSize).map((entry, j) =>
+        `<button data-row="${start + j}" ${start + j === i ? 'aria-current="true"' : ""}>
+          <span>${tab === "party" ? start + j + 1 : String(entry.species).padStart(3, "0")}</span>
+          <strong>${html(name(entry))}</strong><small>Lv${entry.level}</small></button>`).join("")}</div>`;
+    return `<div class="pc-body">${profile(mon)}<div class="pc-register"><div class="pc-rule"><span>${heading}</span>
+      ${!detail && pages > 1 ? `<div class="pc-pages"><button data-jump="-1" aria-label="Previous page" ${start === 0 ? "disabled" : ""}>◂</button>
+        <span>${start / pageSize + 1}/${pages}</span><button data-jump="1" aria-label="Next page" ${start + pageSize >= mons.length ? "disabled" : ""}>▸</button></div>` : ""}</div>${content}</div></div>`;
+  }
+
+  function render() {
+    const detail = mode === "detail";
+    const tip = receipt || (detail ? action() === "Swap" ? "Choose a party member to exchange." : tab === "party" ? "Send this Pokémon to the Center PC." : "Add this Pokémon to your party."
+      : mode === "tabs" ? "← → Select   ↓ Browse" : "↑ ↓ Select   ← → Page");
+    root.dataset.mode = mode;
+    root.innerHTML = `<header class="pc-head"><h1><i class="pc-terminal" aria-hidden="true"></i>Pokémon Storage</h1><span>Center PC</span></header>
+      <nav class="pc-tabs" aria-label="Pokémon lists">
+      <button data-tab="storage" aria-pressed="${tab === "storage"}">Stored <b>${save.storage.length}</b></button>
+      <button data-tab="party" aria-pressed="${tab === "party"}">Party <b>${save.party.length}/6</b></button></nav>
+      ${roster()}<p class="pc-tip" role="status">${html(tip)}</p>
+      <footer class="pc-foot">${list().length && !detail ? `<button data-command="confirm"><kbd>A</kbd> ${mode === "tabs" ? "Browse" : "Inspect"}</button>` : "<span></span>"}
+      <button id="back"><kbd>B</kbd> ${mode === "tabs" ? "Log off" : "Back"}</button></footer>`;
+    const target = detail ? ".pc-action, #back" : mode === "tabs" ? '[aria-pressed="true"]' : '[aria-current="true"]';
+    root.querySelector<HTMLButtonElement>(target)?.focus({ preventScroll: true });
+  }
+
+  function selectTab(next: Tab) {
+    state.tab = tab = next;
+    mode = "tabs";
+    receipt = "";
+    render();
+  }
+  function finished(text: string) {
+    receipt = text;
+    options.onTransfer();
+    state[tab] = index();
+    mode = list().length ? "roster" : "tabs";
+    host.replaceChildren(root);
+    render();
+  }
+  function swap(incoming: Pokemon) {
+    host.replaceChildren();
+    mountParty(host, {
+      title: "Swap for " + name(incoming), confirm: "Swap",
+      rows: save.party.map((mon, i) => ({
+        name: name(mon), level: mon.level, status: mon.status, hp: mon.hp, maxHp: mon.stats[0],
+        sprite: options.sprite(mon.species), disabled: !canDeposit(save.party, i, incoming),
+      })),
+      onSelect: i => {
+        const outgoing = name(save.party[i]);
+        if (withdrawPokemon(save, incoming, i)) finished(`${name(incoming)} joined your party. ${outgoing} was stored.`);
+      },
+      onBack: () => { host.replaceChildren(root); render(); },
+    });
+  }
+  function confirm() {
+    const mon = list()[index()];
+    if (!mon) return;
+    receipt = "";
+    if (mode !== "detail") {
+      mode = mode === "tabs" ? "roster" : "detail";
+      render();
+    } else if (eligible()) {
+      if (tab === "party") {
+        if (depositPokemon(save, index())) finished(`${name(mon)} was deposited.`);
+      } else if (save.party.length === 6) swap(mon);
+      else if (withdrawPokemon(save, mon)) finished(`${name(mon)} joined your party.`);
+    } else back();
+  }
+  function back() {
+    receipt = "";
+    if (mode === "tabs") return options.onClose();
+    mode = mode === "detail" ? "roster" : "tabs";
+    render();
+  }
+  function move(delta: number) {
+    receipt = "";
+    mode = "roster";
+    state[tab] = Math.max(0, Math.min(index() + delta, list().length - 1));
+    render();
+  }
+  function input(action: Control) {
+    if (action === "a") return confirm();
+    if (mode === "detail") return;
+    const horizontal = action === "left" || action === "right";
+    if (mode === "tabs") {
+      if (horizontal) selectTab(tab === "party" ? "storage" : "party");
+      else if (action === "down" && list().length) move(0);
+    } else if (action === "up" && index() === 0) back();
+    else move((action === "up" || action === "left" ? -1 : 1) * (horizontal ? pageSize : 1));
+  }
+  root.onclick = event => {
+    const b = event.target instanceof Element ? event.target.closest("button") : null;
+    if (!b || b.disabled) return;
+    if (b.id === "back") back();
+    else if (b.dataset.tab) selectTab(b.dataset.tab as Tab);
+    else if (b.dataset.jump) move(Number(b.dataset.jump) * pageSize);
+    else if (b.dataset.row !== undefined) {
+      receipt = "";
+      state[tab] = Number(b.dataset.row);
+      mode = "detail";
+      render();
+    } else if (b.dataset.command) confirm();
+  };
+  controllers.set(root, { input });
+  render();
+}

@@ -1,3 +1,4 @@
+import { depositPokemon, sortCollection, storePokemon, withdrawPokemon } from "../src/game/collection";
 import { describe, expect, it } from "vitest";
 import {
   freshSave,
@@ -56,6 +57,7 @@ describe("save files", () => {
   it("rejects broken native structures before they reach WebAssembly", () => {
     for (const patch of [
       { moves: [44] },
+      { moves: [252, 0, 0, 0] },
       { dvs: [8, 8, 8, 8] },
       { stats: [23, 14] },
       { hp: 24 },
@@ -137,4 +139,40 @@ it("recovers an old save on a newly planted Cut tree without awarding the badge 
   expect(recovered.flags).toEqual(old.flags);
   expect(recovered.badges).toBe(0);
   expect(normalizeSavePosition(recovered)).toBe(recovered);
+});
+
+describe("Center PC", () => {
+  it("orders old saves, new captures and deposits by species, retaining each individual", () => {
+    const save = populated();
+    const young = { ...pokemon, level: 4, nickname: "Juniper" };
+    const twin = { ...young, nickname: "Ash" };
+    save.storage = [{ ...pokemon, species: 251 }, twin, young, pokemon];
+    sortCollection(save.storage);
+    storePokemon(save.storage, { ...pokemon, species: 1 });
+    expect(save.storage.map(mon => mon.species)).toEqual([1, 58, 58, 58, 251]);
+    expect(save.storage.slice(1, 4)).toEqual([twin, young, pokemon]);
+    save.party.push({ ...pokemon, species: 25 });
+    expect(depositPokemon(save, 1)).toBe(true);
+    expect(save.storage[1].species).toBe(25);
+    expect(withdrawPokemon(save, young)).toBe(true);
+    expect(save.party[1]).toBe(young);
+    expect(save.storage).toContain(twin);
+    expect(withdrawPokemon(save, young)).toBe(false);
+    expect(isValidSave(JSON.parse(JSON.stringify(save)))).toBe(true);
+  });
+  it("swaps into the chosen full-party slot and keeps an able partner on failed transfers", () => {
+    const save = populated(), injured = { ...pokemon, species: 60, hp: 0, status: 8, item: 57 };
+    for (let i = 1; i < 6; i++) save.party.push({ ...pokemon, hp: 0 });
+    storePokemon(save.storage, injured);
+    const lead = save.party[0];
+    expect(withdrawPokemon(save, injured)).toBe(false);
+    expect(withdrawPokemon(save, injured, 0)).toBe(false);
+    expect(depositPokemon(save, 0)).toBe(false);
+    expect(save.party[0]).toBe(lead);
+    expect(save.storage).toEqual([injured]);
+    const outgoing = save.party[3];
+    expect(withdrawPokemon(save, injured, 3)).toBe(true);
+    expect(save.party[3]).toBe(injured);
+    expect(save.storage).toEqual([outgoing]);
+  });
 });
