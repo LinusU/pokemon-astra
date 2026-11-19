@@ -138,6 +138,17 @@ describe("save files", () => {
     expect(recovered.party).toEqual(save.party);
     expect(normalizeSavePosition(recovered)).toBe(recovered);
   });
+  it("preserves a fractional doorway position and recenters a player clipping the jamb", () => {
+    const map = WORLD.mossford_center;
+    const door = map.exits[0];
+    const save = { ...populated(), map: map.id, x: door.x + 0.26, y: door.y + 0.4 };
+    expect(normalizeSavePosition(save)).toBe(save);
+
+    const clipped = { ...save, x: door.x + 0.12 };
+    expect(normalizeSavePosition(clipped)).toEqual({
+      ...clipped, x: door.x + 0.5, y: door.y + 0.5,
+    });
+  });
   it("moves an old save clear of newly solid NPCs without altering progress", () => {
     const save = populated(),
       npc = WORLD.dewdrop.objects.find((o) => o.kind === "person")!;

@@ -279,6 +279,9 @@ export function normalizeSavePosition(save: Save): Save {
     });
   // Map revisions can also strand a player on an otherwise walkable island.
   // Only relocate into the same walkable component as an entrance.
+  const target = safe(save.x, save.y)
+    ? Math.floor(save.y) * map.width + Math.floor(save.x)
+    : -1;
   const accessible = new Set<number>();
   const queue = map.exits.flatMap(({ x, y }) => [
     [x, y],
@@ -292,14 +295,10 @@ export function normalizeSavePosition(save: Save): Save {
     if (x < 0 || x >= map.width || y < 0 || y >= map.height) continue;
     const key = y * map.width + x;
     if (accessible.has(key) || !safe(x + 0.5, y + 0.5)) continue;
+    if (key === target) return save;
     accessible.add(key);
     queue.push([x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]);
   }
-  if (
-    safe(save.x, save.y) &&
-    accessible.has(Math.floor(save.y) * map.width + Math.floor(save.x))
-  )
-    return save;
   let best: { x: number; y: number; distance: number } | undefined;
   for (let y = 0; y < map.height; y++)
     for (let x = 0; x < map.width; x++) {
