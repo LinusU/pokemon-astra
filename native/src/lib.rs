@@ -61,7 +61,17 @@ fn run(v: Value) -> Result<Value, String> {
         }
         "move" => {
             let id = v["id"].as_u64().unwrap_or(0) as u8;
-            Ok(json!({"id":id,"name":names::move_name(id),"pp":move_pp::max_pp(id,0)}))
+            let mut info = json!({"id":id,"name":names::move_name(id),"pp":move_pp::max_pp(id,0)});
+            if id == crystal_battle::defs::HIDDEN_POWER {
+                if let Some(dvs) = v["dvs"].as_u64() {
+                    let word = u16::try_from(dvs).map_err(|_| "Invalid DVs")?;
+                    let [atk_def, spd_spc] = word.to_be_bytes();
+                    let (move_type, power) = crystal_battle::engine::effects_a::hidden_power(atk_def, spd_spc);
+                    info["type"] = json!(move_type);
+                    info["power"] = json!(power);
+                }
+            }
+            Ok(info)
         }
         "training" => {
             let species = v["species"]
@@ -224,6 +234,20 @@ pub unsafe extern "C" fn cry(ptr: *const u8, len: usize, id: u32, length_offset:
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn hidden_power_matches_cartridge_types_and_power_for_every_dv_word() {
+        let types = [1, 2, 3, 4, 5, 7, 8, 9, 20, 21, 22, 23, 24, 25, 26, 27];
+        for word in 0..=u16::MAX {
+            let [atk_def, spd_spc] = word.to_be_bytes();
+            let [atk, def, spd, spc] = [atk_def >> 4, atk_def & 15, spd_spc >> 4, spd_spc & 15];
+            let index = (atk % 4 * 4 + def % 4) as usize;
+            let bits = (atk / 8) * 8 + (def / 8) * 4 + (spd / 8) * 2 + spc / 8;
+            let expected = (types[index], 31 + (bits * 5 + spc % 4) / 2);
+            assert_eq!(crystal_battle::engine::effects_a::hidden_power(atk_def, spd_spc), expected);
+        }
+        let readout = run(json!({"op":"move","id":237,"dvs":0x6aaa})).unwrap();
+        assert_eq!((readout["type"].as_u64(), readout["power"].as_u64()), (Some(22), Some(49)));
+    }
     #[test]
     fn creates_and_heals_real_mon() {
         let mut mon = make_mon(58, 6).unwrap();

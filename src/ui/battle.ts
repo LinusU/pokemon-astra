@@ -41,7 +41,7 @@ type Options = {
   act: (index: number) => BattleSnapshot;
   sprite: (mon: PokemonPortrait, back?: boolean) => string;
   species: (id: number) => { name: string; types?: number[] };
-  move: (id: number) => { name: string; type?: number; pp?: number; power?: number };
+  move: (id: number, dvs?: number) => { name: string; type?: number; pp?: number; power?: number };
   cry: (id: number) => void;
   music?: (cue: "Victory" | "Capture") => void;
   sound?: (id: number) => void;
@@ -1075,8 +1075,8 @@ export class BattlePresenter {
       this.showParty(initialSlot);
       return;
     }
-    const describeMove = (id: number, currentPp?: number) => {
-      const move = this.o.move(id);
+    const describeMove = (id: number, dvs: number, currentPp?: number) => {
+      const move = this.o.move(id, dvs);
       const maxPp = move.pp != null && currentPp != null
         ? Math.min(61, move.pp + Math.min(7, Math.floor(move.pp / 5)) * (currentPp >> 6))
         : move.pp;
@@ -1090,7 +1090,7 @@ export class BattlePresenter {
     this.root.classList.toggle("battle-choosing", !standard || this.category !== "");
     const copy = this.root.querySelector(".battle-copy")!;
     if (learn) {
-      copy.textContent = `${learn.mon} wants to learn ${this.o.move(learn.mv).name}.\n${describeMove(learn.mv)}`;
+      copy.textContent = `${learn.mon} wants to learn ${this.o.move(learn.mv).name}.\n${describeMove(learn.mv, learningMon.dvs)}`;
     } else if (s.site === "OfferSwitch") {
       const enemy = this.o.species(s.state.enemy.active.species);
       const types = [...new Set(enemy.types)].map((type) => typeNames[type]).filter(Boolean);
@@ -1127,7 +1127,7 @@ export class BattlePresenter {
         const index = actions.findIndex((a) => target === undefined
           ? a.Move?.slot === slot
           : a.Item?.id === this.bagItem && a.Item.target === target && a.Item.move_slot === slot);
-        const detail = describeMove(id, mon.pp[slot]);
+        const detail = describeMove(id, mon.dvs, mon.pp[slot]);
         return `<button data-index="${index}" data-move-detail="${escapeHtml(detail)}"${index < 0 ? " disabled" : ""}>${escapeHtml(this.o.move(id).name)}</button>`;
       });
     } else if (s.site === "OfferSwitch") {

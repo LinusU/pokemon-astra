@@ -1,4 +1,5 @@
 /** Browser bridge to the actual Crystal battle engine and ROM decoders. */
+import { dvWord, type PokemonPortrait } from "./appearance";
 import { CRYSTAL_SFX_COUNT, decodeBattleSound, type CaptureSoundState } from "./battle-sound";
 
 export interface Pokemon {
@@ -163,14 +164,15 @@ export class Engine {
       .replace(/-\n/g, "").replace(/\n/g, " ").replaceAll("POKéMON", "Pokémon");
     return { category, description };
   }
-  move(id: number) {
+  move(id: number, dvs?: PokemonPortrait["dvs"]) {
     if (id < 1 || id > 251) throw Error("Invalid move");
-    const move = this.call<{ id: number; name: string; pp: number }>({
+    const move = this.call<{ id: number; name: string; pp: number; type?: number; power?: number }>({
       op: "move",
       id,
+      dvs: id === 237 && dvs !== undefined ? dvWord(dvs) : undefined,
     });
     const offset = 0x41afb + (id - 1) * 7;
-    return { ...move, power: this.rom[offset + 2], type: this.rom[offset + 3] };
+    return { ...move, power: move.power ?? this.rom[offset + 2], type: move.type ?? this.rom[offset + 3] };
   }
   training({ species, level, exp }: Pokemon) {
     return this.call<{ next: number | null; percent: number }>({ op: "training", species, level, exp });

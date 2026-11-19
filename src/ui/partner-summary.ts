@@ -46,7 +46,7 @@ export function mountPartnerSummary(host: HTMLElement, mon: Pokemon, options: Op
   const held = mon.item ? options.itemName(bagKeyForItem(mon.item)) : "None";
   const experience = engine.training(mon);
   const healed = engine.healPokemon(mon);
-  const moves = mon.moves.flatMap((id, i) => id ? [{ ...engine.move(id), ppLeft: mon.pp[i] & 63, ppMax: healed.pp[i] & 63 }] : []);
+  const moves = mon.moves.flatMap((id, i) => id ? [{ ...engine.move(id, mon.dvs), ppLeft: mon.pp[i] & 63, ppMax: healed.pp[i] & 63 }] : []);
   const evolutions = engine.evolutionData(mon.species).evolutions.map(e => ({
     name: engine.species(e.species).name, condition: evolutionCondition(e, options.itemName),
   }));

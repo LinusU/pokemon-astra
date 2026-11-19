@@ -1493,7 +1493,7 @@ function showBattle(fishing = false) {
     act: (index) => battle.act(index),
     sprite,
     species: (id) => engine.species(id),
-    move: (id) => engine.move(id),
+    move: (id, dvs) => engine.move(id, dvs),
     cry,
     music: (cue) => {
       battleMusic = cue === "Capture" ? "capture" : victoryTheme(battleObject);

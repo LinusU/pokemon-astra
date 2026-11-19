@@ -6,10 +6,14 @@ export interface PokemonPortrait {
   paletteDvs?: number;
 }
 
+export function dvWord(dvs: NonNullable<PokemonPortrait["dvs"]>) {
+  return typeof dvs === "number" ? dvs : (dvs[0] << 8) | dvs[1];
+}
+
 export function pokemonAppearance(mon: PokemonPortrait | number) {
   const species = typeof mon === "number" ? mon : mon.species;
   const dvs = typeof mon === "number" ? undefined : mon.dvs;
-  const word = typeof dvs === "number" ? dvs : ((dvs?.[0] ?? 0) << 8) | (dvs?.[1] ?? 0);
+  const word = dvWord(dvs ?? 0);
   const palette = typeof mon === "number" ? word : mon.paletteDvs ?? word;
   const shiny = (palette & 0x2fff) === 0x2aaa;
   // Crystal packs the middle two bits of each DV into the Unown letter index.

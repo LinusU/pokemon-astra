@@ -16,6 +16,22 @@ use crate::defs::*;
 /// `wBattleMonPP - wBattleMonMoves`.
 const PP_OFFSET: u16 = 6;
 
+/// Hidden Power's type and base power from the two cartridge DV bytes.
+pub fn hidden_power(atk_def: u8, spd_spc: u8) -> (u8, u8) {
+    let (attack, defense) = (atk_def >> 4, atk_def & 15);
+    let (speed, special) = (spd_spc >> 4, spd_spc & 15);
+    let high_bits = (attack & 8) | ((defense & 8) >> 1) | ((speed & 8) >> 2) | ((special & 8) >> 3);
+    let power = (5 * high_bits + (special & 3)) / 2 + 31;
+    let mut move_type = ((attack & 3) << 2) + (defense & 3) + 1;
+    if move_type >= BIRD {
+        move_type += 1;
+    }
+    if move_type >= UNUSED_TYPES {
+        move_type += UNUSED_TYPES_END - UNUSED_TYPES;
+    }
+    (move_type, power)
+}
+
 impl Engine {
     // --- shared helpers from effect_commands.asm ---------------------------------
 
@@ -917,22 +933,7 @@ impl Engine {
     pub fn hidden_power_damage(&mut self) -> Flow {
         let hl = if self.is_player_turn() { W_BATTLE_MON_D_VS } else { W_ENEMY_MON_D_VS };
         let (dv0, dv1) = (self.mem.rb(hl), self.mem.rb(hl + 1));
-        // Power: the top bit of each DV.
-        let a = (dv0.rotate_left(4) & 0b1000)
-            | (dv0 & 0b1000) >> 1
-            | (dv1.rotate_left(4) & 0b1000) >> 2
-            | (dv1 & 0b1000) >> 3;
-        // Multiply by 5, add Special & 3, divide by 2 and add 30 + 1.
-        let a = a * 5 + (dv1 & 0b11);
-        let d = (a >> 1) + 30 + 1;
-        // Type: Def & 3 + (Atk & 3) << 2.
-        let mut t = ((dv0 & 0b11) | ((dv0 & 0b11 << 4).rotate_left(4) << 2)) + 1;
-        if t >= BIRD {
-            t += 1;
-            if t >= UNUSED_TYPES {
-                t += UNUSED_TYPES_END - UNUSED_TYPES;
-            }
-        }
+        let (t, d) = hidden_power(dv0, dv1);
         self.set_battle_var(BATTLE_VARS_MOVE_TYPE, t);
         // The rest of the damage inputs, based on the new type, but keep base power.
         self.battle_command_damage_stats()?;
