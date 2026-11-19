@@ -150,6 +150,28 @@ describe("game input", () => {
     expect(input.hit("up")).toBe(true);
     expect(input.held("right")).toBe(false);
   });
+  it("swaps gamepad A and B after releasing the button used to change layouts", () => {
+    const input = new Input();
+    pads = [pad(0, [0, 0], [0])];
+    input.update();
+    expect(input.hit("a")).toBe(true);
+    input.setGamepadLayout(true);
+    input.update();
+    expect(input.held("b")).toBe(false);
+    pads = [pad(0)];
+    input.update();
+    pads = [pad(0, [0, 0], [0, 9])];
+    input.update();
+    expect(input.hit("b") && input.hit("menu")).toBe(true);
+    pads = [pad(0, [0, 0], [1])];
+    input.update();
+    expect(input.hit("a")).toBe(true);
+    pads = [pad(0)];
+    input.update();
+    key("keydown", "z", "KeyZ");
+    input.update();
+    expect(input.hit("a")).toBe(true);
+  });
   it("merges simultaneous touch movement and confirm, and releases cancelled touches", () => {
     const input = new Input();
     const a = new EventTarget() as unknown as HTMLElement;

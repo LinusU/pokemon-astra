@@ -1,3 +1,4 @@
+import { openFieldGuide } from "./ui/field-guide";
 import { mountMart } from "./ui/mart";
 import { chooseEvolutionMove } from "./ui/learn-move";
 import { levelEvolution, queueEvolutionMoves, resolveEvolutionMove, finishEvolutionChoice, recordTravel } from "./game/training";
@@ -5,7 +6,7 @@ import { mountPartnerSummary } from "./ui/partner-summary";
 import { bagKeyForItem, ballIds, giveFromBag, nativeItemId, rewardItems, rewardShortfall, stoneIds } from "./game/items";
 import { hatchEgg } from "./game/nursery";
 import { openNursery, showHatch } from "./ui/nursery";
-import { captureRegistration, fossilChoices, sortCollection, starterSpecies, storePokemon, surveyStipend } from "./game/collection";
+import { captureRegistration, fossilChoices, sortCollection, starterSpecies, storePokemon } from "./game/collection";
 import { mountStoragePc, type PcState } from "./ui/storage-pc";
 import { specimenCard } from "./ui/specimen";
 import { typeNames } from "./game/type-names";
@@ -69,6 +70,7 @@ import { pokemonAppearance, type PokemonPortrait } from "./engine/appearance";
 import type { Engine, Pokemon } from "./engine";
 import { openCartridge } from "./ui/cartridge";
 import "./styles.css";
+import "./ui/settings.css";
 import "./ui/region-map.css";
 
 const journeyStore = new JourneyStore();
@@ -235,6 +237,7 @@ function prepareSave(data: Save) {
 }
 function restoreSession(ready: Save) {
   save = ready;
+  input.setGamepadLayout(!!save.settings.swapGamepadAB);
   fieldBagState = {};
   pcState = {};
   fieldDexState = {};
@@ -427,12 +430,7 @@ function intro(back?: () => void, error = "") {
 }
 function fieldBasics(back: () => void) {
   mode = "guide";
-  const p = panel(
-    layer,
-    "Field basics",
-    `<div class="journal-entries"><article><strong>Find your way</strong><p>Walk with the D-pad, arrows or WASD. Face a person or object and press A or Z. Open Menu with Start or M to see your next stop on the map.</p></article><article><strong>Build your team</strong><p>Walk through tall grass to find Pokémon. Weaken a wild Pokémon, then choose Bag and throw a Poké Ball. Alder pays ₽${surveyStipend} when a wild catch adds a species to your Pokédex. Extra catches go to the PC in every Pokémon Center.</p></article><article><strong>Train and recover</strong><p>Pokémon that fight earn experience. A teammate holding Exp. Share can earn some too. Talk to a road trainer again for a practice battle. Walking together raises friendship. Open Party and read Growth to see how a partner evolves. A Center heals your whole party.</p></article><article><strong>Follow the beacons</strong><p>Your journal follows the survey and records blocked paths. Each badge unlocks a field ability you can use without teaching a move.</p></article></div><button class="secondary" id="back">Back</button>`,
-  );
-  p.querySelector("#back")!.addEventListener("click", back);
+  openFieldGuide(layer, back, !!save.settings.swapGamepadAB, input.connectedGamepads);
 }
 function specimen(mon: Pokemon) {
   return { ...engine.species(mon.species), ...engine.dexEntry(mon.species), image: sprite(mon) };
@@ -999,17 +997,21 @@ function view(v: string, pageIndex = 0) {
     ).join("")}</div>`;
   } else {
     title = "Settings & save";
-    body = `<div class="save-retry" hidden><p class="error" role="alert"></p><button id="retry-save"></button></div><p>Battle speed: ${save.settings.battleSpeed}×</p><div class="buttons"><button id="speed">Change speed</button><button id="time">${save.settings.night ? "Switch to day" : "Camp until night"}</button><button id="music">${sound.enabled ? "Mute sound" : "Play sound"}</button><button id="how">How to play</button><button id="export">Export save</button><button data-backup-picker id="choose-save">Import save</button><input hidden id="import" type="file" accept="application/json,.json"></div><p class="small muted">Controller: ${escapeHtml(
-      input.connectedGamepads
-        .map((p) => p.id)
-        .join(", ") || "No gamepad connected",
-    )}. Standard 8BitDo modes use A, B, Start and the D-pad or left stick.</p><p class="small muted">To install: on iPhone or iPad, open Share and choose Add to Home Screen. On Android, use your browser’s Install app or Add to Home screen menu.</p><p class="small muted">Your adventure saves automatically in this browser. Export a backup to keep it safe.</p>`;
+    body = `<div class="save-retry" hidden><p class="error" role="alert"></p><button id="retry-save"></button></div>
+      <div class="preference-grid">
+        <button id="speed" aria-label="Change battle speed, currently ${save.settings.battleSpeed}×">Battle speed<strong>${save.settings.battleSpeed}×</strong></button>
+        <button id="time" aria-label="Camp until ${save.settings.night ? "day" : "night"}">Camp<strong>${save.settings.night ? "Night" : "Day"}</strong></button>
+        <button id="music" aria-pressed="${sound.enabled}">Sound<strong>${sound.enabled ? "On" : "Off"}</strong></button>
+        <button id="gamepad-layout" aria-pressed="${!!save.settings.swapGamepadAB}" aria-label="Swap controller A and B">Controller A/B<strong>${save.settings.swapGamepadAB ? "Swapped" : "Standard"}</strong></button>
+      </div>
+      <div class="save-tools"><p>Your journey saves in this browser.</p><div class="buttons"><button id="export">Export save</button><button data-backup-picker id="choose-save">Import save</button><input hidden id="import" type="file" accept="application/json,.json"></div></div>
+      <div class="settings-footer"><button class="secondary" id="how">How to play</button><button class="secondary" id="back">Back</button></div>`;
   }
   const p = panel(
     layer,
     title,
-    v === "map" ? body : `${body}<div class="buttons"><button class="secondary" id="back">Back</button></div>`,
-    v === "map" ? "atlas-screen" : "", fieldCursors[v] ??= {},
+    v === "map" || v === "settings" ? body : `${body}<div class="buttons"><button class="secondary" id="back">Back</button></div>`,
+    v === "map" ? "atlas-screen" : v === "settings" ? "settings-screen" : "", fieldCursors[v] ??= {},
   );
   if (v === "map") {
     const objective = campaignObjective(save);
@@ -1040,6 +1042,12 @@ function view(v: string, pageIndex = 0) {
     ?.addEventListener("click", () => fieldBasics(() => view("settings")));
   p.querySelector("#speed")?.addEventListener("click", () => {
     save.settings.battleSpeed = (save.settings.battleSpeed % 3) + 1;
+    persist();
+    view(v);
+  });
+  p.querySelector("#gamepad-layout")?.addEventListener("click", () => {
+    save.settings.swapGamepadAB = !save.settings.swapGamepadAB;
+    input.setGamepadLayout(save.settings.swapGamepadAB);
     persist();
     view(v);
   });

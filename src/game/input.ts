@@ -26,11 +26,11 @@ const keys: Record<string, Action> = {
   Shift: "speed",
 };
 
-function gamepadActions(pad: Gamepad) {
+function gamepadActions(pad: Gamepad, swapAB: boolean, suppressed: Set<number> | undefined) {
   const actions = new Set<Action>();
   const on = (i: number) => !!pad.buttons[i]?.pressed;
-  if (on(0)) actions.add("a");
-  if (on(1)) actions.add("b");
+  if (on(0) && !suppressed?.has(0)) actions.add(swapAB ? "b" : "a");
+  if (on(1) && !suppressed?.has(1)) actions.add(swapAB ? "a" : "b");
   if (on(9)) actions.add("menu");
   const dpad = on(12) || on(13) || on(14) || on(15);
   if (on(12) || (!dpad && (pad.axes[1] ?? 0) < -0.35)) actions.add("up");
@@ -48,14 +48,24 @@ export class Input {
   private pending = new Set<Action>();
   private pressed = new Set<Action>();
   private active = -1;
+  private swapAB = false;
   private padPolling: "active" | "blurred" | "resuming" | "denied" = "active";
   private pads: Gamepad[] = [];
   get connectedGamepads(): readonly Gamepad[] { return this.pads; }
   confirmLabel = window.matchMedia?.("(pointer: coarse)").matches ? "A" : "Z";
   private padStates = new Map<
     number,
-    { id: string; buttons: boolean[]; axes: number[]; actions: Set<Action>; heldOnFocus?: Set<Action> }
+    { id: string; buttons: boolean[]; axes: number[]; actions: Set<Action>; heldOnFocus?: Set<Action>; suppressed?: Set<number> }
   >();
+
+  setGamepadLayout(swapAB: boolean) {
+    if (this.swapAB === swapAB) return;
+    this.swapAB = swapAB;
+    for (const state of this.padStates.values()) {
+      // The button that confirmed the change must not immediately act as Back.
+      state.suppressed = new Set([0, 1].filter(i => state.buttons[i]));
+    }
+  }
 
   constructor() {
     window.addEventListener("keydown", (event) => {
@@ -176,7 +186,9 @@ export class Input {
         this.active = pad.index;
         this.confirmLabel = "A";
       }
-      const actions = gamepadActions(pad);
+      const suppressed = previous?.suppressed;
+      if (suppressed) for (const index of suppressed) if (!buttons[index]) suppressed.delete(index);
+      const actions = gamepadActions(pad, this.swapAB, suppressed);
       const heldOnFocus = this.padPolling === "resuming" ? new Set(actions) : previous?.heldOnFocus;
       // Each control held when returning must be released before it can fire again.
       if (heldOnFocus) {
@@ -186,7 +198,7 @@ export class Input {
         }
       }
       this.padStates.set(pad.index, {
-        id: pad.id, buttons, axes, actions,
+        id: pad.id, buttons, axes, actions, suppressed: suppressed?.size ? suppressed : undefined,
         heldOnFocus: heldOnFocus?.size ? heldOnFocus : undefined,
       });
     }

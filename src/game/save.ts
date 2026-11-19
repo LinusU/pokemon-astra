@@ -30,7 +30,7 @@ export type Save = {
   center?: string;
   hallOfFame?: { species: number; level: number; dvs?: number[] }[];
   repel?: number;
-  settings: { battleSpeed: number; night?: boolean; music?: boolean };
+  settings: { battleSpeed: number; night?: boolean; music?: boolean; swapGamepadAB?: boolean };
 };
 export const freshSave = (): Save => ({
   version: 1,
@@ -211,7 +211,8 @@ export function isValidSave(x: any): x is Save {
     !!x.settings &&
     integer(x.settings.battleSpeed, 1, 3) &&
     (x.settings.night === undefined || typeof x.settings.night === "boolean") &&
-    (x.settings.music === undefined || typeof x.settings.music === "boolean")
+    (x.settings.music === undefined || typeof x.settings.music === "boolean") &&
+    (x.settings.swapGamepadAB === undefined || typeof x.settings.swapGamepadAB === "boolean")
   );
 }
 export function meetsRequirement(
