@@ -13,6 +13,7 @@ import { Renderer } from "./game/render";
 import { WorldActors, interactionTarget } from "./game/actors";
 import {
   barrierTarget,
+  fieldActions,
   exitOpen,
   exitAt,
   connectedBlocked,
@@ -20,7 +21,7 @@ import {
 } from "./game/navigation";
 import { regionPosition } from "./game/region";
 import { mountRegionChart } from "./ui/region-map";
-import { campaignObjective, directions, bearings } from "./game/journal";
+import { campaignObjective, directions, bearings, journalPaths, journalRequests } from "./game/journal";
 import { drawFieldMap } from "./ui/field-map";
 import { mountBag, itemInfo, type BagState } from "./ui/bag";
 import { battleStatus, mountParty } from "./ui/party";
@@ -43,7 +44,6 @@ import {
 import { createShell, panel, escapeHtml, type PanelCursor } from "./ui/shell";
 import {
   WORLD,
-  QUESTS,
   isWildEncounter,
   BADGES,
   type Exit,
@@ -487,35 +487,6 @@ function applyReward(r?: Reward) {
 }
 const isExitOpen = (exit: Exit) => exitOpen(exit, has, save.flags);
 
-const fieldActions: Record<string, [string, string, string]> = {
-  cut: [
-    "Overgrown tree",
-    "Use Cut",
-    "The branches fell away. The path is clear.",
-  ],
-  strength: [
-    "Heavy boulder",
-    "Use Strength",
-    "You pushed the boulder off the trail.",
-  ],
-  whirlpool: [
-    "Whirlpool",
-    "Use Whirlpool",
-    "The spinning water settled. You can cross.",
-  ],
-  surf: [
-    "Water crossing",
-    "Use Surf",
-    "Your Pokémon carried you onto the water.",
-  ],
-  rockSmash: ["Cracked rock", "Use Rock Smash", "The cracked rock crumbled."],
-  flash: ["Dark passage", "Use Flash", "The passage lit up."],
-  waterfall: [
-    "Waterfall",
-    "Use Waterfall",
-    "Your Pokémon found a way up the falls.",
-  ],
-};
 function inspectBarrier(exit: Exit) {
   const obstacle = exit.barrier!;
   const action = fieldActions[obstacle.kind];
@@ -1021,46 +992,15 @@ function view(v: string, pageIndex = 0) {
   } else if (v === "journal") {
     title = "Beacon journal";
     const goal = directions(save, has);
-    const gates = Object.values(WORLD)
-      .flatMap((m) =>
-        m.exits
-          .filter((e) => save.flags.includes(`gate_${m.id}_${e.to}`))
-          .map(
-            (e) =>
-              `<article><strong>${escapeHtml(WORLD[e.to].name)}</strong> · ${escapeHtml(m.name)}<p class="small">${isExitOpen(e) ? "The way is open." : has(e.requires) && e.barrier ? (fieldActions[e.barrier.kind]?.[1] || "Inspect the path") + " here." : escapeHtml(e.lockedDialogue || "Check the next beacon objective.")}</p></article>`,
-          ),
-      )
-      .join("");
-    const entries = QUESTS.flatMap((q) => {
-      const who = Object.values(WORLD).find((m) =>
-        m.objects.some((o) => o.quest === q.id),
-      )!;
-      const npc = who.objects.find((o) => o.quest === q.id)!;
-      const done = save.flags.includes(q.completedFlag);
-      if (
-        !done &&
-        !save.flags.includes("met_" + npc.id) &&
-        !save.flags.includes("request_" + q.id) &&
-        !(q.id === "parcel" && save.flags.includes("found_parcel"))
-      )
-        return [];
-      const clue = requestHint(q.id, save.flags, save.caught, id => engine.species(id).types);
-      const ready = !done && has(npc.requires);
-      return {
-        done,
-        ready,
-        local: who.id === save.map,
-        html: `<article><strong>${done ? "✓ " : ""}${escapeHtml(q.name)}</strong><p class="small">${escapeHtml(done ? "Received " + q.reward : ready ? "Return to " + npc.name + " in " + who.name + "." : clue)}</p>${done || ready ? "" : `<span class="small muted">${escapeHtml(who.name)} · ${escapeHtml(q.reward)}</span>`}</article>`,
-      };
-    }).sort(
-      (a, b) =>
-        Number(a.done) - Number(b.done) ||
-        Number(b.ready) - Number(a.ready) ||
-        Number(b.local) - Number(a.local),
-    );
+    const gates = journalPaths(save, has).map(path =>
+      `<article><strong>${escapeHtml(path.title)}</strong> · ${escapeHtml(path.place)}<p class="small">${escapeHtml(path.note)}</p></article>`,
+    ).join("");
+    const entries = journalRequests(save, has, id => engine.species(id).types).map(request =>
+      `<article><strong>${request.status === "Filed" ? "✓ " : ""}${escapeHtml(request.title)}</strong><p class="small">${escapeHtml(request.note)}</p><span class="small muted">${escapeHtml(request.place)} · ${escapeHtml(request.reward)}</span></article>`,
+    ).join("");
     const shores = save.badges >= 3 && save.badges < 6
       ? `<h3>Choose your next beacon</h3><div class="buttons">${["Sunspire · Sable", "Cinderfall · Flint", "Rimepeak · Neve"].map((label, i) => save.flags.includes("badge" + (i + 4)) ? "" : `<button data-survey="${i + 4}" aria-pressed="${save.survey === i + 4}">${label}</button>`).join("")}</div>` : "";
-    body = `${shores}<div class="objective"><strong>${escapeHtml(goal.title)}</strong><br>${escapeHtml(goal.hint)}</div><h3>Beacon badges</h3><p>${save.badges ? BADGES.filter((_, i) => badgeMask(save) & (1 << i)).join(" · ") : "Your first keeper is Fern in Bramble."}</p>${save.hallOfFame ? '<button id="hall">Hall of Fame</button>' : ""}${gates ? `<h3>Paths to revisit</h3><div class="journal-entries">${gates}</div>` : ""}<h3>Field requests</h3><div class="journal-entries">${entries.map((e) => e.html).join("") || "<p>No requests yet. Talk to people along the way.</p>"}</div>`;
+    body = `${shores}<div class="objective"><strong>${escapeHtml(goal.title)}</strong><br>${escapeHtml(goal.hint)}</div><h3>Beacon badges</h3><p>${save.badges ? BADGES.filter((_, i) => badgeMask(save) & (1 << i)).join(" · ") : "Your first keeper is Fern in Bramble."}</p>${save.hallOfFame ? '<button id="hall">Hall of Fame</button>' : ""}${gates ? `<h3>Paths to revisit</h3><div class="journal-entries">${gates}</div>` : ""}<h3>Field requests</h3><div class="journal-entries">${entries || "<p>No requests yet. Talk to people along the way.</p>"}</div>`;
   } else if (v === "map") {
     title = "Astra region";
     body = `<header class="atlas-header"><h2>Astra region</h2><div><button data-zoom aria-pressed="false">Zoom +</button><button id="local-map">Local map</button><button id="back">Back</button></div></header>

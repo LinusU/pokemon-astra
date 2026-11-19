@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { WORLD, type Requirement } from "../src/world";
-import { campaignObjective, directions, routeTo } from "../src/game/journal";
+import { campaignObjective, directions, journalPaths, journalRequests, routeTo } from "../src/game/journal";
 import { awardBadge, badgeMask, fieldTeam } from "../src/game/badges";
 import { freshSave, meetsRequirement } from "../src/game/save";
 
@@ -66,4 +66,34 @@ it.each(["456", "465", "546", "564", "645", "654"])("can survey the three shores
   }
   expect(earned.join("")).toBe("123" + order + "78");
   expect(save.flags).toContain("champion");
+});
+
+it("keeps undiscovered requests out and follows a parcel from pickup to filing", () => {
+  const save = freshSave();
+  const requests = () => journalRequests(save, req => meetsRequirement(save, req), () => []);
+  expect(requests()).toEqual([]);
+  save.flags.push("found_parcel", "request_collector", "quest_hearth_complete");
+  expect(requests().map(entry => entry.status)).toEqual(["Active", "Active", "Filed"]);
+  expect(requests()[0].note).toContain("packing bench");
+  save.items.courier_parcel = 1;
+  save.flags.push("parcel_wrapped");
+  expect(requests()[0]).toMatchObject({ title: "Lost Parcel", status: "Ready", reward: "5 Great Balls" });
+  save.flags.push("quest_parcel_complete");
+  expect(requests()[0].id).toBe("collector");
+  expect(requests().find(entry => entry.id === "parcel")?.status).toBe("Filed");
+});
+
+it("records an inspected path through its blocked, clearable and open states", () => {
+  const save = freshSave();
+  const origin = Object.values(WORLD).find(map => map.exits.some(exit => exit.barrier?.kind === "cut"))!;
+  const exit = origin.exits.find(exit => exit.barrier?.kind === "cut")!;
+  let permitted = false;
+  const paths = () => journalPaths(save, () => permitted);
+  expect(paths()).toEqual([]);
+  save.flags.push(`gate_${origin.id}_${exit.to}`);
+  expect(paths()[0]).toMatchObject({ status: "Blocked", place: origin.name, title: WORLD[exit.to].name });
+  permitted = true;
+  expect(paths()[0]).toMatchObject({ status: "Clearable", note: "Use Cut here." });
+  save.flags.push(exit.barrier!.flag!);
+  expect(paths()[0].status).toBe("Open");
 });

@@ -1,11 +1,14 @@
 import { expeditions, expeditionState } from "../world/expeditions";
 import {
   WORLD,
+  QUESTS,
   type Exit,
   type Requirement,
   type WorldMap,
   type WorldObject,
 } from "../world";
+import { requestHint } from "../world/requests";
+import { exitOpen, fieldActions } from "./navigation";
 import type { Save } from "./save";
 
 type Landmark = { map: WorldMap; object: WorldObject };
@@ -167,4 +170,67 @@ export function directions(
       : goal.map.name,
     marker: next,
   };
+}
+
+export type JournalNote = {
+  id: string;
+  title: string;
+  status: "Active" | "Ready" | "Filed" | "Blocked" | "Clearable" | "Open";
+  place: string;
+  note: string;
+  reward?: string;
+};
+
+const requesters = new Map(
+  [...landmarks.values()].flatMap(landmark =>
+    landmark.object.quest ? [[landmark.object.quest, landmark] as const] : [],
+  ),
+);
+
+export function journalRequests(
+  save: Save,
+  permitted: (requirement?: Requirement) => boolean,
+  typesOf: (id: number) => number[],
+) {
+  const entries = QUESTS.flatMap(quest => {
+    const { map, object } = requesters.get(quest.id)!;
+    const done = save.flags.includes(quest.completedFlag);
+    const discovered = done || save.flags.includes("met_" + object.id) ||
+      save.flags.includes("request_" + quest.id) ||
+      (quest.id === "parcel" && save.flags.includes("found_parcel"));
+    if (!discovered) return [];
+    const ready = !done && permitted(object.requires);
+    return [{
+      id: quest.id,
+      title: quest.name,
+      status: done ? "Filed" as const : ready ? "Ready" as const : "Active" as const,
+      place: map.name,
+      note: done ? object.victoryDialogue || "Request complete."
+        : ready ? `Return to ${object.name} in ${map.name}.`
+        : requestHint(quest.id, save.flags, save.caught, typesOf),
+      reward: quest.reward,
+    }];
+  });
+  const priority = { Ready: 0, Active: 1, Filed: 2 };
+  const here = WORLD[save.map].name;
+  return entries.sort((a, b) =>
+    priority[a.status] - priority[b.status] || Number(b.place === here) - Number(a.place === here),
+  );
+}
+
+export function journalPaths(save: Save, permitted: (requirement?: Requirement) => boolean): JournalNote[] {
+  return Object.values(WORLD).flatMap(map => map.exits.flatMap(exit => {
+    const id = `gate_${map.id}_${exit.to}`;
+    if (!save.flags.includes(id)) return [];
+    const open = exitOpen(exit, permitted, save.flags);
+    const action = exit.barrier && permitted(exit.requires) && fieldActions[exit.barrier.kind];
+    return [{
+      id,
+      title: WORLD[exit.to].name,
+      status: open ? "Open" : action ? "Clearable" : "Blocked",
+      place: map.name,
+      note: open ? "The way is open." : action ? action[1] + " here."
+        : exit.lockedDialogue || "Check the next beacon objective.",
+    } satisfies JournalNote];
+  }));
 }

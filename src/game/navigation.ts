@@ -1,6 +1,36 @@
 import { WORLD, type Exit, type Requirement, type WorldMap } from "../world";
 import { interactionDistance } from "./actors";
 
+export const fieldActions: Record<string, [string, string, string]> = {
+  cut: [
+    "Overgrown tree",
+    "Use Cut",
+    "The branches fell away. The path is clear.",
+  ],
+  strength: [
+    "Heavy boulder",
+    "Use Strength",
+    "You pushed the boulder off the trail.",
+  ],
+  whirlpool: [
+    "Whirlpool",
+    "Use Whirlpool",
+    "The spinning water settled. You can cross.",
+  ],
+  surf: [
+    "Water crossing",
+    "Use Surf",
+    "Your Pokémon carried you onto the water.",
+  ],
+  rockSmash: ["Cracked rock", "Use Rock Smash", "The cracked rock crumbled."],
+  flash: ["Dark passage", "Use Flash", "The passage lit up."],
+  waterfall: [
+    "Waterfall",
+    "Use Waterfall",
+    "Your Pokémon found a way up the falls.",
+  ],
+};
+
 export function exitOpen(
   exit: Exit,
   has: (requirement?: Requirement) => boolean,
