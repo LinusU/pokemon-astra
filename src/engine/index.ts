@@ -71,6 +71,7 @@ export interface BattleOptions {
   money?: number;
   badges?: number;
   seed?: number;
+  night?: boolean;
   seen?: number[];
   caught?: number[];
 }
@@ -303,8 +304,9 @@ export class Engine {
       opponent: opp,
       options: { battle_scene: true },
       world: {
-        time_of_day: 2,
-        unlocked_unowns: 0,
+        time_of_day: options.night ? 2 : 1,
+        // Astra’s wild letter habitat is independent of Johto’s four ruin puzzles.
+        unlocked_unowns: 0x0f,
         rival_name: "ROBIN",
         seen: options.seen ?? [],
         caught: options.caught ?? [],

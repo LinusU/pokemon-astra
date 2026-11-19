@@ -1388,6 +1388,7 @@ function startBattle(species: number, level: number, o?: WorldObject, fishing = 
       ]),
       money: save.money,
       badges: badgeMask(save),
+      night: !!save.settings.night,
       seen: save.seen,
       caught: save.caught,
     });

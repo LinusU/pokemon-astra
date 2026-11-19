@@ -1,11 +1,40 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
+import { isWildEncounter, WORLD } from "../src/world";
 import { Engine } from "../src/engine";
 import { HEAL_TRACK, OVERWORLD_SOUNDS } from "../src/game/audio";
 import { MUSIC_TRACKS } from "../src/game/music";
 const available =
   existsSync("pokecrystal11.gbc") && existsSync("public/astra_native.wasm");
 describe.skipIf(!available)("Crystal ROM native bridge", () => {
+  it("captures every species in the authored habitats and records the camp time", async () => {
+    const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});
+    const engine = new Engine(instance.exports as never, readFileSync("pokecrystal11.gbc"));
+    const habitats = new Map<number, number>();
+    for (const map of Object.values(WORLD)) {
+      for (const entry of map.encounters) habitats.set(entry.species, entry.minLevel);
+      for (const object of map.objects.filter(isWildEncounter)) {
+        const mon = object.trainer!.team[0];
+        habitats.set(mon.species, mon.level);
+      }
+    }
+    expect(habitats.size).toBe(251);
+    const party = [engine.makeStarter(60)];
+    let caught: number[] = [];
+    for (const [species, level] of habitats) {
+      const night = species % 2 === 0;
+      const battle = engine.startBattle({ party, opponent: { species, level }, seed: species,
+        balls: [[1, 1]], items: [], caught, seen: caught, night });
+      const ball = battle.snapshot().legal.findIndex((a: any) => a.Item?.id === 1);
+      expect(ball, `Master Ball for species ${species}`).toBeGreaterThanOrEqual(0);
+      const result = battle.act(ball).result!;
+      const mon = result.party[result.caught!];
+      expect(mon.species).toBe(species);
+      expect(mon.caught[0] >> 6).toBe(night ? 3 : 2);
+      caught = result.world.caught;
+    }
+    expect(new Set(caught).size).toBe(251);
+  });
   it("reads both pages of all 251 species records across the four ROM banks", async () => {
     const rom = readFileSync("pokecrystal11.gbc");
     const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});
