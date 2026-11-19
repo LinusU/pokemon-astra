@@ -143,9 +143,13 @@ At the Cinderfall forge the player heated, hammered and quenched the salvaged or
 
 Whirlpool opened Bellflower Way. At Echo Bell Tower the player rang the three-rope watch peal, heard the recording and took a rubbing to the historian, who introduced Unown. Robin’s testimony opened the way to Lyra. After winning the seventh badge, the player collected the night clerk’s pass, found the signed diversion order and defeated Director Vale in his office.
 
-At Bellweather’s PC, the player withdrew the Dewgong caught on High Pass. Waterfall opened Route 18. The player aligned the Starfall telescope, defeated Aster’s three gym trainers and won the eighth badge from Orion. After shutting down the Celestial Engine, the team took the west pitch of Victory Ascent, defeated Rope Captain Tor and signed the summit register.
+At Bellweather’s PC, the player withdrew the Dewgong caught on Snowmelt Road. Waterfall opened Route 18. The player aligned the Starfall telescope, defeated Aster’s three gym trainers and won the eighth badge from Orion. After shutting down the Celestial Engine, the team took the west pitch of Victory Ascent, defeated Rope Captain Tor and signed the summit register.
 
 At Crown Summit, the player used the PC to exchange Diglett for Noctowl and stocked up for the League. The team beat Rowan, Petra and Nyx before falling to Gale. The party woke up healed at Crown Summit and the League challenge reset.
+
+The player caught Aerodactyl on Crown Road and Ampharos on Observatory Approach and withdrew them at Crown Summit and Aster. Gale won the next attempt. Ampharos then led the party against the remaining route trainers, including Robin on Route 18, reaching level 51 before the third attempt. The team defeated the Elite Four and Champion Mira and entered the Hall of Fame with Arcanine (63), Aerodactyl (48), Noctowl (41), Dewgong (61), Ampharos (59) and Magcargo (36). This journey used scripted browser inputs and normal saves from Dewdrop through the League. Its battle driver used the native campaign suite’s decision rules for the final attempt.
+
+After reloading the same journey, the player flew to Dewdrop, walked Aurora Trail and restored the sanctuary by observing Butterfree in daylight and the Wooper eggs at night. A separate native survey started from a copy of this save with 16 living species. It caught the other 235 across 1,524 encounters and paid for supplies with field grants and 25 rematches. In Chrome the player checked the 245 stored species at Dewdrop’s PC, selected the Ember nursery cover at Aurora, read the certificate and reloaded offline with all 251 partners.
 
 ## Save recovery
 
