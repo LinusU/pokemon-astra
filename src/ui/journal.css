@@ -222,3 +222,14 @@
   .jn-tabs button:hover, .jn-row:hover { background: #d7dfbf; color: var(--ink); }
   .jn-foot button:hover, .jn-pager button:enabled:hover { text-decoration: underline; }
 }
+
+/* Keep the whole book and the touch pad in view when the pad sits below the screen. */
+@media (min-height: 551px) and (pointer: coarse), (orientation: portrait) and (max-width: 650px) {
+  .shell:has(.beacon-journal) {
+    --journal-chrome: 278px;
+    width: min(100%, 1050px, calc((100dvh - var(--safe-top) - var(--safe-bottom) - var(--journal-chrome)) * 4 / 3 + 30px));
+  }
+}
+@media (orientation: portrait) and (max-width: 650px) {
+  .shell:has(.beacon-journal) { --journal-chrome: calc(268px + clamp(20px, 7dvh, 70px)); }
+}

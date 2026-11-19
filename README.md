@@ -47,7 +47,9 @@ The region plan is in [docs/DESIGN.md](docs/DESIGN.md); implemented content and 
 
 Shift runs faster. Connect the FlipPad in a browser-supported Gamepad API mode, then press a button. The last actively used controller is selected so an idle receiver does not steal input. Standard mappings are implemented and tested with simulated pad events; physical FlipPad/iOS hardware has not been tested here.
 
-Open **Menu → Map** for a zoomable regional atlas. Select towns and numbered routes to see their connections, or open **Local map** for the next exit or objective. After the third badge, the journal can guide you to Sunspire, Cinderfall or Rimepeak in your chosen order. Inspect obstacles with A to record blocked routes in the journal. It also records requests you have discovered and your next survey stop. Party details show current moves, PP and evolution methods.
+Open **Menu → Map** for a zoomable regional atlas. Select towns and numbered routes to see their connections, or open **Local map** for the next exit or objective. Party details show current moves, PP and evolution methods.
+
+Open **Menu → Journal** and press left or right to turn between Survey, Requests, Paths and Badges. In Requests or Paths, press up or down to select an entry, A to read it and B to return to the index. Inspect a blocked route in the field with A to record it. After the third badge, choose your next beacon on the Survey page to follow Sunspire, Cinderfall or Rimepeak in your preferred order.
 
 Saves and cartridge bytes stay in this browser's IndexedDB. **Options → Export save** creates a portable JSON backup; importing validates native Pokémon data and repairs positions obstructed by map revisions. Clearing browser storage removes the cached cartridge and save. Export a backup before changing devices or clearing storage. A new adventure asks for confirmation.
 
