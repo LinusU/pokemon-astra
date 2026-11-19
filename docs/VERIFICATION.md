@@ -123,7 +123,7 @@ After losing to Fern, the player picked up the orchard’s Fire Stone, evolved G
 
 The same adventure reached Tideglass. After an offline restart, its PC returned Rattata with its original record. The player drained the breathing pool in Undertow Cave, crossed the shell bar and restored the fog signal. They caught Chinchou on the coast, crossed the lightship’s lowered gangway and fought both dock trainers. After the first loss to Marina, optional trainers on Amberbank and Saltwind Coast and a return to the Mart prepared the party for a rematch. The win awarded the Tidal Badge and Surf.
 
-From Tideglass the player followed Canal Road to Copperwick, read the night meter in the loft and isolated the foundry feeder. The service lift reopened after the intake was restored. Beating Coil Winder Tess opened the west catwalk to Volt.
+From Tideglass the player followed Canal Road to Copperwick, read the night meter in the loft and isolated the foundry feeder. The service lift reopened after the intake was restored. Beating Coil Winder Tess opened the west catwalk to Volt. After a loss, the player trained Diglett near Copperworks, beat Line Runner Dex on the east catwalk and returned to Volt with Diglett leading. The rematch ended with three badges, Flash and a level-16 Diglett in the saved party.
 
 ## Save recovery
 
