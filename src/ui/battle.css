@@ -635,7 +635,6 @@
 
 /* The four move positions stay put as PP and move availability change. */
 .battle-moves .battle-box {
-  flex-basis: 44%;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 0.7cqw;
@@ -646,6 +645,11 @@
   font-size: min(4.7cqw, 24px);
   line-height: 1;
   overflow: hidden;
+}
+.battle-moves:not(.battle-learning) .battle-copy {
+  block-size: 2lh;
+  font-size: clamp(12px, 4.2cqw, 22px);
+  overflow: auto;
 }
 .battle-moves .battle-controls,
 .battle-controls:has([data-group="FIGHT"]) {
@@ -661,6 +665,9 @@
   background: #ebeed5;
   font-size: min(5.5cqw, 28px);
   padding: 0 0.6cqw 0 3.6cqw;
+}
+.battle-moves:not(.battle-learning) .battle-controls > * {
+  font-size: clamp(13px, 5cqw, 26px);
 }
 .battle-empty-move {
   color: #899781;
