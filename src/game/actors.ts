@@ -322,29 +322,24 @@ export class WorldActors {
     const dx = player.x - actor.x,
       dy = player.y - actor.y;
     actor.facing = facingToward(dx, dy);
-    if (pursuit.age > 6) {
-      actor.moving = false;
-      actor.wait = 3;
-      this.pursuit = undefined;
-      return;
-    }
-    if (Math.hypot(dx, dy) <= 1.0) {
-      actor.moving = false;
-      actor.wait = 0.35;
-      this.pursuit = undefined;
-      return map.objects.find((o) => o.id === pursuit.id);
-    }
-    const step = Math.min(dt * 2.7, Math.hypot(dx, dy) - 0.92);
-    const nx = actor.x + (dx / Math.hypot(dx, dy)) * step,
-      ny = actor.y + (dy / Math.hypot(dx, dy)) * step;
-    if (!terrainBlocked(map, nx, ny) && !this.solid(map, nx, ny, pursuit.id)) {
+    const distance = Math.hypot(dx, dy);
+    const inRange = distance <= 1;
+    const fraction = inRange ? 0 : Math.min(dt * 2.7, distance - 0.92) / distance;
+    const nx = actor.x + dx * fraction,
+      ny = actor.y + dy * fraction;
+    const cancelled = pursuit.age > 6 ||
+      (!inRange && this.solid(map, nx, ny, pursuit.id));
+    if (!cancelled && !inRange && !terrainBlocked(map, nx, ny)) {
       actor.x = nx;
       actor.y = ny;
       actor.moving = true;
-    } else {
-      actor.moving = false;
-      actor.wait = 3;
-      this.pursuit = undefined;
+      return;
     }
+
+    // A trainer who already saw the player can call out from the last walkable point.
+    actor.moving = false;
+    actor.wait = cancelled ? 3 : 0.35;
+    this.pursuit = undefined;
+    if (!cancelled) return map.objects.find((o) => o.id === pursuit.id);
   }
 }

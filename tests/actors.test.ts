@@ -128,6 +128,27 @@ describe("living overworld actors", () => {
     ).toBeGreaterThanOrEqual(0.9);
     expect(actors.approaching).toBe(false);
   });
+  it("lets Pia challenge the player when the Lantern Wood corner stops her approach", () => {
+    const room = WORLD.lantern_1;
+    const pia = room.objects.find((object) => object.id === "lantern_guardian_trainer")!;
+    const actors = new WorldActors();
+    const player = { x: 2.8, y: 2.95 };
+    actors.enter(room);
+    expect(terrainBlocked(room, player.x, player.y)).toBe(false);
+    expect(actors.spotTrainer(room, player, () => true)).toBe(pia);
+
+    let challenger: WorldObject | undefined;
+    for (let i = 0; i < 180 && actors.approaching; i++)
+      challenger = actors.approach(room, 1 / 60, player);
+
+    expect(challenger).toBe(pia);
+    expect(actors.approaching).toBe(false);
+    const actor = actors.states[pia.id];
+    expect(actor.x).toBeLessThan(pia.x + 0.5);
+    expect(Math.hypot(actor.x - player.x, actor.y - player.y)).toBeGreaterThan(1);
+    expect(terrainBlocked(room, actor.x, actor.y)).toBe(false);
+    expect(actor).toMatchObject({ moving: false, notice: false });
+  });
   it("does not let a wandering NPC move into the player", () => {
     const m = map([person]),
       actors = new WorldActors();
