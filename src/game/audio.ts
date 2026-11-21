@@ -54,13 +54,14 @@ export class GameAudio {
   private buffers = new Map<string, AudioBuffer>();
   private timer?: number;
   private next = 0;
-  private current?: MusicScene;
+  private current?: MusicScene | number;
   private trackEnded = false;
   private engine?: Engine;
   enabled = true;
   failed = false;
   constructor(
-    private scene: () => MusicScene,
+    /** A named scene, or a Crystal music id for adventures with their own song tables. */
+    private scene: () => MusicScene | number,
     private changed: () => void = () => {},
   ) {
     document.addEventListener("visibilitychange", () => {
@@ -159,8 +160,9 @@ export class GameAudio {
       const scene = this.scene();
       if (scene !== this.current) {
         this.stopScheduled();
-        this.trackEnded = scene === "silent";
-        if (!this.trackEnded) this.engine.startMusicTrack(MUSIC_TRACKS[scene]);
+        const track = typeof scene === "number" ? scene : MUSIC_TRACKS[scene];
+        this.trackEnded = track === 0;
+        if (!this.trackEnded) this.engine.startMusicTrack(track);
         this.current = scene;
         this.next = ctx.currentTime + 0.025;
       }

@@ -48,6 +48,7 @@ import { BattlePresenter, escapeAnnounced } from "./ui/battle";
 import { playEvolution } from "./ui/evolution";
 import { createJourney, deleteJourney, download, JourneyConflict, JourneyStore, listJourneys, peekJourney, type AdventureId, type JourneyEntry, type JourneySummary } from "./game/storage";
 import { mountJourneyList, type AdventureInfo } from "./ui/journeys";
+import { continueYellowJourney, hasYellowCartridge, newYellowJourney, type YellowHost, type YellowRunner } from "./yellow/launch";
 import {
   freshSave,
   isValidSave,
@@ -182,7 +183,9 @@ function currentField(id = save.map) {
   const map = expeditionState(gymState(WORLD[id], save.flags), save.flags);
   return guardianField(map, save.flags, has);
 }
-function scene(): MusicScene {
+let yellow: YellowRunner | undefined;
+function scene(): MusicScene | number {
+  if (yellow) return yellow.musicScene();
   if (mode === "title" || mode === "intro") return "title";
   if (mode === "ceremony") return "hallOfFame";
   if (mode === "evolution") return "evolution";
@@ -214,7 +217,19 @@ function summarize(adventure: AdventureId, data: unknown) {
 }
 const ADVENTURE_LIST: AdventureInfo[] = [
   { id: "astra", name: "Astra", blurb: "Survey the eight beacons of the Astra region with Professor Alder." },
+  { id: "yellow", name: "Yellow", blurb: "Kanto with Pikachu, read from your own Pokémon Yellow cartridge." },
 ];
+function yellowHost(): YellowHost {
+  return {
+    engine, input, menuInput, layer, canvas, sound, saveWarning, sprite, cry,
+    activate: game => {
+      yellow = game;
+      mode = game ? "yellow" : "title";
+      sound.refreshMusic();
+    },
+    journeys: error => void journeys(error),
+  };
+}
 let journeyCursor = {};
 async function journeys(error?: string) {
   mode = "title";
@@ -231,13 +246,16 @@ async function journeys(error?: string) {
     return;
   }
   sound.attach(engine, true);
+  const yellowReady = await hasYellowCartridge();
   mountJourneyList(layer, {
-    entries, adventures: ADVENTURE_LIST, sprite, cursor: journeyCursor, error,
+    entries, adventures: ADVENTURE_LIST.map(a => a.id === "yellow" && !yellowReady ? { ...a, note: "You'll be asked for your Yellow cartridge." } : a),
+    sprite, cursor: journeyCursor, error,
     onContinue: entry => {
+      if (entry.adventure === "yellow") return void continueYellowJourney(yellowHost(), entry);
       journeyStore = new JourneyStore(entry.id, astraSummary);
       void readJourney();
     },
-    onNew: () => intro(() => void journeys()),
+    onNew: adventure => adventure === "yellow" ? void newYellowJourney(yellowHost(), () => void journeys()) : intro(() => void journeys()),
     onExport: async entry => {
       try {
         download(`pokemon-${entry.adventure}-save.json`, await peekJourney(entry.id));
@@ -252,6 +270,16 @@ async function journeys(error?: string) {
     },
     onRestore: async file => {
       let next: Save;
+      try {
+        const data = JSON.parse(await file.text());
+        if (data?.adventure === "yellow") {
+          const { isYellowSave } = await import("./yellow/save");
+          if (!isYellowSave(data)) return "Choose a valid Yellow backup.";
+          await createJourney("yellow", data);
+          void journeys();
+          return;
+        }
+      } catch { /* handled below as an Astra backup */ }
       try {
         next = await readBackup(file);
       } catch (error) {
@@ -1890,6 +1918,12 @@ function frame(now: number) {
   const dt = Math.min((now - last) / 1000, 0.15);
   last = now;
   input.update();
+  if (yellow) {
+    yellow.frame(now, dt);
+    canvas.parentElement!.dataset.scene = yellow.scene;
+    requestAnimationFrame(frame);
+    return;
+  }
   const wasWorld = mode === "world";
   if (mode === "dialogue" && (input.hit("a") || input.hit("b"))) advance();
   else if (mode === "hatching" && input.hit("b")) layer.querySelector<HTMLButtonElement>("#hatch-done:enabled")?.click();

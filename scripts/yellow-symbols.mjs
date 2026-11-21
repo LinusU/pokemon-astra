@@ -79,6 +79,7 @@ function processConstants(text, onConst) {
     } else if ((m = /^const_next\s+(.+)$/.exec(line))) {
       constValue = evaluate(m[1]);
     } else if ((m = /^DEF\s+([A-Za-z_][A-Za-z0-9_]*)\s+(?:EQU|=)\s+(.+)$/.exec(line))) {
+      values.set("const_value", constValue);
       define(m[1], tryEvaluate(m[2]));
     } else if ((m = /^([A-Za-z_][A-Za-z0-9_]*)\s+EQU\s+(.+)$/.exec(line))) {
       define(m[1], tryEvaluate(m[2]));
@@ -110,6 +111,8 @@ collect("constants/event_constants.asm", "EVENT", /^EVENT_/);
 collect("constants/hide_show_constants.asm", "HS", /^HS_/);
 collect("constants/sprite_set_constants.asm", "SPRITE_SET", /.*/);
 collect("constants/tileset_constants.asm", "TILESET", /.*/);
+collect("constants/palette_constants.asm", "PAL", /^PAL_/);
+const CONST = Object.fromEntries(["NUM_CITY_MAPS", "FIRST_ROUTE_MAP", "FIRST_INDOOR_MAP", "NUM_MAPS"].map(n => [n, values.get(n)]));
 // TMs and HMs are defined with their own macros after the item list.
 {
   const text = read("constants/item_constants.asm");
@@ -186,7 +189,7 @@ const wanted = [...sym.keys()].filter(name =>
     "CeladonPrizeMenu", "PrizeDifferentMenuPtrs", "RedsHouse1FDefaultText", "WaterTilesets", "EvosMovesPointerTable",
     "MonPartyData", "IndigoPlateauStatues", "FossilsList", "SuperRodData", "FishingSlots", "GoodRodMons",
     "SpecialWarpData", "BadgeMaps", "BadgeMaps.end", "DungeonWarpList", "DungeonWarpData", "SafariZoneEncounterLevels",
-    "Music_PalletTown", "WaterTilesets", "ShoreTiles", "TilePairCollisionsWater", "WarpTileListPointers",
+    "Music_PalletTown", "SuperRodFishingSlots", "TechnicalMachines", "FlowerTile1", "FlowerTile2", "FlowerTile3", "TalkToTrainer", "TextScriptEnd", "CGBBasePalettes", "WaterTilesets", "ShoreTiles", "TilePairCollisionsWater", "WarpTileListPointers",
   ].includes(name) || /^(Tileset|Overworld|RedsHouse|Mart|Forest|Dojo|Pokecenter|Gym|House|ForestGate|Museum|Underground|Gate|Ship|ShipPort|Cemetery|Interior|Cavern|Lobby|Mansion|Lab|Club|Facility|Plateau|BeachHouse)_(GFX|Block|Coll)$/.test(name) ||
   /Sprite$/.test(name) || /^Music_[A-Za-z0-9]+$/.test(name) || /^Pikachu/.test(name),
 );
@@ -195,7 +198,7 @@ for (const m of read("data/events/hidden_objects.asm").matchAll(/hidden_object\s
   if (sym.has(m[1]) && !wanted.includes(m[1])) wanted.push(m[1]);
 const addresses = Object.fromEntries(wanted.sort().map(n => [n, sym.get(n)]));
 // Work RAM read by text commands, so the runtime can fill in names and numbers.
-const ramNames = new Set(["wPlayerName", "wRivalName", "wPlayerMoney", "wPlayerCoins", "wStringBuffer", "wNameBuffer", "wcd6d", "wPikachuHappiness"]);
+const ramNames = new Set(["wEventFlags", "wPlayerName", "wRivalName", "wPlayerMoney", "wPlayerCoins", "wStringBuffer", "wNameBuffer", "wcd6d", "wPikachuHappiness"]);
 const walk = dir => readdirSync(join(root, dir), { withFileTypes: true }).flatMap(e =>
   e.isDirectory() ? walk(join(dir, e.name)) : e.name.endsWith(".asm") ? [join(dir, e.name)] : []);
 for (const file of [...walk("text"), ...walk("scripts"), ...walk("engine"), ...walk("data"), ...walk("home")])
@@ -220,6 +223,8 @@ export const MOVE: Record<string, number> = ${JSON.stringify(groups.MOVE)};
 export const SPRITE: Record<string, number> = ${JSON.stringify(groups.SPRITE)};
 export const TRAINER: Record<string, number> = ${JSON.stringify(groups.TRAINER)};
 export const TILESET: Record<string, number> = ${JSON.stringify(groups.TILESET)};
+export const PAL: Record<string, number> = ${JSON.stringify(groups.PAL)};
+export const CONST: Record<string, number> = ${JSON.stringify(CONST)};
 export const MUSIC: Record<string, { id: number; bank: number }> = ${JSON.stringify(music)};
 export const SFX: Record<string, { id: number; bank: number }> = ${JSON.stringify(sfx)};
 /** TEXT_* ids by map script label. */

@@ -1,0 +1,1333 @@
+/**
+ * Pokémon Yellow, played with Astra's engine: the Crystal battle engine, menus
+ * and audio, over maps, dialogue and events read from the player's cartridge.
+ */
+import type { Engine, Pokemon } from "../engine";
+import type { PokemonPortrait } from "../engine/appearance";
+import type { Input } from "../game/input";
+import type { GameAudio } from "../game/audio";
+import type { MenuInput } from "../ui/menu-input";
+import type { MusicScene } from "../game/music";
+import { escapeHtml, panel } from "../ui/shell";
+import { BattlePresenter, escapeAnnounced } from "../ui/battle";
+import { JourneyConflict, type JourneyStore } from "../game/storage";
+import { EVENT, HS, ITEM, MAP, MAP_OBJECT, MAP_SCRIPT, MAP_TEXT, MON, RAM, SPRITE, SYM, TRAINER } from "./generated/symbols";
+import { YellowRom, type MapHeader, type MapObject, type TextOp } from "./rom";
+import { YellowWorld, STEP, opposite, type Facing } from "./world";
+import { YellowGraphics, mapPalette, type Rgb } from "./gfx";
+import { yellowSummary, type YellowSave } from "./save";
+import { MAP_SCRIPTS, SHARED_TEXTS, type Actor, type BattleOutcome, type Emote, type Game } from "./script";
+import { textPages } from "./textbox";
+import { crystalMusic } from "./music";
+import { openYellowMenu } from "./menu";
+import { trainerTrigger, trainerHeaders, type TrainerHeader } from "./trainers";
+import "./scripts";
+import "./yellow.css";
+
+export interface YellowContext {
+  engine: Engine;
+  rom: YellowRom;
+  input: Input;
+  menuInput: MenuInput;
+  layer: HTMLElement;
+  canvas: HTMLCanvasElement;
+  sound: GameAudio;
+  sprite: (mon: PokemonPortrait | number, back?: boolean) => string;
+  cry: (species: number) => void;
+  store: JourneyStore;
+  save: YellowSave;
+  /** Leaves Yellow for the journey list. */
+  exit: () => void;
+  saveWarning: HTMLElement;
+}
+
+interface Mover {
+  x: number;
+  y: number;
+  facing: Facing;
+  /** Fractional progress of the current step. */
+  from?: { x: number; y: number; t: number; duration: number; hop?: boolean };
+  walkFrame: number;
+}
+interface Npc extends Mover {
+  object: MapObject;
+  home: { x: number; y: number };
+  wait: number;
+  path: Facing[];
+  onPath?: () => void;
+  hidden: boolean;
+  emote?: { kind: Emote; until: number };
+}
+
+const WALK_SECONDS = 1 / 4.2;
+const TEXT_RESET = new Set(["wait", "done"]);
+
+export class YellowGame implements Game {
+  readonly rom: YellowRom;
+  readonly world: YellowWorld;
+  readonly gfx: YellowGraphics;
+  save: YellowSave;
+  private ctx2d: CanvasRenderingContext2D;
+  private mode: "world" | "script" | "menu" | "battle" | "text" = "world";
+  private me: Mover;
+  private pikachu?: Mover & { visible: boolean; trail: { x: number; y: number }[] };
+  private npcs: Npc[] = [];
+  private header!: MapHeader;
+  private palette!: Rgb[];
+  private trainers: TrainerHeader[] = [];
+  private standingOnWarp = false;
+  private textVars = new Map<number, string>();
+  private resume?: (value?: unknown) => void;
+  private yesNoResolve?: (yes: boolean) => void;
+  private pages: string[] = [];
+  private lastSave = 0;
+  private turnHeld = 0;
+  private fadeLevel = 0;
+  private currentMusic?: number;
+  private clock = 0;
+  private encounterCooldown = 0;
+  private saveIssue = false;
+  private stopped = false;
+
+  constructor(readonly ctx: YellowContext) {
+    this.rom = ctx.rom;
+    this.world = new YellowWorld(ctx.rom);
+    this.gfx = new YellowGraphics(ctx.rom);
+    this.save = ctx.save;
+    this.ctx2d = ctx.canvas.getContext("2d")!;
+    this.me = { x: this.save.x, y: this.save.y, facing: this.save.facing, walkFrame: 0 };
+    this.enterMap(this.save.map, false);
+    ctx.input.setGamepadLayout(!!this.save.settings.swapGamepadAB);
+    ctx.sound.attach(ctx.engine, this.save.settings.music !== false);
+    void this.runScript(() => this.afterArrival(true));
+  }
+
+  stop() {
+    this.stopped = true;
+    this.ctx.layer.replaceChildren();
+  }
+
+  // ------------------------------------------------------------ Game interface
+  get map() { return this.header.id; }
+  get mapLabel() { return this.header.label; }
+  get playerState() { return this.me; }
+  get player() { return this.me; }
+  get money() { return this.save.money; }
+  set money(v: number) { this.save.money = Math.max(0, Math.min(999999, Math.floor(v))); }
+  get coins() { return this.save.coins; }
+  set coins(v: number) { this.save.coins = Math.max(0, Math.min(9999, Math.floor(v))); }
+  get vars() { return this.save.vars; }
+  get state() { return this.save.vars["script:" + this.header.label] ?? 0; }
+  set state(v: number) { this.save.vars["script:" + this.header.label] = v; }
+
+  private eventIndex(name: string) {
+    const i = EVENT[name];
+    if (i === undefined) throw Error(`Unknown event ${name}`);
+    return i;
+  }
+  ev(name: string) { return this.save.events.includes(this.eventIndex(name)); }
+  set(name: string) { this.setEvent(this.eventIndex(name), true); }
+  reset(name: string) { this.setEvent(this.eventIndex(name), false); }
+  setEvent(index: number, on: boolean) {
+    const has = this.save.events.includes(index);
+    if (on && !has) this.save.events.push(index);
+    if (!on && has) this.save.events = this.save.events.filter(e => e !== index);
+  }
+  private hsIndex(name: string) {
+    const i = HS[name];
+    if (i === undefined) throw Error(`Unknown object ${name}`);
+    return i;
+  }
+  shown(hs: string) { return !this.save.hidden.includes(this.hsIndex(hs)); }
+  show(hs: string) { this.toggle(this.hsIndex(hs), true); }
+  hide(hs: string) { this.toggle(this.hsIndex(hs), false); }
+  private toggle(index: number, shown: boolean) {
+    this.save.hidden = this.save.hidden.filter(h => h !== index);
+    if (!shown) this.save.hidden.push(index);
+    const entry = this.rom.missables()[index];
+    if (entry?.map === this.header.id) {
+      const npc = this.npcs.find(n => n.object.index === entry.object);
+      if (npc) {
+        if (shown && npc.hidden) Object.assign(npc, { x: npc.object.x, y: npc.object.y, from: undefined, path: [] });
+        npc.hidden = !shown;
+      }
+    }
+  }
+  textVar(name: string, value: string | number) {
+    const addr = RAM[name];
+    if (addr === undefined) throw Error(`Unknown text variable ${name}`);
+    this.textVars.set(addr, String(value));
+  }
+
+  npc(index: number) {
+    const n = this.npcs.find(n => n.object.index === index && !n.hidden);
+    return n && { x: n.x, y: n.y, facing: n.facing };
+  }
+  private actor(who: Actor): Mover | undefined {
+    if (who === "player") return this.me;
+    if (who === "pikachu") return this.pikachu;
+    return this.npcs.find(n => n.object.index === who);
+  }
+  face(who: Actor, facing: Facing) {
+    const a = this.actor(who);
+    if (a) a.facing = facing;
+  }
+  facePlayer(index: number) {
+    const n = this.npcs.find(n => n.object.index === index);
+    if (n) n.facing = this.towards(n, this.me);
+  }
+  private towards(from: { x: number; y: number }, to: { x: number; y: number }): Facing {
+    const dx = to.x - from.x, dy = to.y - from.y;
+    if (Math.abs(dx) > Math.abs(dy)) return dx > 0 ? "right" : "left";
+    return dy > 0 ? "down" : "up";
+  }
+  move(who: Actor, path: string, options: { speed?: number; ignoreCollision?: boolean } = {}) {
+    const steps: Facing[] = [];
+    for (const m of path.toUpperCase().matchAll(/([UDLR])(\d*)/g)) {
+      const dir = ({ U: "up", D: "down", L: "left", R: "right" } as const)[m[1] as "U"];
+      for (let i = 0; i < (m[2] ? +m[2] : 1); i++) steps.push(dir);
+    }
+    return this.walk(who, steps, options.speed ?? 1);
+  }
+  private walk(who: Actor, steps: Facing[], speed = 1): Promise<void> {
+    const a = this.actor(who);
+    if (!a || !steps.length) return Promise.resolve();
+    return new Promise(resolve => {
+      const queue = [...steps];
+      const next = () => {
+        const dir = queue.shift();
+        if (!dir) return resolve();
+        a.facing = dir;
+        const [dx, dy] = STEP[dir];
+        const fromX = a.x, fromY = a.y;
+        if (who === "player") this.pikachuFollow(fromX, fromY);
+        a.x += dx;
+        a.y += dy;
+        a.from = { x: fromX, y: fromY, t: 0, duration: WALK_SECONDS / speed };
+        (a as Npc).onPath = next;
+        if (who === "player") (this.me as Mover & { onPath?: () => void }).onPath = () => {
+          this.crossEdge();
+          next();
+        };
+      };
+      next();
+    });
+  }
+  async approach(index: number) {
+    const n = this.npcs.find(n => n.object.index === index);
+    if (!n) return;
+    const path: Facing[] = [];
+    let { x, y } = n;
+    while (Math.abs(this.me.x - x) + Math.abs(this.me.y - y) > 1) {
+      const dir = x !== this.me.x && (y === this.me.y || Math.abs(this.me.x - x) > Math.abs(this.me.y - y))
+        ? (this.me.x > x ? "right" : "left") : (this.me.y > y ? "down" : "up");
+      path.push(dir);
+      x += STEP[dir][0];
+      y += STEP[dir][1];
+      if (path.length > 40) break;
+    }
+    await this.walk(index, path);
+    n.facing = this.towards(n, this.me);
+  }
+  place(who: Actor, x: number, y: number, facing?: Facing) {
+    const a = this.actor(who);
+    if (!a) return;
+    a.x = x;
+    a.y = y;
+    a.from = undefined;
+    if (facing) a.facing = facing;
+    if (who !== "player" && who !== "pikachu") {
+      const n = a as Npc;
+      n.home = { x, y };
+      n.path = [];
+    }
+  }
+  emote(who: Actor, kind: Emote) {
+    const a = this.actor(who) as Npc | undefined;
+    if (!a) return Promise.resolve();
+    a.emote = { kind, until: this.clock + 0.9 };
+    return this.delay(54);
+  }
+
+  hasItem(item: string, count = 1) { return (this.save.items[this.itemId(item)] ?? 0) >= count; }
+  private itemId(item: string) {
+    const id = ITEM[item];
+    if (id === undefined) throw Error(`Unknown item ${item}`);
+    return id;
+  }
+  give(item: string, count = 1) {
+    const id = this.itemId(item), key = String(id);
+    const kinds = Object.keys(this.save.items).filter(k => this.save.items[k] > 0);
+    if (!this.save.items[key] && kinds.length >= 20) return false;
+    if ((this.save.items[key] ?? 0) + count > 99) return false;
+    this.save.items[key] = (this.save.items[key] ?? 0) + count;
+    return true;
+  }
+  take(item: string, count = 1) {
+    const key = String(this.itemId(item));
+    if ((this.save.items[key] ?? 0) < count) return false;
+    this.save.items[key] -= count;
+    if (!this.save.items[key]) delete this.save.items[key];
+    return true;
+  }
+  partyHas(species: string) {
+    const dex = this.rom.dex(MON[species]);
+    return this.save.party.some(m => m.species === dex);
+  }
+  async giveMon(species: string, level: number, options: { nickname?: string; message?: boolean } = {}) {
+    const dex = this.rom.dex(MON[species]);
+    const mon = this.makeMon(dex, level, options.nickname);
+    if (this.save.party.length < 6) this.save.party.push(mon);
+    else this.save.storage.push(mon);
+    this.register(dex, true);
+    if (options.message !== false) {
+      this.ctx.sound.overworld("item");
+      await this.say(`${this.me.facing ? "" : ""}{PLAYER} got ${this.rom.monName(MON[species])}!${this.save.party.includes(mon) ? "" : " It was sent to the PC."}`);
+    }
+    return mon;
+  }
+  makeMon(dex: number, level: number, nickname?: string): Pokemon {
+    const mon = this.ctx.engine.makePokemon(dex, level);
+    return { ...mon, ot_id: this.otId(), ot_name: this.save.name, nickname: nickname ?? mon.nickname };
+  }
+  otId() {
+    this.save.vars.otId ??= Math.floor(Math.random() * 65536);
+    return this.save.vars.otId;
+  }
+  register(dex: number, caught: boolean) {
+    if (!this.save.seen.includes(dex)) this.save.seen.push(dex);
+    if (caught && !this.save.caught.includes(dex)) this.save.caught.push(dex);
+  }
+
+  heal() { this.save.party = this.save.party.map(m => this.ctx.engine.healPokemon(m)); }
+  badge(index: number) { this.save.badges |= 1 << index; }
+  hasBadge(index: number) { return !!(this.save.badges & (1 << index)); }
+  private musicOverride?: number | null;
+  music(name?: string) {
+    this.musicOverride = name ? crystalMusic(name) : undefined;
+    this.ctx.sound.refreshMusic();
+  }
+  sfx(name: string) {
+    const kind = ({ SFX_GET_ITEM_1: "item", SFX_GET_KEY_ITEM: "item", SFX_HEAL_MACHINE: "interact", SFX_GO_INSIDE: "door", SFX_GO_OUTSIDE: "exit", SFX_COLLISION: "bump", SFX_LEDGE: "exit", SFX_PUSH_BOULDER: "strength", SFX_TELEPORT_ENTER_1: "fly", SFX_TELEPORT_EXIT_1: "fly", SFX_ENTER_PC: "bootPc", SFX_TURN_OFF_PC: "shutDownPc", SFX_CUT: "cut", SFX_SWAP: "interact", SFX_PRESS_AB: "interact", SFX_START_MENU: "interact", SFX_LEVEL_UP: "item", SFX_POKEDEX_RATING: "item", SFX_TRADE_MACHINE: "interact", SFX_SS_ANNE_HORN: "door", SFX_STOP_ALL_MUSIC: "interact" } as Record<string, string>)[name];
+    if (kind) this.ctx.sound.overworld(kind as never);
+  }
+  cry(species: string) { this.ctx.cry(this.rom.dex(MON[species])); }
+  delay(frames: number) {
+    return new Promise<void>(resolve => {
+      const until = this.clock + frames / 60;
+      this.waiters.push({ until, resolve });
+    });
+  }
+  private waiters: { until: number; resolve: () => void }[] = [];
+  async fade(during?: () => void | Promise<void>) {
+    await this.fadeTo(1);
+    await during?.();
+    await this.fadeTo(0);
+  }
+  private fadeTarget = 0;
+  private fadeResolve?: () => void;
+  private fadeTo(level: number) {
+    this.fadeTarget = level;
+    return new Promise<void>(resolve => { this.fadeResolve = resolve; });
+  }
+  log(message: string) { console.info(`[yellow:${this.header.label}]`, message); }
+
+  // ------------------------------------------------------------ text
+  /** Shows text from a cartridge label, a TEXT_* name or a map text id. */
+  async text(ref: string | number, options: { wait?: boolean } = {}) {
+    if (typeof ref === "string" && ref.startsWith("TEXT_")) {
+      const id = MAP_TEXT[this.header.label]?.[ref];
+      if (id === undefined) throw Error(`Unknown text ${ref} on ${this.header.label}`);
+      return this.textId(id, options);
+    }
+    if (typeof ref === "number") return this.textId(ref, options);
+    const at = SYM[ref];
+    if (at === undefined) throw Error(`Unknown text label ${ref}`);
+    await this.runText(ref, at, options);
+  }
+  private async textId(id: number, options: { wait?: boolean } = {}) {
+    const at = this.rom.mapText(this.header, id);
+    await this.runText(this.rom.label(at) ?? `@${at}`, at, options);
+  }
+  /** Runs a text entry: printed text, text_asm handlers and special scripts. */
+  private async runText(label: string, at: number, options: { wait?: boolean } = {}) {
+    const ops = this.rom.text(at);
+    const asm = ops.find(op => op.op === "asm");
+    const script = ops.find(op => op.op === "script") as Extract<TextOp, { op: "script" }> | undefined;
+    const printed = ops.filter(op => op.op !== "asm" && op.op !== "script");
+    if (printed.length) await this.showText(printed, asm || script ? false : options.wait !== false);
+    if (script) return this.special(script.kind, script.at);
+    if (!asm) return;
+    const handler = this.textHandler(label);
+    if (handler) return handler(this);
+    const trainer = this.trainerTalk((asm as { at: number }).at);
+    if (trainer) return this.talkToTrainer(trainer);
+    if (this.rom.u8((asm as { at: number }).at) === 0xc3 && this.rom.u16((asm as { at: number }).at + 1) === SYM.TextScriptEnd) return;
+    this.log(`No handler for ${label}`);
+    if (!printed.length) await this.say("…");
+  }
+  private textHandler(label: string) {
+    return MAP_SCRIPTS[this.header.label]?.texts?.[label] ?? SHARED_TEXTS[label];
+  }
+  /** Shows a literal string (with {PLAYER} and {RIVAL}). */
+  say(text: string, wait = true) {
+    return this.showText([{ op: "text", s: text }], wait);
+  }
+  private resolveVar = (op: TextOp) => {
+    if (op.op === "ram") return this.ramString(op.addr);
+    if (op.op === "num" || op.op === "bcd") return this.ramString(op.addr);
+    return "";
+  };
+  private ramString(addr: number) {
+    if (addr === RAM.wPlayerName) return this.save.name;
+    if (addr === RAM.wRivalName) return this.save.rival;
+    if (addr === RAM.wPlayerMoney) return String(this.save.money);
+    if (addr === RAM.wPlayerCoins) return String(this.save.coins);
+    return this.textVars.get(addr) ?? "";
+  }
+  /** Displays pages of text and resolves once the player has read them. */
+  showText(ops: TextOp[], wait = true): Promise<void> {
+    for (const op of ops) if (op.op === "sound") this.ctx.sound.overworld("item");
+    const pages = textPages(ops, this.resolveVar, this.save.name, this.save.rival);
+    if (!pages.length) return Promise.resolve();
+    this.pages = pages;
+    const previous = this.mode;
+    this.mode = "text";
+    return new Promise(resolve => {
+      this.resume = () => {
+        this.mode = previous === "text" ? "script" : previous;
+        resolve();
+      };
+      this.renderPage(wait);
+    });
+  }
+  private lastPageWait = true;
+  private renderPage(wait = this.lastPageWait) {
+    this.lastPageWait = wait;
+    const page = this.pages[0] ?? "";
+    const last = this.pages.length === 1;
+    this.ctx.layer.innerHTML = `<div class="dialogue yellow-text" role="status">${escapeHtml(page)}${!last || wait ? `<span class="advance">${this.ctx.input.confirmLabel} ▸</span>` : ""}</div>`;
+    this.ctx.layer.querySelector(".dialogue")?.addEventListener("click", () => this.advanceText());
+    if (last && !wait) {
+      const done = this.resume;
+      this.resume = undefined;
+      done?.();
+    }
+  }
+  private advanceText() {
+    if (this.mode !== "text" && !(this.pages.length && this.resume)) return;
+    this.pages.shift();
+    if (this.pages.length) return this.renderPage();
+    this.ctx.layer.replaceChildren();
+    const done = this.resume;
+    this.resume = undefined;
+    done?.();
+  }
+  yesNo(): Promise<boolean> {
+    const previous = this.mode;
+    this.mode = "menu";
+    return new Promise(resolve => {
+      const box = document.createElement("div");
+      box.className = "yellow-yesno";
+      box.innerHTML = `<button data-yes>YES</button><button data-no>NO</button>`;
+      this.ctx.layer.append(box);
+      const finish = (yes: boolean) => {
+        this.yesNoResolve = undefined;
+        this.ctx.layer.replaceChildren();
+        this.mode = previous === "menu" ? "script" : previous;
+        resolve(yes);
+      };
+      this.yesNoResolve = finish;
+      box.querySelector<HTMLButtonElement>("[data-yes]")!.onclick = () => finish(true);
+      box.querySelector<HTMLButtonElement>("[data-no]")!.onclick = () => finish(false);
+      box.querySelector<HTMLButtonElement>("[data-yes]")!.focus({ preventScroll: true });
+    });
+  }
+
+  // ------------------------------------------------------------ maps
+  private enterMap(id: number, fromWarp: boolean) {
+    this.header = this.world.map(id);
+    this.save.map = id;
+    if (id < 0x25) {
+      this.save.lastMap = id;
+      if (!this.save.visited.includes(id) && id < 0x0b) this.save.visited.push(id);
+    }
+    this.palette = mapPalette(this.rom, this.header, this.save.lastMap);
+    this.trainers = trainerHeaders(this.rom, this.header);
+    const missables = this.rom.missables();
+    this.npcs = this.header.objects.map(object => {
+      const hs = missables.findIndex(m => m.map === id && m.object === object.index);
+      const stay = !object.walk;
+      const facing: Facing = stay ? ({ 0xd0: "down", 0xd1: "up", 0xd2: "left", 0xd3: "right" } as Record<number, Facing>)[object.range] ?? "down" : "down";
+      return {
+        object, x: object.x, y: object.y, facing, walkFrame: 0, home: { x: object.x, y: object.y },
+        wait: 1 + Math.random() * 2, path: [], hidden: hs >= 0 && this.save.hidden.includes(hs),
+      };
+    });
+    this.standingOnWarp = fromWarp;
+    this.encounterCooldown = 3;
+    this.musicOverride = undefined;
+    this.ctx.sound.refreshMusic();
+    this.placePikachu();
+  }
+  get scene() { return this.mode === "battle" ? "battle" : "world"; }
+  /** Battle themes by opponent, then the map's own song. */
+  musicScene(): MusicScene | number {
+    if (this.mode === "battle") {
+      if (this.battleCue) return this.battleCue as MusicScene;
+      if (!this.inBattle?.trainer) return 8;
+      const klass = this.inBattle.klass ?? 0;
+      if (klass === TRAINER.RIVAL3) return 47;
+      return isLeader(klass) ? 6 : 7;
+    }
+    return this.musicTrack() ?? 0;
+  }
+  /** Where the map's music comes from: the cartridge's song table, played with Crystal's Kanto arrangements. */
+  musicTrack(): number | undefined {
+    if (this.mode === "battle") return undefined;
+    if (this.musicOverride !== undefined) return this.musicOverride ?? undefined;
+    if (this.save.surfing) return crystalMusic("MUSIC_SURFING");
+    if (this.save.bike) return crystalMusic("MUSIC_BIKE_RIDING");
+    const song = this.rom.mapSong(this.header.id);
+    return crystalMusic(song.id);
+  }
+
+  private crossEdge() {
+    const { w, h } = this.world.cells(this.header);
+    if (this.me.x >= 0 && this.me.y >= 0 && this.me.x < w && this.me.y < h) return;
+    const place = this.world.resolve(this.header, this.me.x, this.me.y);
+    if (!place) return;
+    const dx = place.x - this.me.x, dy = place.y - this.me.y;
+    if (this.me.from) {
+      this.me.from.x += dx;
+      this.me.from.y += dy;
+    }
+    if (this.pikachu) {
+      this.pikachu.x += dx;
+      this.pikachu.y += dy;
+      if (this.pikachu.from) {
+        this.pikachu.from.x += dx;
+        this.pikachu.from.y += dy;
+      }
+      this.pikachu.trail = this.pikachu.trail.map(p => ({ x: p.x + dx, y: p.y + dy }));
+    }
+    this.me.x = place.x;
+    this.me.y = place.y;
+    const pikachu = this.pikachu;
+    this.enterMap(place.map, false);
+    if (pikachu && this.pikachu) Object.assign(this.pikachu, { x: pikachu.x, y: pikachu.y, from: pikachu.from, trail: pikachu.trail, visible: pikachu.visible });
+    void this.runOnEnter();
+  }
+
+  private async runOnEnter() {
+    await MAP_SCRIPTS[this.header.label]?.onEnter?.(this);
+  }
+
+  /** Teleports to a map square, as a script warp or a door. */
+  async warp(map: string, x: number, y: number, facing?: Facing) {
+    const id = MAP[map];
+    if (id === undefined) throw Error(`Unknown map ${map}`);
+    await this.fade(() => {
+      this.me.x = x;
+      this.me.y = y;
+      this.me.from = undefined;
+      if (facing) this.me.facing = facing;
+      this.enterMap(id, true);
+    });
+    await this.runOnEnter();
+  }
+
+  private async useWarp(index: number) {
+    const warp = this.header.warps[index];
+    let target = warp.map === 0xff ? this.save.lastMap : warp.map;
+    const dest = this.rom.map(target);
+    if (!dest) return;
+    const arrival = dest.warps[warp.warp];
+    if (!arrival) return;
+    const outdoorsBefore = this.header.id < 0x25;
+    this.ctx.sound.overworld(outdoorsBefore ? "door" : "exit");
+    await this.fade(() => {
+      this.me.x = arrival.x;
+      this.me.y = arrival.y;
+      this.me.from = undefined;
+      this.enterMap(target, true);
+    });
+    target = this.header.id;
+    await this.runOnEnter();
+    // Leaving a building through a door steps the player out onto the street.
+    if (this.world.door(this.header, this.me.x, this.me.y)) {
+      await this.walk("player", ["down"]);
+      this.standingOnWarp = false;
+    }
+    this.persist();
+  }
+
+  // ------------------------------------------------------------ main loop
+  frame(now: number, dt: number) {
+    if (this.stopped) return;
+    this.clock += dt;
+    this.save.seconds += dt;
+    const input = this.ctx.input;
+    for (const w of [...this.waiters]) if (this.clock >= w.until) {
+      this.waiters.splice(this.waiters.indexOf(w), 1);
+      w.resolve();
+    }
+    // Fades
+    const target = this.fadeTarget;
+    if (this.fadeLevel !== target) {
+      this.fadeLevel += Math.sign(target - this.fadeLevel) * Math.min(Math.abs(target - this.fadeLevel), dt * 5);
+      if (this.fadeLevel === target) {
+        const r = this.fadeResolve;
+        this.fadeResolve = undefined;
+        r?.();
+      }
+    }
+    if (this.mode === "text") {
+      if (input.hit("a") || input.hit("b")) this.advanceText();
+    } else if (this.mode === "menu") {
+      if (this.yesNoResolve) {
+        const buttons = [...this.ctx.layer.querySelectorAll<HTMLButtonElement>(".yellow-yesno button")];
+        const focused = buttons.indexOf(document.activeElement as HTMLButtonElement);
+        if (input.hit("up") || input.hit("down")) buttons[focused === 0 ? 1 : 0]?.focus({ preventScroll: true });
+        else if (input.hit("a")) this.yesNoResolve(focused !== 1);
+        else if (input.hit("b")) this.yesNoResolve(false);
+      } else {
+        if (input.hit("b")) {
+          const back = this.ctx.layer.querySelector<HTMLButtonElement>("[data-bag-cancel], #back, #close");
+          if (back) back.click();
+        } else if (input.hit("menu")) this.ctx.layer.querySelector<HTMLButtonElement>("#close")?.click();
+        else this.ctx.menuInput.update(this.ctx.layer, input, now, false);
+      }
+    } else if (this.mode === "battle") {
+      if (input.hit("b")) this.battlePresenter?.back();
+      else this.ctx.menuInput.update(this.ctx.layer, input, now, true);
+    }
+    this.updateMovers(dt);
+    if (this.mode === "world") this.control(dt);
+    if (this.mode !== "battle") this.render(now);
+    if (this.mode === "world" && this.save.steps - this.lastSave >= 16) this.persist();
+  }
+
+  private moveDuration() {
+    if (this.save.bike) return WALK_SECONDS / 2;
+    return WALK_SECONDS / (this.ctx.input.held("speed") || this.ctx.input.held("b") ? 1.6 : 1);
+  }
+
+  private control(dt: number) {
+    const input = this.ctx.input;
+    const tapped = (["up", "down", "left", "right"] as const).find(d => input.hit(d));
+    if (this.me.from) {
+      // A tap during a step is remembered so quick taps still walk square by square.
+      if (tapped) this.queued = tapped;
+      return;
+    }
+    if (input.hit("menu")) {
+      void this.openMenu();
+      return;
+    }
+    if (input.hit("a")) {
+      void this.runScript(() => this.interact());
+      return;
+    }
+    const queued = this.queued;
+    this.queued = undefined;
+    const dir = (["up", "down", "left", "right"] as const).find(d => input.held(d) || input.hit(d)) ?? queued;
+    if (!dir) {
+      this.turnHeld = 0;
+      return;
+    }
+    if (queued === dir && !input.held(dir)) {
+      this.player.facing = dir;
+      this.tryStep(dir);
+      return;
+    }
+    if (dir !== this.me.facing && !this.turnHeld) {
+      this.me.facing = dir;
+      this.turnHeld = 0.0001;
+      return;
+    }
+    this.turnHeld += dt;
+    if (dir !== this.me.facing) this.me.facing = dir;
+    if (this.turnHeld < 0.07 && !input.hit(dir)) return;
+    this.tryStep(dir);
+  }
+
+  private blocked(x: number, y: number, mover?: Mover) {
+    return this.npcs.some(n => !n.hidden && n !== mover &&
+      ((n.x === x && n.y === y) || (n.from && n.from.x === x && n.from.y === y)));
+  }
+
+  private tryStep(dir: Facing) {
+    const p = this.me, [dx, dy] = STEP[dir];
+    const nx = p.x + dx, ny = p.y + dy;
+    const map = this.header;
+    if (this.standingOnWarp && this.world.edgeWarp(map, p.x, p.y, dir)) {
+      const index = this.world.warpAt(map, p.x, p.y);
+      if (index >= 0) {
+        void this.runScript(() => this.useWarp(index));
+        return;
+      }
+    }
+    if (this.world.ledge(map, p.x, p.y, dir) && !this.blocked(nx + dx, ny + dy)) {
+      this.pikachuFollow(p.x, p.y);
+      p.from = { x: p.x, y: p.y, t: 0, duration: WALK_SECONDS * 2, hop: true };
+      p.x += dx * 2;
+      p.y += dy * 2;
+      this.ctx.sound.overworld("exit");
+      return;
+    }
+    const surfing = !!this.save.surfing;
+    const from = this.world.tile(map, p.x, p.y), to = this.world.tile(map, nx, ny);
+    let ok = !this.blocked(nx, ny) && !this.world.pairBlocked(map, from, to, surfing);
+    if (ok) ok = surfing ? this.world.isWater(map, nx, ny) || this.landFromSurf(nx, ny) : this.world.passable(map, nx, ny);
+    if (ok && !surfing && this.world.isWater(map, nx, ny) && !this.world.passable(map, nx, ny)) ok = false;
+    if (!ok) {
+      if (this.standingOnWarp) {
+        const index = this.world.warpAt(map, p.x, p.y);
+        if (index >= 0 && this.world.edgeWarp(map, p.x, p.y, dir)) {
+          void this.runScript(() => this.useWarp(index));
+          return;
+        }
+      }
+      if (!this.bumped) this.ctx.sound.overworld("bump");
+      this.bumped = true;
+      return;
+    }
+    this.bumped = false;
+    this.pikachuFollow(p.x, p.y);
+    p.from = { x: p.x, y: p.y, t: 0, duration: this.moveDuration() };
+    p.x = nx;
+    p.y = ny;
+  }
+  private bumped = false;
+  private queued?: Facing;
+  /** Development helper: jump to a map square. */
+  debugWarp(map: string, x: number, y: number) {
+    void this.runScript(() => this.warp(map, x, y));
+  }
+  private landFromSurf(x: number, y: number) {
+    if (!this.world.passable(this.header, x, y)) return false;
+    this.save.surfing = false;
+    this.ctx.sound.refreshMusic();
+    return true;
+  }
+
+  private updateMovers(dt: number) {
+    const advance = (m: Mover & { onPath?: () => void }) => {
+      if (!m.from) return false;
+      m.from.t += dt / m.from.duration;
+      m.walkFrame += dt;
+      if (m.from.t < 1) return false;
+      m.from = undefined;
+      return true;
+    };
+    const player = this.me as Mover & { onPath?: () => void };
+    if (advance(player)) {
+      const scripted = player.onPath;
+      player.onPath = undefined;
+      if (scripted) scripted();
+      else void this.runScript(() => this.arrived());
+    }
+    if (this.pikachu) advance(this.pikachu);
+    for (const n of this.npcs) {
+      if (n.hidden) continue;
+      if (advance(n)) {
+        const cb = n.onPath;
+        n.onPath = undefined;
+        cb?.();
+        continue;
+      }
+      if (n.from || this.mode !== "world" || !n.object.walk) continue;
+      n.wait -= dt;
+      if (n.wait > 0) continue;
+      n.wait = 1 + Math.random() * 3;
+      const options: Facing[] = n.object.range === 1 ? ["up", "down"] : n.object.range === 2 ? ["left", "right"] : ["up", "down", "left", "right"];
+      const dir = options[Math.floor(Math.random() * options.length)];
+      n.facing = dir;
+      const [dx, dy] = STEP[dir], x = n.x + dx, y = n.y + dy;
+      const { w, h } = this.world.cells(this.header);
+      if (x < 0 || y < 0 || x >= w || y >= h || Math.abs(x - n.home.x) > 3 || Math.abs(y - n.home.y) > 3) continue;
+      if (!this.world.passable(this.header, x, y) || this.world.isGrass(this.header, x, y) && false) continue;
+      if (this.blocked(x, y, n) || (this.me.x === x && this.me.y === y) || (this.me.from && this.me.from.x === x && this.me.from.y === y)) continue;
+      if (this.pikachu?.visible && this.pikachu.x === x && this.pikachu.y === y) continue;
+      if (this.header.warps.some(wp => wp.x === x && wp.y === y)) continue;
+      n.from = { x: n.x, y: n.y, t: 0, duration: WALK_SECONDS * 1.4 };
+      n.x = x;
+      n.y = y;
+    }
+  }
+
+  /** The player finished a step. */
+  private async arrived() {
+    this.save.x = this.me.x;
+    this.save.y = this.me.y;
+    this.save.facing = this.me.facing;
+    this.crossEdge();
+    this.save.steps++;
+    if (this.save.repel) this.save.repel = Math.max(0, this.save.repel - 1);
+    if (this.save.steps % 256 === 0) this.save.party = this.save.party.map(m => ({ ...m, happiness: Math.min(255, m.happiness + 1) }));
+    const map = this.header;
+    const warp = this.world.warpAt(map, this.me.x, this.me.y);
+    this.standingOnWarp = warp >= 0;
+    if (warp >= 0 && this.world.instantWarp(map, this.me.x, this.me.y)) return this.useWarp(warp);
+    if (warp >= 0 && this.world.edgeWarp(map, this.me.x, this.me.y, this.me.facing)) {
+      const held = this.ctx.input.held(this.me.facing);
+      if (held) return this.useWarp(warp);
+    }
+    await this.afterArrival(false);
+  }
+
+  /** Map scripts, trainer sightlines and grass encounters after each step. */
+  private async afterArrival(entering: boolean) {
+    if (entering) await this.runOnEnter();
+    await MAP_SCRIPTS[this.header.label]?.onStep?.(this);
+    if (this.mode !== "world" && this.mode !== "script") return;
+    const spotted = trainerTrigger(this, this.trainers, this.npcs.filter(n => !n.hidden));
+    if (spotted) {
+      await this.trainerSpotted(spotted.header, spotted.index);
+      return;
+    }
+    if (!entering) await this.encounter();
+  }
+
+  private async encounter() {
+    if (this.encounterCooldown > 0) {
+      this.encounterCooldown--;
+      return;
+    }
+    if (!this.save.party.some(m => m.hp > 0)) return;
+    const wild = this.rom.wild(this.header.id);
+    const onWater = this.save.surfing;
+    const inGrass = this.world.isGrass(this.header, this.me.x, this.me.y);
+    const caveFloor = !onWater && wild.grassRate && !this.rom.tileset(this.header.tileset).grass;
+    const rate = onWater ? wild.waterRate : inGrass || caveFloor ? wild.grassRate : 0;
+    const table = onWater ? wild.water : wild.grass;
+    if (!rate || !table.length || Math.random() * 256 >= rate) return;
+    const roll = Math.random() * 256;
+    const slots = [51, 51, 39, 25, 25, 25, 13, 13, 11, 3];
+    let acc = 0, slot = 0;
+    for (; slot < 9; slot++) if (roll < (acc += slots[slot])) break;
+    const pick = table[slot];
+    if (this.save.repel && pick.level < (this.save.party.find(m => m.hp > 0)?.level ?? 0)) return;
+    await this.wildBattle(pick.species, pick.level);
+  }
+
+  // ------------------------------------------------------------ interaction
+  private async interact() {
+    const [dx, dy] = STEP[this.me.facing];
+    let fx = this.me.x + dx, fy = this.me.y + dy;
+    if (this.pikachu?.visible && this.pikachu.x === fx && this.pikachu.y === fy) return this.talkToPikachu();
+    let npc = this.npcs.find(n => !n.hidden && n.x === fx && n.y === fy);
+    if (!npc && this.world.counter(this.header, fx, fy)) {
+      fx += dx;
+      fy += dy;
+      npc = this.npcs.find(n => !n.hidden && n.x === fx && n.y === fy);
+    }
+    if (npc) {
+      if (npc.object.walk || npc.object.range !== 0xff) npc.facing = opposite(this.me.facing);
+      this.ctx.sound.overworld("interact");
+      if (npc.object.item !== undefined) return this.pickUp(npc);
+      return this.textId(npc.object.text);
+    }
+    const sign = this.header.signs.find(s => s.x === this.me.x + dx && s.y === this.me.y + dy);
+    if (sign) {
+      this.ctx.sound.overworld("interact");
+      return this.textId(sign.text);
+    }
+    const hidden = this.rom.hiddenObjects(this.header.id).find(h => h.x === this.me.x + dx && h.y === this.me.y + dy);
+    if (hidden) return this.hiddenObject(hidden);
+  }
+
+  private async pickUp(npc: Npc) {
+    const item = npc.object.item!;
+    const name = this.rom.itemName(item);
+    const key = String(item);
+    const kinds = Object.keys(this.save.items).filter(k => this.save.items[k] > 0).length;
+    if (!this.save.items[key] && kinds >= 20) return this.say(`{PLAYER} found ${name}!\fNo more room for items!`);
+    this.save.items[key] = (this.save.items[key] ?? 0) + 1;
+    const hs = this.rom.missables().findIndex(m => m.map === this.header.id && m.object === npc.object.index);
+    if (hs >= 0) this.toggle(hs, false);
+    else npc.hidden = true;
+    this.ctx.sound.overworld("item");
+    await this.say(`{PLAYER} found ${name}!`);
+    this.persist();
+  }
+
+  private async hiddenObject(h: { x: number; y: number; arg: number; routine: string }) {
+    const handler = SHARED_TEXTS["hidden:" + h.routine];
+    if (handler) {
+      this.textVar("wNameBuffer", h.arg);
+      this.hiddenArg = h;
+      return handler(this);
+    }
+    if (h.routine === "HiddenItems" || h.routine === "HiddenCoins") {
+      const key = `hidden:${this.header.id}:${h.x}:${h.y}`;
+      if (this.save.vars[key]) return;
+      if (h.routine === "HiddenCoins") {
+        if (!this.hasItem("COIN_CASE")) return;
+        this.save.vars[key] = 1;
+        const amount = h.arg === 0 ? 10 : h.arg;
+        this.coins += amount;
+        this.ctx.sound.overworld("item");
+        return this.say(`{PLAYER} found ${amount} coins!`);
+      }
+      const name = this.rom.itemName(h.arg);
+      const key2 = String(h.arg);
+      const kinds = Object.keys(this.save.items).filter(k => this.save.items[k] > 0).length;
+      if (!this.save.items[key2] && kinds >= 20) return this.say(`{PLAYER} found ${name}!\fNo more room for items!`);
+      this.save.vars[key] = 1;
+      this.save.items[key2] = (this.save.items[key2] ?? 0) + 1;
+      this.ctx.sound.overworld("item");
+      await this.say(`{PLAYER} found ${name}!`);
+      this.persist();
+      return;
+    }
+    if (h.routine === "OpenPokemonCenterPC" || h.routine === "OpenRedsPC" || h.routine === "BillsHousePC") return this.service("pc");
+    this.log(`Hidden object ${h.routine}`);
+  }
+  hiddenArg?: { x: number; y: number; arg: number; routine: string };
+
+  /** Runs an interaction or cutscene with the player locked. */
+  async runScript(action: () => Promise<void> | void) {
+    if (this.mode !== "world") return action();
+    this.mode = "script";
+    try {
+      await action();
+    } catch (error) {
+      console.error(error);
+      await this.say(`Something went wrong: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      this.mode = "world";
+    }
+  }
+
+  // ------------------------------------------------------------ special text scripts
+  async service(kind: "mart" | "nurse" | "pc" | "bills_pc", arg?: number[]) {
+    const { openService } = await import("./services");
+    this.mode = "menu";
+    try {
+      await openService(this, kind, arg);
+    } finally {
+      this.ctx.layer.replaceChildren();
+      this.mode = "script";
+    }
+  }
+  private async special(kind: number, at: number) {
+    if (kind === 0xff) return this.service("nurse");
+    if (kind === 0xfe) return this.service("mart", this.rom.martStock(at));
+    if (kind === 0xfd || kind === 0xfc || kind === 0xf9) return this.service("pc");
+    if (kind === 0xf5) {
+      const { vendingMachine } = await import("./services");
+      return vendingMachine(this);
+    }
+    if (kind === 0xf7) {
+      const { prizeVendor } = await import("./services");
+      return prizeVendor(this);
+    }
+    if (kind === 0xf6) return this.say("The link is not available in this adventure.");
+  }
+
+  // ------------------------------------------------------------ trainers
+  private trainerTalk(asmAt: number): TrainerHeader | undefined {
+    // ld hl, header ; call TalkToTrainer ; jp TextScriptEnd
+    if (this.rom.u8(asmAt) !== 0x21 || this.rom.u8(asmAt + 3) !== 0xcd) return;
+    const target = this.rom.u16(asmAt + 4);
+    if (target !== SYM.TalkToTrainer) return;
+    const header = this.rom.far(this.header.bank, this.rom.u16(asmAt + 1));
+    return this.trainers.find(t => t.at === header);
+  }
+  private trainerNpc(header: TrainerHeader) {
+    return this.npcs.find(n => n.object.index === header.object);
+  }
+  private async talkToTrainer(header: TrainerHeader) {
+    const npc = this.trainerNpc(header);
+    if (this.save.events.includes(header.event)) return this.showText(this.rom.text(header.after));
+    if (npc) npc.facing = this.towards(npc, this.me);
+    await this.fightTrainer(header, npc);
+  }
+  private async trainerSpotted(header: TrainerHeader, index: number) {
+    const npc = this.npcs.find(n => n.object.index === index);
+    if (!npc) return;
+    this.music(trainerIntro(npc.object.trainer!.klass));
+    await this.emote(index, "exclamation");
+    await this.approach(index);
+    this.me.facing = opposite(npc.facing);
+    await this.fightTrainer(header, npc);
+  }
+  private async fightTrainer(header: TrainerHeader, npc?: Npc) {
+    const trainer = npc?.object.trainer;
+    if (!trainer) return;
+    const intro = this.textHandler(this.rom.label(header.before) ?? "");
+    if (intro) await intro(this);
+    else await this.showText(this.rom.text(header.before));
+    this.music();
+    const won = await this.battleTrainer(trainer.klass, trainer.index, { endText: header.end });
+    if (won) {
+      this.setEvent(header.event, true);
+      const after = MAP_SCRIPTS[this.header.label]?.texts?.["after:" + header.object];
+      if (after) await after(this);
+    }
+  }
+
+  // ------------------------------------------------------------ battles
+  private battlePresenter?: BattlePresenter;
+  private crystalItems?: Map<number, number>;
+  /** Gen 1 item id -> Crystal item id, matched by name. */
+  crystalItem(id: number) {
+    if (!this.crystalItems) {
+      const byName = new Map<string, number>();
+      for (let i = 1; i < 256; i++) {
+        try { byName.set(this.ctx.engine.itemName(i).toUpperCase().replace(/[^A-Z0-9]/g, ""), i); } catch { /* unused id */ }
+      }
+      this.crystalItems = new Map();
+      for (let i = 1; i <= 0x53; i++) {
+        const crystal = byName.get(this.rom.itemName(i).toUpperCase().replace(/[^A-Z0-9]/g, ""));
+        if (crystal) this.crystalItems.set(i, crystal);
+      }
+    }
+    return this.crystalItems.get(id);
+  }
+  private battleBag() {
+    const balls: [number, number][] = [], items: [number, number][] = [];
+    for (const [key, count] of Object.entries(this.save.items)) {
+      const id = +key, crystal = this.crystalItem(id);
+      if (!crystal || !count) continue;
+      if (id >= 1 && id <= 4) balls.push([crystal, count]);
+      else items.push([crystal, count]);
+    }
+    return { balls, items };
+  }
+  private badgeMask() {
+    // Yellow's stat badges line up with the Crystal badges that grant the same boosts.
+    const order = [0, 1, 2, 3, 5, 4, 6, 7];
+    let mask = 0;
+    for (let i = 0; i < 8; i++) if (this.save.badges & (1 << i)) mask |= 1 << order[i];
+    return mask;
+  }
+  async trainerBattle(klass: string, index: number, options: { canLose?: boolean } = {}) {
+    const id = TRAINER[klass];
+    if (id === undefined) throw Error(`Unknown trainer class ${klass}`);
+    return this.battleTrainer(id, index, options);
+  }
+  private async battleTrainer(klass: number, index: number, options: { canLose?: boolean; endText?: number } = {}) {
+    const party = this.rom.trainerParty(klass, index);
+    const opponents = party.map(m => this.ctx.engine.makePokemon(this.rom.dex(m.species), m.level));
+    const prize = this.rom.trainerMoney(klass) * (party[party.length - 1]?.level ?? 1);
+    const outcome = await this.battle({ party: opponents, prizeMoney: prize }, {
+      trainer: this.rom.trainerClassName(klass).replace(/^(.)(.*)$/, (_, a, b) => a + b.toLowerCase()),
+      canLose: options.canLose,
+      klass,
+    });
+    return outcome === "win";
+  }
+  async wildBattle(species: string | number, level: number, options: { stationary?: boolean } = {}): Promise<BattleOutcome> {
+    const internal = typeof species === "string" ? MON[species] : species;
+    return this.battle({ species: this.rom.dex(internal), level, stationary: options.stationary }, {});
+  }
+  private battle(opponent: Parameters<Engine["startBattle"]>[0]["opponent"], options: { trainer?: string; canLose?: boolean; klass?: number }): Promise<BattleOutcome> {
+    const engine = this.ctx.engine;
+    if (!this.save.party.some(m => m.hp > 0)) return Promise.resolve("lose");
+    const bag = this.battleBag();
+    const battle = engine.startBattle({
+      party: this.save.party, opponent, balls: bag.balls, items: bag.items, money: this.save.money,
+      badges: this.badgeMask(), seen: this.save.seen, caught: this.save.caught,
+    });
+    const previous = this.mode;
+    this.mode = "battle";
+    this.inBattle = { trainer: !!options.trainer, klass: options.klass };
+    this.ctx.sound.refreshMusic();
+    this.ctx.layer.innerHTML = '<div class="encounter-transition" aria-hidden="true"></div>';
+    return new Promise(resolve => {
+      const finish = (outcome: BattleOutcome) => {
+        this.inBattle = undefined;
+        this.mode = previous === "battle" ? "script" : previous;
+        this.ctx.layer.replaceChildren();
+        this.ctx.sound.refreshMusic();
+        resolve(outcome);
+      };
+      const present = () => {
+        const s = battle.snapshot();
+        if (s.outcome && s.result) return void this.battleResult(s, options, finish);
+        this.battlePresenter = new BattlePresenter({
+          layer: this.ctx.layer,
+          trainerName: options.trainer,
+          caught: this.save.caught,
+          snapshot: s,
+          act: index => battle.act(index),
+          sprite: this.ctx.sprite,
+          species: id => engine.species(id),
+          move: (id, dvs) => engine.move(id, dvs),
+          cry: this.ctx.cry,
+          music: cue => {
+            this.battleCue = cue === "Capture" ? "capture" : options.trainer ? (options.klass && isLeader(options.klass) ? "gymVictory" : "trainerVictory") : "wildVictory";
+            this.ctx.sound.refreshMusic();
+          },
+          sound: id => this.ctx.sound.soundEffect(id),
+          animationSound: (...args) => this.ctx.sound.battleAnimation(...args),
+          itemName: id => engine.itemName(id),
+          party: () => this.save.party,
+          speed: this.save.settings.battleSpeed,
+          finish: () => {
+            this.battlePresenter = undefined;
+            present();
+          },
+          error: e => {
+            console.error(e);
+            finish("draw");
+          },
+        });
+      };
+      window.setTimeout(present, 620);
+    });
+  }
+  inBattle?: { trainer: boolean; klass?: number };
+  battleCue?: string;
+
+  private async battleResult(s: ReturnType<ReturnType<Engine["startBattle"]>["snapshot"]>, options: { trainer?: string; canLose?: boolean }, finish: (o: BattleOutcome) => void) {
+    const result = s.result!;
+    this.battleCue = undefined;
+    this.save.party = result.party.slice(0, 6);
+    for (const mon of result.party.slice(6)) this.save.storage.push({ ...mon, ot_name: mon.ot_name || this.save.name });
+    this.save.money = result.money;
+    // Return the native bag counts to Gen 1 item ids.
+    for (const [key] of Object.entries(this.save.items)) {
+      const crystal = this.crystalItem(+key);
+      if (!crystal) continue;
+      const left = [...result.bag.balls, ...result.bag.items].find(([id]) => id === crystal)?.[1] ?? 0;
+      if (left) this.save.items[key] = left;
+      else delete this.save.items[key];
+    }
+    this.save.seen = result.world.seen.filter(n => n <= 251);
+    this.save.caught = result.world.caught.filter(n => n <= 251);
+    const outcome = s.outcome!.toLowerCase();
+    const won = ["win", "won", "victory"].includes(outcome);
+    const caught = result.caught !== null && result.caught !== undefined;
+    const lost = !won && !caught && (["lose", "loss", "lost", "defeat"].includes(outcome) || !this.save.party.some(m => m.hp > 0));
+    this.ctx.layer.replaceChildren();
+    this.mode = "script";
+    if (caught) {
+      const mon = result.party[result.caught!];
+      if (mon && !mon.ot_name) mon.ot_name = this.save.name;
+      await this.say(`${engine_name(this, mon.species)} ${result.caught! >= 6 ? "was transferred to the PC" : "joined your party"}!`);
+    }
+    if (lost && options.canLose) {
+      this.heal();
+      finish("lose");
+      return;
+    }
+    if (lost) {
+      await this.blackout();
+      finish("lose");
+      return;
+    }
+    await this.evolveAfterBattle(result.may_evolve);
+    this.persist();
+    const escaped = outcome === "draw" && escapeAnnounced(s.events);
+    finish(won ? "win" : caught ? "caught" : escaped ? "run" : outcome === "draw" ? "run" : "draw");
+  }
+
+  private async evolveAfterBattle(slots: number[]) {
+    const { evolveAfterBattle } = await import("./evolution");
+    await evolveAfterBattle(this, slots);
+  }
+
+  async blackout() {
+    await this.say("{PLAYER} is out of useable POKéMON!\f{PLAYER} blacked out!");
+    this.save.money = Math.floor(this.save.money / 2);
+    this.heal();
+    const town = this.save.blackout;
+    const { blackoutSpot } = await import("./services");
+    const spot = blackoutSpot(this, town);
+    await this.fade(() => {
+      this.me.x = spot.x;
+      this.me.y = spot.y;
+      this.me.facing = "down";
+      this.me.from = undefined;
+      this.enterMap(spot.map, true);
+    });
+    this.persist();
+  }
+
+  // ------------------------------------------------------------ Pikachu
+  private starterPikachu() {
+    const lead = this.save.party.find(m => m.species === 25 && m.ot_id === this.save.vars.otId && this.save.vars.pikachuStarter);
+    return lead && lead.hp > 0 ? lead : undefined;
+  }
+  private placePikachu() {
+    const follows = !!this.starterPikachu() && !this.save.surfing && !this.save.bike;
+    if (!follows) {
+      this.pikachu = undefined;
+      return;
+    }
+    const behind = STEP[opposite(this.me.facing)];
+    let x = this.me.x + behind[0], y = this.me.y + behind[1];
+    if (!this.world.passable(this.header, x, y) || this.blocked(x, y)) {
+      x = this.me.x;
+      y = this.me.y;
+    }
+    this.pikachu = { x, y, facing: this.me.facing, walkFrame: 0, visible: true, trail: [] };
+  }
+  private pikachuFollow(fromX: number, fromY: number) {
+    const p = this.pikachu;
+    if (!p) return;
+    if (p.x === fromX && p.y === fromY) return;
+    const dx = fromX - p.x, dy = fromY - p.y;
+    if (Math.abs(dx) + Math.abs(dy) > 2) {
+      p.x = fromX;
+      p.y = fromY;
+      return;
+    }
+    p.facing = this.towards(p, { x: fromX, y: fromY });
+    p.from = { x: p.x, y: p.y, t: 0, duration: this.me.from?.duration ?? WALK_SECONDS };
+    p.x = fromX;
+    p.y = fromY;
+  }
+  private async talkToPikachu() {
+    const { talkToPikachu } = await import("./pikachu");
+    if (this.pikachu) this.pikachu.facing = opposite(this.me.facing);
+    await talkToPikachu(this);
+  }
+
+  // ------------------------------------------------------------ menus and saving
+  private async openMenu() {
+    this.mode = "menu";
+    this.ctx.sound.overworld("interact");
+    await openYellowMenu(this);
+    this.ctx.layer.replaceChildren();
+    this.mode = "world";
+  }
+  get layer() { return this.ctx.layer; }
+  get engine() { return this.ctx.engine; }
+
+  persist(force = false) {
+    this.lastSave = this.save.steps;
+    this.save.x = this.me.from ? this.me.from.x : this.me.x;
+    this.save.y = this.me.from ? this.me.from.y : this.me.y;
+    this.save.facing = this.me.facing;
+    return this.ctx.store.write(this.save, !force).then(() => {
+      if (this.saveIssue) this.ctx.saveWarning.hidden = true;
+      this.saveIssue = false;
+    }, error => {
+      this.saveIssue = true;
+      this.ctx.saveWarning.hidden = false;
+      this.ctx.saveWarning.textContent = error instanceof JourneyConflict ? "Newer save in another window" : "Unsaved progress · Menu → Save";
+    });
+  }
+  summary() {
+    return yellowSummary(this.save, id => titleCase(this.rom.mapName(id) || this.rom.mapLabel(id) || "Kanto"));
+  }
+
+  // ------------------------------------------------------------ rendering
+  private render(now: number) {
+    const c = this.ctx2d, map = this.header;
+    c.imageSmoothingEnabled = false;
+    const pos = (m: Mover) => {
+      if (!m.from) return { x: m.x * 16, y: m.y * 16, lift: 0 };
+      const t = Math.min(1, m.from.t);
+      const lift = m.from.hop ? Math.sin(t * Math.PI) * 8 : 0;
+      return { x: (m.from.x + (m.x - m.from.x) * t) * 16, y: (m.from.y + (m.y - m.from.y) * t) * 16, lift };
+    };
+    const p = pos(this.me);
+    const camX = Math.round(p.x + 8 - 160), camY = Math.round(p.y + 8 - 120);
+    c.fillStyle = `rgb(${this.palette[0].join(",")})`;
+    c.fillRect(0, 0, 320, 240);
+    // Border blocks around everything.
+    const border = this.gfx.block(map, map.border, this.palette);
+    const bx0 = Math.floor(camX / 32), by0 = Math.floor(camY / 32);
+    for (let by = by0; by <= by0 + 8; by++)
+      for (let bx = bx0; bx <= bx0 + 10; bx++) c.drawImage(border, bx * 32 - camX, by * 32 - camY);
+    c.drawImage(this.gfx.map(map, this.palette), -camX, -camY);
+    for (const conn of map.connections) {
+      const target = this.world.map(conn.map);
+      const img = this.gfx.map(target, mapPalette(this.rom, target, this.save.lastMap));
+      const ox = conn.dir === "north" || conn.dir === "south" ? conn.offset * 32 : conn.dir === "west" ? -target.width * 32 : map.width * 32;
+      const oy = conn.dir === "west" || conn.dir === "east" ? conn.offset * 32 : conn.dir === "north" ? -target.height * 32 : map.height * 32;
+      c.drawImage(img, ox - camX, oy - camY);
+    }
+    this.animateTiles(c, camX, camY, now);
+    // Characters, back to front.
+    type Drawn = { y: number; draw: () => void };
+    const drawn: Drawn[] = [];
+    const add = (m: Mover, sprite: number, emote?: Npc["emote"]) => {
+      const at = pos(m);
+      const walking = !!m.from && Math.floor(m.from.t * 2) % 2 === 0 && Math.floor(m.walkFrame / WALK_SECONDS) % 2 === 0;
+      drawn.push({
+        y: at.y, draw: () => {
+          const img = this.gfx.sprite(sprite, m.facing, walking, this.palette);
+          if (!img) return;
+          const x = Math.round(at.x - camX), y = Math.round(at.y - camY - 4 - at.lift);
+          c.drawImage(img, x, y);
+          if (emote && emote.until > this.clock) this.drawEmote(c, emote.kind, x, y - 16);
+        },
+      });
+    };
+    for (const n of this.npcs) if (!n.hidden) add(n, n.object.sprite, n.emote);
+    if (this.pikachu?.visible) add(this.pikachu, SPRITE.SPRITE_PIKACHU);
+    add(this.me, this.save.surfing ? SPRITE.SPRITE_SEEL : this.save.bike ? SPRITE.SPRITE_RED_BIKE ?? SPRITE.SPRITE_RED : SPRITE.SPRITE_RED, (this.me as Npc).emote);
+    drawn.sort((a, b) => a.y - b.y).forEach(d => d.draw());
+    if (this.fadeLevel > 0) {
+      c.fillStyle = `rgba(16,16,24,${this.fadeLevel})`;
+      c.fillRect(0, 0, 320, 240);
+    }
+  }
+  private animTiles = new Map<number, { x: number; y: number; tile: number }[]>();
+  private animateTiles(c: CanvasRenderingContext2D, camX: number, camY: number, now: number) {
+    const map = this.header, tileset = this.rom.tileset(map.tileset);
+    if (!tileset.animation) return;
+    let list = this.animTiles.get(map.id);
+    if (!list) {
+      list = [];
+      for (let by = 0; by < map.height; by++)
+        for (let bx = 0; bx < map.width; bx++) {
+          const tiles = this.rom.block(tileset, map.blocks[by * map.width + bx]);
+          for (let i = 0; i < 16; i++) {
+            const t = tiles[i];
+            if (t === 0x14 || (t === 0x03 && tileset.animation === 2))
+              list.push({ x: bx * 32 + (i & 3) * 8, y: by * 32 + (i >> 2) * 8, tile: t });
+          }
+        }
+      this.animTiles.set(map.id, list);
+    }
+    const frame = Math.floor(now / 333);
+    for (const t of list) {
+      const x = t.x - camX, y = t.y - camY;
+      if (x < -8 || y < -8 || x > 320 || y > 240) continue;
+      c.drawImage(this.gfx.animatedTile(map, t.tile, this.palette, frame), x, y);
+    }
+  }
+  private drawEmote(c: CanvasRenderingContext2D, kind: Emote, x: number, y: number) {
+    c.fillStyle = "#fff";
+    c.strokeStyle = "#222";
+    c.lineWidth = 1;
+    c.beginPath();
+    c.roundRect(x + 1.5, y + 1.5, 13, 12, 3);
+    c.fill();
+    c.stroke();
+    c.fillStyle = kind === "exclamation" ? "#d03030" : "#2a2a2a";
+    c.font = "bold 11px monospace";
+    c.textAlign = "center";
+    c.fillText(kind === "exclamation" ? "!" : kind === "question" ? "?" : "♪", x + 8, y + 11);
+    c.textAlign = "start";
+  }
+}
+
+const LEADER_CLASSES = new Set(["BROCK", "MISTY", "LT_SURGE", "ERIKA", "KOGA", "SABRINA", "BLAINE", "GIOVANNI", "LORELEI", "BRUNO", "AGATHA", "LANCE", "RIVAL3"]);
+function isLeader(klass: number) {
+  return [...LEADER_CLASSES].some(name => TRAINER[name] === klass);
+}
+function trainerIntro(klass: number) {
+  const name = Object.keys(TRAINER).find(k => TRAINER[k] === klass) ?? "";
+  if (/ROCKET|GIOVANNI/.test(name)) return "MUSIC_MEET_EVIL_TRAINER";
+  if (/RIVAL/.test(name)) return "MUSIC_MEET_RIVAL";
+  if (/LASS|BEAUTY|JR_TRAINER_F|COOLTRAINER_F|CHANNELER|SWIMMER_F|PICNICKER/.test(name)) return "MUSIC_MEET_FEMALE_TRAINER";
+  return "MUSIC_MEET_MALE_TRAINER";
+}
+function engine_name(game: YellowGame, dex: number) {
+  return game.engine.species(dex).name.toUpperCase();
+}
+export function titleCase(s: string) {
+  return s.toLowerCase().replace(/(^|[\s.'-])([a-zé])/g, (_, a, b) => a + b.toUpperCase()).replace(/\bPokémon\b/i, "Pokémon");
+}
+void MAP_OBJECT;
+void MAP_SCRIPT;
+void TEXT_RESET;

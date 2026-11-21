@@ -1,0 +1,30 @@
+.yellow-text { white-space: normal; }
+.yellow-yesno {
+  position: absolute;
+  right: 4%;
+  bottom: calc(4% + 82px);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  border: 4px double #284c3b;
+  background: #f7efd3;
+  font-family: "VT323", monospace;
+  font-size: 22px;
+}
+.yellow-yesno button { border: 0; background: none; color: #213e33; font: inherit; text-align: left; padding: 0 0 0 1em; }
+.yellow-yesno button:focus-visible, .yellow-yesno button:focus { outline: none; }
+.yellow-yesno button:focus::before { content: "▶"; margin-left: -1em; position: absolute; }
+.yellow-dex { list-style: none; margin: 0; padding: 0; max-height: 9em; overflow-y: auto; }
+.yellow-dex li { display: flex; align-items: center; gap: .4em; }
+.yellow-dex img { width: 1.6em; height: 1.6em; image-rendering: pixelated; }
+.yellow-dex em { margin-left: auto; font-style: normal; opacity: .7; }
+.yellow-card { display: grid; grid-template-columns: auto 1fr; gap: .1em .8em; margin: .2em 0; }
+.yellow-card dd { margin: 0; }
+.yellow-badges { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; margin: .4em 0; font-size: .8em; }
+.yellow-badges span { padding: 1px 3px; border: 1px dashed #9db59a; text-align: center; opacity: .5; }
+.yellow-badges span.earned { border-style: solid; background: #f2c94c; color: #3b2f0c; opacity: 1; }
+.yellow-qty { font-family: "VT323", monospace; font-size: 26px; margin: .2em 0; }
+.panel.yellow-choice .journey-list button { text-align: left; }
+.yellow-intro label { display: flex; flex-direction: column; gap: 2px; margin: .3em 0; }
+.yellow-intro input { font-family: "VT323", monospace; font-size: 22px; padding: 2px 6px; text-transform: uppercase; max-width: 12em; }
