@@ -901,6 +901,7 @@ export class YellowGame implements Game {
     }
     const hidden = this.rom.hiddenObjects(this.header.id).find(h => h.x === this.me.x + dx && h.y === this.me.y + dy);
     if (hidden) return this.hiddenObject(hidden);
+    if (await MAP_SCRIPTS[this.header.label]?.onInteract?.(this)) return;
     const { fieldPrompt } = await import("./field");
     if (await fieldPrompt(this)) return;
     // Bookshelves, statues and displays in buildings without their own sign.

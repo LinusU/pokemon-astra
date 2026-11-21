@@ -127,6 +127,11 @@ export interface MapScript {
   onEnter?(g: Game): void | Promise<void>;
   /** Runs when the player arrives on a square or regains control. */
   onStep?(g: Game): void | Promise<void>;
+  /**
+   * Runs when the player presses A and nothing (person, sign, hidden object)
+   * is in front. Resolves true when it handled the press.
+   */
+  onInteract?(g: Game): Promise<boolean>;
   /** Handlers for text_asm entries, keyed by their cartridge label. */
   texts?: Record<string, (g: Game) => Promise<void>>;
 }

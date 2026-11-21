@@ -51,22 +51,21 @@ function silphEnter(g: Game, floor: number) {
   for (const door of DOORS[floor] ?? []) if (!g.ev(door.event)) g.setBlock(door.x, door.y, door.locked);
 }
 
-/**
- * Pressing A on a locked gate with the Card Key opens it (PrintCardKeyText).
- * API REQUEST: a hook for "A pressed on the tile in front of the player" so the
- * gate can also say CardKeyFailText without the key. Workaround: the gate opens
- * as soon as the player stands in front of it holding the Card Key.
- */
+/** Pressing A on a locked gate opens it with the Card Key (PrintCardKeyText). */
 async function silphCardKey(g: Game, floor: number) {
-  if (!g.hasItem("CARD_KEY")) return;
   const step = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[g.player.facing];
   const bx = (g.player.x + step[0]) >> 1, by = (g.player.y + step[1]) >> 1;
   const door = (DOORS[floor] ?? []).find(d => d.x === bx && d.y === by && !g.ev(d.event) && g.block(bx, by) === d.locked);
-  if (!door) return;
+  if (!door) return false;
+  if (!g.hasItem("CARD_KEY")) {
+    await g.text("CardKeyFailText");
+    return true;
+  }
   await g.text("CardKeySuccessText");
   g.setBlock(door.x, door.y, floor === 11 ? 0x03 : OPEN_DOOR_BLOCK);
   g.set(door.event);
   g.sfx("SFX_GO_INSIDE");
+  return true;
 }
 
 /** Silph Co. workers say one thing while Team Rocket holds the building and another afterwards. */
@@ -228,7 +227,7 @@ defineMap("SilphCo1F", {
 
 defineMap("SilphCo2F", {
   onEnter: g => silphEnter(g, 2),
-  onStep: g => silphCardKey(g, 2),
+  onInteract: g => silphCardKey(g, 2),
   texts: {
     async SilphCo2FSilphWorkerFText(g) {
       const T = "SilphCo2FSilphWorkerFText.";
@@ -243,7 +242,7 @@ defineMap("SilphCo2F", {
 
 defineMap("SilphCo3F", {
   onEnter: g => silphEnter(g, 3),
-  onStep: g => silphCardKey(g, 3),
+  onInteract: g => silphCardKey(g, 3),
   texts: {
     SilphCo3FSilphWorkerMText: g => beatGiovanni(g, "SilphCo3FSilphWorkerMText.WhatShouldIDoText", "SilphCo3FSilphWorkerMText.YouSavedUsText"),
   },
@@ -251,7 +250,7 @@ defineMap("SilphCo3F", {
 
 defineMap("SilphCo4F", {
   onEnter: g => silphEnter(g, 4),
-  onStep: g => silphCardKey(g, 4),
+  onInteract: g => silphCardKey(g, 4),
   texts: {
     SilphCo4FSilphWorkerMText: g => beatGiovanni(g, "SilphCo4FSilphWorkerMText.ImHidingText", "SilphCo4FSilphWorkerMText.TeamRocketIsGoneText"),
   },
@@ -259,7 +258,7 @@ defineMap("SilphCo4F", {
 
 defineMap("SilphCo5F", {
   onEnter: g => silphEnter(g, 5),
-  onStep: g => silphCardKey(g, 5),
+  onInteract: g => silphCardKey(g, 5),
   texts: {
     SilphCo5FSilphWorkerMText: g => beatGiovanni(g, "SilphCo5FSilphWorkerMText.ThatsYouRightText", "SilphCo5FSilphWorkerMText.YoureOurHeroText"),
   },
@@ -267,7 +266,7 @@ defineMap("SilphCo5F", {
 
 defineMap("SilphCo6F", {
   onEnter: g => silphEnter(g, 6),
-  onStep: g => silphCardKey(g, 6),
+  onInteract: g => silphCardKey(g, 6),
   texts: {
     SilphCo6FSilphWorkerM1Text: g => beatGiovanni(g, "SilphCo6FSilphWorkerM1Text.TookOverTheBuildingText", "SilphCo6FSilphWorkerM1Text.BackToWorkText"),
     SilphCo6FSilphWorkerM2Text: g => beatGiovanni(g, "SilphCo6FSilphWorkerM2Text.HelpMePleaseText", "SilphCo6FSilphWorkerM2Text.WeGotEngagedText"),
@@ -304,8 +303,8 @@ async function silphRival(g: Game) {
 
 defineMap("SilphCo7F", {
   onEnter: g => silphEnter(g, 7),
+  onInteract: g => silphCardKey(g, 7),
   async onStep(g) {
-    await silphCardKey(g, 7);
     if (g.ev("EVENT_BEAT_SILPH_CO_RIVAL")) return;
     if (g.player.x === 3 && (g.player.y === 2 || g.player.y === 3)) await silphRival(g);
   },
@@ -326,7 +325,7 @@ defineMap("SilphCo7F", {
 
 defineMap("SilphCo8F", {
   onEnter: g => silphEnter(g, 8),
-  onStep: g => silphCardKey(g, 8),
+  onInteract: g => silphCardKey(g, 8),
   texts: {
     SilphCo8FSilphWorkerMText: g => beatGiovanni(g, "SilphCo8FSilphWorkerMText.SilphIsFinishedText", "SilphCo8FSilphWorkerMText.ThanksForSavingUsText"),
   },
@@ -334,7 +333,7 @@ defineMap("SilphCo8F", {
 
 defineMap("SilphCo9F", {
   onEnter: g => silphEnter(g, 9),
-  onStep: g => silphCardKey(g, 9),
+  onInteract: g => silphCardKey(g, 9),
   texts: {
     async SilphCo9FNurseText(g) {
       const T = "SilphCo9FNurseText.";
@@ -348,7 +347,7 @@ defineMap("SilphCo9F", {
 
 defineMap("SilphCo10F", {
   onEnter: g => silphEnter(g, 10),
-  onStep: g => silphCardKey(g, 10),
+  onInteract: g => silphCardKey(g, 10),
   texts: {
     SilphCo10FSilphWorkerFText: g => beatGiovanni(g, "SilphCo10FSilphWorkerFText.ImScaredText", "SilphCo10FSilphWorkerFText.QuietAboutMyCryingText"),
   },
@@ -414,8 +413,8 @@ async function giovanniMeetsPlayer(g: Game) {
 
 defineMap("SilphCo11F", {
   onEnter: g => silphEnter(g, 11),
+  onInteract: g => silphCardKey(g, 11),
   async onStep(g) {
-    await silphCardKey(g, 11);
     const { x, y } = g.player;
     if (!g.ev("EVENT_BEAT_SILPH_CO_11F_JESSIE_JAMES") && y === 3 && x < 4) return jessieAndJames(g);
     if (!g.ev("EVENT_BEAT_SILPH_CO_GIOVANNI") && ((x === 6 && y === 13) || (x === 7 && y === 12))) return giovanniMeetsPlayer(g);
