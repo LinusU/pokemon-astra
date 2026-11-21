@@ -46,6 +46,13 @@ describe.skipIf(!available)("Yellow saves", () => {
     expect(isYellowSave(JSON.parse(JSON.stringify(save)))).toBe(true);
     expect(isYellowSave({ ...save, map: 300 })).toBe(false);
   });
+  it("keep the movement choice", async () => {
+    const { freshYellowSave, isYellowSave } = await import("../src/yellow/save");
+    const rom = new YellowRom(new Uint8Array(readFileSync("pokeyellow.gbc")));
+    const save = freshYellowSave(rom, "RED", "BLUE");
+    expect(isYellowSave({ ...save, settings: { ...save.settings, movement: "grid" } })).toBe(true);
+    expect(isYellowSave({ ...save, settings: { ...save.settings, movement: "diagonal" } })).toBe(false);
+  });
 });
 
 describe.skipIf(!available)("Yellow movesets", () => {

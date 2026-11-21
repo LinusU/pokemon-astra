@@ -46,7 +46,13 @@ export interface YellowSave {
   safari?: { steps: number; balls: number };
   /** The Route 5 Day-Care: the Pokémon left there and the steps walked since. */
   daycare?: { mon: Pokemon; steps: number };
-  settings: { battleSpeed: number; music?: boolean; swapGamepadAB?: boolean };
+  settings: {
+    battleSpeed: number;
+    music?: boolean;
+    swapGamepadAB?: boolean;
+    /** Free movement like Astra's, or square-by-square steps as on the Game Boy. */
+    movement?: "free" | "grid";
+  };
 }
 
 export function freshYellowSave(rom: YellowRom, name: string, rival: string): YellowSave {
@@ -99,7 +105,8 @@ export function isYellowSave(data: unknown): data is YellowSave {
     counts(s.items) && counts(s.pcItems) && int(s.money, 0, 999999) && int(s.coins, 0, 9999) && int(s.badges, 0, 255) &&
     ints(s.seen, 1, 251) && ints(s.caught, 1, 251) && !!s.pikachu && int(s.pikachu.happiness, 0, 255) &&
     ints(s.visited, 0, 255) && int(s.steps, 0, Number.MAX_SAFE_INTEGER) && typeof s.seconds === "number" && s.seconds >= 0 && Number.isFinite(s.seconds) &&
-    !!s.settings && int(s.settings.battleSpeed, 1, 3);
+    !!s.settings && int(s.settings.battleSpeed, 1, 3) &&
+    (s.settings.movement === undefined || ["free", "grid"].includes(s.settings.movement));
 }
 
 export function yellowSummary(save: YellowSave, place: (map: number) => string): JourneySummary {

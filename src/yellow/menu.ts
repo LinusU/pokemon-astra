@@ -136,6 +136,7 @@ export function openYellowMenu(game: YellowGame): Promise<(() => Promise<void>) 
           <button id="speed">Battle speed<strong>${save.settings.battleSpeed}×</strong></button>
           <button id="music">Sound<strong>${game.ctx.sound.enabled ? "On" : "Off"}</strong></button>
           <button id="gamepad">Controller A/B<strong>${save.settings.swapGamepadAB ? "Swapped" : "Standard"}</strong></button>
+          <button id="movement">Movement<strong>${save.settings.movement === "grid" ? "Square by square" : "Free"}</strong></button>
           </div><div class="buttons"><button class="secondary" id="back">Back</button></div>`, "settings-screen");
         p.querySelector<HTMLButtonElement>("#speed")!.onclick = () => { save.settings.battleSpeed = save.settings.battleSpeed % 3 + 1; view("options"); };
         p.querySelector<HTMLButtonElement>("#music")!.onclick = () => {
@@ -147,6 +148,10 @@ export function openYellowMenu(game: YellowGame): Promise<(() => Promise<void>) 
         p.querySelector<HTMLButtonElement>("#gamepad")!.onclick = () => {
           save.settings.swapGamepadAB = !save.settings.swapGamepadAB;
           game.ctx.input.setGamepadLayout(save.settings.swapGamepadAB);
+          view("options");
+        };
+        p.querySelector<HTMLButtonElement>("#movement")!.onclick = () => {
+          save.settings.movement = save.settings.movement === "grid" ? "free" : "grid";
           view("options");
         };
         p.querySelector<HTMLButtonElement>("#back")!.onclick = main;

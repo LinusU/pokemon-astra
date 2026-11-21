@@ -53,6 +53,14 @@ interface Mover {
   /** Fractional progress of the current step. */
   from?: { x: number; y: number; t: number; duration: number; hop?: boolean };
   walkFrame: number;
+  /**
+   * With free movement: the position in squares between steps. `x` and `y`
+   * stay the square under the actor's centre, which is what scripts see.
+   */
+  free?: { x: number; y: number };
+  /** Distance walked freely, which sets the walking frame. */
+  stride?: number;
+  moving?: boolean;
 }
 interface Npc extends Mover {
   object: MapObject;
@@ -65,6 +73,9 @@ interface Npc extends Mover {
 }
 
 const WALK_SECONDS = 1 / 4.2;
+/** Free movement: walking speed in squares per second and the player's half width. */
+const FREE_SPEED = 4.6;
+const FREE_RADIUS = 0.28;
 const TEXT_RESET = new Set(["wait", "done"]);
 
 export class YellowGame implements Game {
@@ -200,9 +211,11 @@ export class YellowGame implements Game {
     }
     return this.walk(who, steps, options.speed ?? 1);
   }
-  private walk(who: Actor, steps: Facing[], speed = 1): Promise<void> {
+  private async walk(who: Actor, steps: Facing[], speed = 1): Promise<void> {
     const a = this.actor(who);
-    if (!a || !steps.length) return Promise.resolve();
+    if (!a || !steps.length) return;
+    // Scenes move in whole squares, so the player first finishes the square they are crossing.
+    await this.settle();
     return new Promise(resolve => {
       const queue = [...steps];
       const next = () => {
@@ -210,8 +223,9 @@ export class YellowGame implements Game {
         if (!dir) return resolve();
         a.facing = dir;
         const [dx, dy] = STEP[dir];
-        const fromX = a.x, fromY = a.y;
-        if (who === "player") this.pikachuFollow(fromX, fromY);
+        const fromX = a.free?.x ?? a.x, fromY = a.free?.y ?? a.y;
+        a.free = undefined;
+        if (who === "player") this.pikachuFollow(a.x, a.y);
         a.x += dx;
         a.y += dy;
         a.from = { x: fromX, y: fromY, t: 0, duration: WALK_SECONDS / speed };
@@ -227,6 +241,7 @@ export class YellowGame implements Game {
   async approach(index: number) {
     const n = this.npcs.find(n => n.object.index === index);
     if (!n) return;
+    await this.settle();
     const path: Facing[] = [];
     let { x, y } = n;
     while (Math.abs(this.me.x - x) + Math.abs(this.me.y - y) > 1) {
@@ -246,18 +261,20 @@ export class YellowGame implements Game {
     a.x = x;
     a.y = y;
     a.from = undefined;
+    a.free = undefined;
     if (facing) a.facing = facing;
+    if (who === "player") this.resetTrail();
     if (who !== "player" && who !== "pikachu") {
       const n = a as Npc;
       n.home = { x, y };
       n.path = [];
     }
   }
-  emote(who: Actor, kind: Emote) {
+  async emote(who: Actor, kind: Emote) {
     const a = this.actor(who) as Npc | undefined;
-    if (!a) return Promise.resolve();
+    if (!a) return;
     a.emote = { kind, until: this.clock + 0.9 };
-    return this.delay(54);
+    await Promise.all([this.delay(54), this.settle()]);
   }
 
   hasItem(item: string, count = 1) { return (this.save.items[this.itemId(item)] ?? 0) >= count; }
@@ -549,24 +566,21 @@ export class YellowGame implements Game {
     const place = this.world.resolve(this.header, this.me.x, this.me.y);
     if (!place) return;
     const dx = place.x - this.me.x, dy = place.y - this.me.y;
-    if (this.me.from) {
-      this.me.from.x += dx;
-      this.me.from.y += dy;
-    }
-    if (this.pikachu) {
-      this.pikachu.x += dx;
-      this.pikachu.y += dy;
-      if (this.pikachu.from) {
-        this.pikachu.from.x += dx;
-        this.pikachu.from.y += dy;
+    const shift = (m?: Mover) => {
+      if (!m) return;
+      m.x += dx;
+      m.y += dy;
+      for (const p of [m.from, m.free]) if (p) {
+        p.x += dx;
+        p.y += dy;
       }
-      this.pikachu.trail = this.pikachu.trail.map(p => ({ x: p.x + dx, y: p.y + dy }));
-    }
-    this.me.x = place.x;
-    this.me.y = place.y;
+    };
+    shift(this.me);
+    shift(this.pikachu);
+    if (this.pikachu) this.pikachu.trail = this.pikachu.trail.map(p => ({ x: p.x + dx, y: p.y + dy }));
     const pikachu = this.pikachu;
     this.enterMap(place.map, false);
-    if (pikachu && this.pikachu) Object.assign(this.pikachu, { x: pikachu.x, y: pikachu.y, from: pikachu.from, trail: pikachu.trail, visible: pikachu.visible });
+    if (pikachu && this.pikachu) Object.assign(this.pikachu, { x: pikachu.x, y: pikachu.y, from: pikachu.from, free: pikachu.free, trail: pikachu.trail, visible: pikachu.visible });
   }
 
   /** Teleports to a map square, as a script warp or a door. */
@@ -577,6 +591,7 @@ export class YellowGame implements Game {
       this.me.x = x;
       this.me.y = y;
       this.me.from = undefined;
+      this.me.free = undefined;
       if (facing) this.me.facing = facing;
       this.enterMap(id, true);
     });
@@ -596,6 +611,7 @@ export class YellowGame implements Game {
       this.me.x = arrival.x;
       this.me.y = arrival.y;
       this.me.from = undefined;
+      this.me.free = undefined;
       this.enterMap(target, true);
     });
     target = this.header.id;
@@ -662,6 +678,15 @@ export class YellowGame implements Game {
   }
 
   private control(dt: number) {
+    if (this.save.settings.movement !== "grid") return this.controlFree(dt);
+    // Switching to steps mid-square lines everyone up on their squares.
+    if (!this.me.from) this.me.free = undefined;
+    if (this.pikachu && !this.pikachu.from) this.pikachu.free = undefined;
+    this.controlGrid(dt);
+  }
+
+  /** Square-by-square steps, as on the Game Boy. */
+  private controlGrid(dt: number) {
     const input = this.ctx.input;
     const tapped = (["up", "down", "left", "right"] as const).find(d => input.hit(d));
     if (this.me.from) {
@@ -762,6 +787,9 @@ export class YellowGame implements Game {
   private pushBoulder(boulder: Npc, dir: Facing) {
     if (++this.pushTries < 2) return false;
     this.pushTries = 0;
+    return this.moveBoulder(boulder, dir);
+  }
+  private moveBoulder(boulder: Npc, dir: Facing) {
     const [dx, dy] = STEP[dir], x = boulder.x + dx, y = boulder.y + dy;
     const map = this.header;
     if (!this.world.passable(map, x, y) || this.blocked(x, y, boulder) ||
@@ -775,6 +803,205 @@ export class YellowGame implements Game {
     boulder.onPath = () => void this.runScript(() => MAP_SCRIPTS[this.header.label]?.onStep?.(this));
     return true;
   }
+
+  // ------------------------------------------------------------ free movement
+  private pushing = 0;
+  /**
+   * Astra-style movement: any direction, diagonals included, with the map's
+   * rules applied whenever the player's centre enters a new square.
+   */
+  private controlFree(dt: number) {
+    const input = this.ctx.input, me = this.me;
+    if (me.from) return;
+    if (input.hit("menu")) {
+      void this.openMenu();
+      return;
+    }
+    if (input.hit("a")) {
+      void this.runScript(async () => {
+        await this.interact();
+        await this.afterControl();
+      });
+      return;
+    }
+    const held = (d: Facing) => input.held(d) || input.hit(d);
+    const h = (held("right") ? 1 : 0) - (held("left") ? 1 : 0), v = (held("down") ? 1 : 0) - (held("up") ? 1 : 0);
+    if (!h && !v) {
+      this.pushing = 0;
+      this.bumped = false;
+      me.moving = false;
+      return;
+    }
+    const across: Facing | undefined = h ? (h > 0 ? "right" : "left") : undefined;
+    const along: Facing | undefined = v ? (v > 0 ? "down" : "up") : undefined;
+    me.facing = across && along ? (me.facing === across || me.facing === along ? me.facing : along) : (across ?? along)!;
+    const map = this.header;
+    // Mats and carpets lead out when the player keeps walking into the edge beyond them.
+    const warp = this.world.warpAt(map, me.x, me.y);
+    if (warp >= 0) for (const dir of [along, across]) if (dir && this.world.edgeWarp(map, me.x, me.y, dir)) {
+      me.facing = dir;
+      me.moving = false;
+      void this.runScript(() => this.useWarp(warp));
+      return;
+    }
+    const speed = FREE_SPEED * (this.save.bike ? 2 : input.held("speed") || input.held("b") ? 1.5 : 1);
+    const len = Math.hypot(h, v), dx = h / len, dy = v / len;
+    const pos = { ...(me.free ?? { x: me.x, y: me.y }) }, start = { ...pos };
+    // Short collision steps keep corners exact; a new square stops the frame so no square is skipped.
+    let remaining = speed * Math.min(dt, 0.05);
+    while (remaining > 1e-6) {
+      const step = Math.min(remaining, 0.1);
+      remaining -= step;
+      const before = { ...pos };
+      if (dx) {
+        if (!this.freeBlocked(pos.x + dx * step, pos.y)) pos.x += dx * step;
+        else if (!dy) this.slide(pos, "y", dx * step);
+      }
+      if (dy) {
+        if (!this.freeBlocked(pos.x, pos.y + dy * step)) pos.y += dy * step;
+        else if (!dx) this.slide(pos, "x", dy * step);
+      }
+      if (Math.round(pos.x) !== me.x || Math.round(pos.y) !== me.y) break;
+      if (pos.x === before.x && pos.y === before.y) break;
+    }
+    const moved = Math.hypot(pos.x - start.x, pos.y - start.y);
+    me.free = pos;
+    me.moving = moved > 0;
+    me.stride = (me.stride ?? 0) + moved;
+    const [fx, fy] = STEP[me.facing];
+    const forward = (pos.x - start.x) * fx + (pos.y - start.y) * fy;
+    if (forward > 1e-4 || (across && along && moved > 0)) {
+      this.pushing = 0;
+      this.bumped = false;
+    } else if (this.pushAgainst(me.facing, pos, dt)) return;
+    const tx = Math.round(pos.x), ty = Math.round(pos.y);
+    if (tx === me.x && ty === me.y) return;
+    me.x = tx;
+    me.y = ty;
+    if (this.save.surfing && !this.world.isWater(map, tx, ty) && this.landFromSurf(tx, ty)) this.placePikachu();
+    void this.runScript(() => this.arrived());
+  }
+
+  /** Walking straight into something: ledges, Strength boulders and walls. */
+  private pushAgainst(dir: Facing, pos: { x: number; y: number }, dt: number) {
+    const me = this.me, map = this.header, [dx, dy] = STEP[dir];
+    const lateral = dx ? Math.abs(pos.y - me.y) : Math.abs(pos.x - me.x);
+    if (lateral < 0.35 && this.world.ledge(map, me.x, me.y, dir) && !this.blocked(me.x + dx * 2, me.y + dy * 2)) {
+      me.from = { x: pos.x, y: pos.y, t: 0, duration: WALK_SECONDS * 2, hop: true };
+      me.free = undefined;
+      me.x += dx * 2;
+      me.y += dy * 2;
+      this.ctx.sound.overworld("exit");
+      return true;
+    }
+    const boulder = this.objectAt(me.x + dx, me.y + dy);
+    if (boulder?.object.sprite === SPRITE.SPRITE_BOULDER && this.strength && !boulder.from) {
+      this.pushing += dt;
+      if (this.pushing >= 0.3) {
+        this.pushing = 0;
+        this.moveBoulder(boulder, dir);
+      }
+      return false;
+    }
+    if (!this.bumped) this.ctx.sound.overworld("bump");
+    this.bumped = true;
+    return false;
+  }
+
+  /** Whether the player's body would overlap a wall, a person or a raised edge at this position. */
+  private freeBlocked(x: number, y: number) {
+    const map = this.header, me = this.me, r = FREE_RADIUS;
+    const surfing = !!this.save.surfing, here = this.world.tile(map, me.x, me.y);
+    const cx = x + 0.5, cy = y + 0.5;
+    for (let ty = Math.floor(cy - r); ty <= Math.floor(cy + r - 1e-6); ty++)
+      for (let tx = Math.floor(cx - r); tx <= Math.floor(cx + r - 1e-6); tx++) {
+        if (tx === me.x && ty === me.y) continue;
+        if (this.blocked(tx, ty)) return true;
+        const open = surfing ? this.world.isWater(map, tx, ty) || this.world.passable(map, tx, ty) : this.world.passable(map, tx, ty);
+        if (!open || this.world.pairBlocked(map, here, this.world.tile(map, tx, ty), surfing)) return true;
+      }
+    return false;
+  }
+
+  /** Eases the player into the lane of a door or gap they are walking at, so a near miss still fits. */
+  private slide(pos: { x: number; y: number }, axis: "x" | "y", step: number) {
+    const lane = Math.round(pos[axis]), offset = lane - pos[axis];
+    if (Math.abs(offset) < 1e-4) return;
+    const ahead = axis === "x" ? this.freeBlocked(lane, pos.y + step) : this.freeBlocked(pos.x + step, lane);
+    if (ahead) return;
+    const nudge = Math.sign(offset) * Math.min(Math.abs(offset), Math.abs(step));
+    const next = axis === "x" ? this.freeBlocked(pos.x + nudge, pos.y) : this.freeBlocked(pos.x, pos.y + nudge);
+    if (!next) pos[axis] += nudge;
+  }
+
+  /** Finishes the square the player is crossing, so a scene starts from its centre. */
+  private settle(): Promise<void> {
+    const me = this.me as Mover & { onPath?: () => void };
+    const free = me.free;
+    me.free = undefined;
+    me.moving = false;
+    if (!free || me.from) return Promise.resolve();
+    const distance = Math.hypot(free.x - me.x, free.y - me.y);
+    if (distance < 0.02) return Promise.resolve();
+    return new Promise(resolve => {
+      me.from = { x: free.x, y: free.y, t: 0, duration: Math.max(0.03, distance * WALK_SECONDS) };
+      me.onPath = resolve;
+    });
+  }
+
+  /** Whether the player's body covers a square, so people do not walk into them. */
+  private playerCovers(x: number, y: number) {
+    const me = this.me;
+    if (me.from && Math.round(me.from.x) === x && Math.round(me.from.y) === y) return true;
+    const p = me.free ?? me;
+    return Math.abs(p.x - x) < 0.5 + FREE_RADIUS && Math.abs(p.y - y) < 0.5 + FREE_RADIUS;
+  }
+
+  /** Pikachu walks the player's own path, a square behind. */
+  private resetTrail() {
+    const p = this.pikachu;
+    if (p) p.trail = [{ x: p.free?.x ?? p.x, y: p.free?.y ?? p.y }, { ...this.playerPos() }];
+  }
+  private playerPos() {
+    const m = this.me;
+    if (m.from) {
+      const t = Math.min(1, m.from.t);
+      return { x: m.from.x + (m.x - m.from.x) * t, y: m.from.y + (m.y - m.from.y) * t };
+    }
+    return m.free ?? { x: m.x, y: m.y };
+  }
+  private followTrail(dt: number) {
+    const p = this.pikachu;
+    if (!p) return;
+    p.moving = false;
+    if (!p.visible || p.from) return;
+    const pos = this.playerPos(), trail = p.trail;
+    const last = trail[trail.length - 1];
+    if (!last || Math.hypot(pos.x - last.x, pos.y - last.y) >= 0.05) trail.push({ ...pos });
+    if (trail.length > 80) trail.splice(0, trail.length - 80);
+    let need = 1, cur = pos, target: { x: number; y: number } | undefined;
+    for (let i = trail.length - 1; i >= 0 && !target; i--) {
+      const point = trail[i], seg = Math.hypot(cur.x - point.x, cur.y - point.y);
+      if (seg >= need) target = { x: cur.x + (point.x - cur.x) * (need / seg), y: cur.y + (point.y - cur.y) * (need / seg) };
+      else {
+        need -= seg;
+        cur = point;
+      }
+    }
+    if (!target) return;
+    const at = p.free ?? { x: p.x, y: p.y };
+    const dx = target.x - at.x, dy = target.y - at.y, distance = Math.hypot(dx, dy);
+    if (distance < 1e-3) return;
+    const k = distance > 3 ? 1 : Math.min(1, (FREE_SPEED * 2.5 * dt) / distance);
+    const next = { x: at.x + dx * k, y: at.y + dy * k };
+    if (distance > 0.02) p.facing = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up";
+    p.free = next;
+    p.moving = true;
+    p.stride = (p.stride ?? 0) + distance * k;
+    p.x = Math.round(next.x);
+    p.y = Math.round(next.y);
+  }
+
   /** Development helper: jump to a map square. */
   debugWarp(map: string, x: number, y: number) {
     void this.runScript(() => this.warp(map, x, y));
@@ -803,6 +1030,7 @@ export class YellowGame implements Game {
       else void this.runScript(() => this.arrived());
     }
     if (this.pikachu) advance(this.pikachu);
+    if (this.save.settings.movement !== "grid") this.followTrail(dt);
     for (const n of this.npcs) {
       if (n.hidden) continue;
       if (advance(n)) {
@@ -822,7 +1050,7 @@ export class YellowGame implements Game {
       const { w, h } = this.world.cells(this.header);
       if (x < 0 || y < 0 || x >= w || y >= h || Math.abs(x - n.home.x) > 3 || Math.abs(y - n.home.y) > 3) continue;
       if (!this.world.passable(this.header, x, y) || this.world.isGrass(this.header, x, y) && false) continue;
-      if (this.blocked(x, y, n) || (this.me.x === x && this.me.y === y) || (this.me.from && this.me.from.x === x && this.me.from.y === y)) continue;
+      if (this.blocked(x, y, n) || this.playerCovers(x, y)) continue;
       if (this.pikachu?.visible && this.pikachu.x === x && this.pikachu.y === y) continue;
       if (this.header.warps.some(wp => wp.x === x && wp.y === y)) continue;
       n.from = { x: n.x, y: n.y, t: 0, duration: WALK_SECONDS * 1.4 };
@@ -899,6 +1127,15 @@ export class YellowGame implements Game {
     let fx = this.me.x + dx, fy = this.me.y + dy;
     if (this.pikachu?.visible && this.pikachu.x === fx && this.pikachu.y === fy) return this.talkToPikachu();
     let npc = this.npcs.find(n => !n.hidden && n.x === fx && n.y === fy);
+    const free = this.me.free;
+    if (!npc && free) {
+      // With free movement, someone half a square to the side still counts as in front.
+      const off = dx ? free.y - this.me.y : free.x - this.me.x;
+      if (Math.abs(off) > 0.15) {
+        const side = Math.sign(off);
+        npc = this.npcs.find(n => !n.hidden && n.x === fx + (dx ? 0 : side) && n.y === fy + (dx ? side : 0));
+      }
+    }
     if (!npc && this.world.counter(this.header, fx, fy)) {
       fx += dx;
       fy += dy;
@@ -1433,6 +1670,7 @@ export class YellowGame implements Game {
       this.me.y = spot.y;
       this.me.facing = "down";
       this.me.from = undefined;
+      this.me.free = undefined;
       this.enterMap(spot.map, true);
     });
     this.persist();
@@ -1456,10 +1694,11 @@ export class YellowGame implements Game {
       y = this.me.y;
     }
     this.pikachu = { x, y, facing: this.me.facing, walkFrame: 0, visible: true, trail: [] };
+    this.resetTrail();
   }
   private pikachuFollow(fromX: number, fromY: number) {
     const p = this.pikachu;
-    if (!p) return;
+    if (!p || this.save.settings.movement !== "grid") return;
     if (p.x === fromX && p.y === fromY) return;
     const dx = fromX - p.x, dy = fromY - p.y;
     if (Math.abs(dx) + Math.abs(dy) > 2) {
@@ -1495,8 +1734,8 @@ export class YellowGame implements Game {
 
   persist(force = false) {
     this.lastSave = this.save.steps;
-    this.save.x = this.me.from ? this.me.from.x : this.me.x;
-    this.save.y = this.me.from ? this.me.from.y : this.me.y;
+    this.save.x = Math.round(this.me.from ? this.me.from.x : this.me.x);
+    this.save.y = Math.round(this.me.from ? this.me.from.y : this.me.y);
     this.save.facing = this.me.facing;
     return this.ctx.store.write(this.save, !force).then(() => {
       if (this.saveIssue) this.ctx.saveWarning.hidden = true;
@@ -1516,7 +1755,7 @@ export class YellowGame implements Game {
     const c = this.ctx2d, map = this.header;
     c.imageSmoothingEnabled = false;
     const pos = (m: Mover) => {
-      if (!m.from) return { x: m.x * 16, y: m.y * 16, lift: 0 };
+      if (!m.from) return { x: (m.free?.x ?? m.x) * 16, y: (m.free?.y ?? m.y) * 16, lift: 0 };
       const t = Math.min(1, m.from.t);
       const lift = m.from.hop ? Math.sin(t * Math.PI) * 8 : 0;
       return { x: (m.from.x + (m.x - m.from.x) * t) * 16, y: (m.from.y + (m.y - m.from.y) * t) * 16, lift };
@@ -1544,7 +1783,9 @@ export class YellowGame implements Game {
     const drawn: Drawn[] = [];
     const add = (m: Mover, sprite: number, emote?: Npc["emote"]) => {
       const at = pos(m);
-      const walking = !!m.from && Math.floor(m.from.t * 2) % 2 === 0 && Math.floor(m.walkFrame / WALK_SECONDS) % 2 === 0;
+      const walking = m.from
+        ? Math.floor(m.from.t * 2) % 2 === 0 && Math.floor(m.walkFrame / WALK_SECONDS) % 2 === 0
+        : !!m.moving && Math.floor((m.stride ?? 0) * 2) % 2 === 1;
       drawn.push({
         y: at.y, draw: () => {
           const img = this.gfx.sprite(sprite, m.facing, walking, this.palette);

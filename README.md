@@ -48,7 +48,7 @@ Choose **New journey → Yellow** to play Pokémon Yellow's Kanto on Astra's eng
 - Pikachu follows you and won't go in its ball. Talk to it to see how it feels.
 - Field moves need their badge and a Pokémon that knows the move. Inspect a tree, the water or a boulder to use Cut, Surf or Strength, or choose the move from the party menu. Fly, Flash, Dig, Teleport and Softboiled work as in Yellow. A fainted Pokémon can still use field moves.
 - The Safari Zone, the Game Corner's slot machines and prize corner, the Day-Care, fossils, gift Pokémon, in-game trades, the Name Rater, Silph Co.'s Card Key doors and elevators, the Pokémon Tower ghosts, Snorlax and the legendary birds are all playable.
-- Movement is square by square, as on the Game Boy, with smooth steps. Hold B or Shift to walk faster.
+- You move freely, diagonals included, as in Astra. Yellow's events still work square by square: they fire when your centre enters a square, and you glide to its centre when a scene starts. Hold B or Shift to walk faster. **Option → Movement** switches to the Game Boy's square-by-square steps.
 
 Not included: link-cable features, the Game Boy Printer, the Surfing Pikachu minigame and Pikachu's animated emotion pictures. Talking to Pikachu shows a short line instead.
 
