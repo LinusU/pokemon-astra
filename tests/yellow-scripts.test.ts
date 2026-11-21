@@ -29,3 +29,13 @@ describe("Yellow map scripts", () => {
     expect(missing(refs(/"(MUSIC_[A-Z0-9_]+)"/g), n => MUSIC[n] !== undefined)).toEqual([]);
   });
 });
+
+describe("Yellow runtime symbols", () => {
+  it("only reads cartridge tables that the generated symbol table publishes", () => {
+    const files = ["src/yellow", "src/yellow/scripts"].flatMap(d => readdirSync(d).filter(f => f.endsWith(".ts")).map(f => `${d}/${f}`));
+    const used = new Set<string>();
+    for (const file of files) for (const m of readFileSync(file, "utf8").matchAll(/\bSYM\.([A-Za-z0-9_]+)/g)) used.add(m[1]);
+    for (const file of files) for (const m of readFileSync(file, "utf8").matchAll(/\.sym\("([A-Za-z0-9_.]+)"\)/g)) used.add(m[1]);
+    expect([...used].filter(n => SYM[n] === undefined)).toEqual([]);
+  });
+});

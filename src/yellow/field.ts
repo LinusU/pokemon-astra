@@ -23,7 +23,8 @@ export function knownFieldMoves(mon: Pokemon): FieldMove[] {
 export function fieldUser(game: YellowGame, move: FieldMove) {
   const { badge } = FIELD_MOVES[move];
   if (badge >= 0 && !game.hasBadge(badge)) return undefined;
-  return game.save.party.find(m => m.hp > 0 && m.moves.includes(FIELD_MOVES[move].move));
+  // As in Yellow, a fainted Pokémon can still use its field moves.
+  return game.save.party.find(m => m.moves.includes(FIELD_MOVES[move].move));
 }
 
 const name = (game: YellowGame, mon: Pokemon) => mon.nickname || game.engine.species(mon.species).name;
@@ -42,7 +43,7 @@ export function cuttableAhead(game: YellowGame) {
 }
 
 function cutSwap(game: YellowGame, block: number) {
-  for (let o = SYM.CutTreeBlockSwaps; game.rom.u8(o) !== 0xff; o += 2)
+  for (let o = game.rom.sym("CutTreeBlockSwaps"); game.rom.u8(o) !== 0xff; o += 2)
     if (game.rom.u8(o) === block) return game.rom.u8(o + 1);
   return undefined;
 }
