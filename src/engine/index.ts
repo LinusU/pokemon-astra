@@ -131,6 +131,14 @@ export class Engine {
       this.wasm.dealloc(p, data.length);
     }
   }
+  /** The Crystal cartridge, read-only by convention, for renderers that draw its graphics. */
+  get cartridge(): Uint8Array {
+    return this.rom;
+  }
+  /** Decompresses Crystal LZ data, such as tileset graphics. */
+  decompress(data: Uint8Array): Uint8Array {
+    return this.bytes(data, (p, n) => this.wasm.decompress(p, n));
+  }
   private call<T>(value: unknown): T {
     const bytes = this.bytes(
       new TextEncoder().encode(JSON.stringify(value)),

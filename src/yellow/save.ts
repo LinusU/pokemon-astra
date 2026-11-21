@@ -52,6 +52,8 @@ export interface YellowSave {
     swapGamepadAB?: boolean;
     /** Free movement like Astra's, or square-by-square steps as on the Game Boy. */
     movement?: "free" | "grid";
+    /** Kanto drawn with Crystal's tiles and colors, or Yellow's own Game Boy Color look. */
+    look?: "crystal" | "yellow";
   };
 }
 
@@ -106,7 +108,8 @@ export function isYellowSave(data: unknown): data is YellowSave {
     ints(s.seen, 1, 251) && ints(s.caught, 1, 251) && !!s.pikachu && int(s.pikachu.happiness, 0, 255) &&
     ints(s.visited, 0, 255) && int(s.steps, 0, Number.MAX_SAFE_INTEGER) && typeof s.seconds === "number" && s.seconds >= 0 && Number.isFinite(s.seconds) &&
     !!s.settings && int(s.settings.battleSpeed, 1, 3) &&
-    (s.settings.movement === undefined || ["free", "grid"].includes(s.settings.movement));
+    (s.settings.movement === undefined || ["free", "grid"].includes(s.settings.movement)) &&
+    (s.settings.look === undefined || ["crystal", "yellow"].includes(s.settings.look));
 }
 
 export function yellowSummary(save: YellowSave, place: (map: number) => string): JourneySummary {

@@ -15,6 +15,8 @@ import { EVENT, HS, ITEM, MAP, MAP_OBJECT, MAP_SCRIPT, MAP_TEXT, MON, RAM, SPRIT
 import { YellowRom, type MapHeader, type MapObject, type TextOp } from "./rom";
 import { YellowWorld, STEP, opposite, type Facing } from "./world";
 import { YellowGraphics, mapPalette, type Rgb } from "./gfx";
+import { CrystalGraphics } from "./crystal-gfx";
+import { CrystalSprites } from "./crystal-sprites";
 import { yellowSummary, type YellowSave } from "./save";
 import { MAP_SCRIPTS, SHARED_TEXTS, type Actor, type BattleOutcome, type Emote, type Game } from "./script";
 import { textPages } from "./textbox";
@@ -82,6 +84,8 @@ export class YellowGame implements Game {
   readonly rom: YellowRom;
   readonly world: YellowWorld;
   readonly gfx: YellowGraphics;
+  readonly crystal: CrystalGraphics;
+  readonly crystalSprites: CrystalSprites;
   save: YellowSave;
   private ctx2d: CanvasRenderingContext2D;
   private mode: "world" | "script" | "menu" | "battle" | "text" = "world";
@@ -109,6 +113,8 @@ export class YellowGame implements Game {
     this.rom = ctx.rom;
     this.world = new YellowWorld(ctx.rom);
     this.gfx = new YellowGraphics(ctx.rom);
+    this.crystal = new CrystalGraphics(ctx.rom, ctx.engine.cartridge, data => ctx.engine.decompress(data));
+    this.crystalSprites = new CrystalSprites(ctx.rom, ctx.engine.cartridge);
     this.save = ctx.save;
     this.ctx2d = ctx.canvas.getContext("2d")!;
     this.me = { x: this.save.x, y: this.save.y, facing: this.save.facing, walkFrame: 0 };
@@ -1762,17 +1768,18 @@ export class YellowGame implements Game {
     };
     const p = pos(this.me);
     const camX = Math.round(p.x + 8 - 160), camY = Math.round(p.y + 8 - 120);
-    c.fillStyle = `rgb(${this.palette[0].join(",")})`;
+    const crystal = this.crystalLook(map);
+    c.fillStyle = `rgb(${(crystal ? this.crystal.backdrop(map) : this.palette[0]).join(",")})`;
     c.fillRect(0, 0, 320, 240);
     // Border blocks around everything.
-    const border = this.gfx.block(map, map.border, this.palette);
+    const border = crystal ? this.crystal.block(map, map.border) : this.gfx.block(map, map.border, this.palette);
     const bx0 = Math.floor(camX / 32), by0 = Math.floor(camY / 32);
     for (let by = by0; by <= by0 + 8; by++)
       for (let bx = bx0; bx <= bx0 + 10; bx++) c.drawImage(border, bx * 32 - camX, by * 32 - camY);
-    c.drawImage(this.gfx.map(map, this.palette, this.blocksVersion), -camX, -camY);
+    c.drawImage(crystal ? this.crystal.map(map, this.blocksVersion) : this.gfx.map(map, this.palette, this.blocksVersion), -camX, -camY);
     for (const conn of map.connections) {
       const target = this.world.map(conn.map);
-      const img = this.gfx.map(target, mapPalette(this.rom, target, this.save.lastMap));
+      const img = this.crystalLook(target) ? this.crystal.map(target) : this.gfx.map(target, mapPalette(this.rom, target, this.save.lastMap));
       const ox = conn.dir === "north" || conn.dir === "south" ? conn.offset * 32 : conn.dir === "west" ? -target.width * 32 : map.width * 32;
       const oy = conn.dir === "west" || conn.dir === "east" ? conn.offset * 32 : conn.dir === "north" ? -target.height * 32 : map.height * 32;
       c.drawImage(img, ox - camX, oy - camY);
@@ -1781,14 +1788,16 @@ export class YellowGame implements Game {
     // Characters, back to front.
     type Drawn = { y: number; draw: () => void };
     const drawn: Drawn[] = [];
-    const add = (m: Mover, sprite: number, emote?: Npc["emote"]) => {
+    const add = (m: Mover, sprite: number, emote?: Npc["emote"], object?: MapObject) => {
       const at = pos(m);
       const walking = m.from
         ? Math.floor(m.from.t * 2) % 2 === 0 && Math.floor(m.walkFrame / WALK_SECONDS) % 2 === 0
         : !!m.moving && Math.floor((m.stride ?? 0) * 2) % 2 === 1;
+      const leg = m.from ? Math.floor(m.walkFrame / WALK_SECONDS) : Math.floor(m.stride ?? 0);
+      const choice = this.save.settings.look !== "yellow" ? this.crystalSprites.choose(sprite, object, map.label) : undefined;
       drawn.push({
         y: at.y, draw: () => {
-          const img = this.gfx.sprite(sprite, m.facing, walking, this.palette);
+          const img = choice ? this.crystalSprites.sprite(choice, sprite, m.facing, walking, leg) : this.gfx.sprite(sprite, m.facing, walking, this.palette);
           if (!img) return;
           const x = Math.round(at.x - camX), y = Math.round(at.y - camY - 4 - at.lift);
           c.drawImage(img, x, y);
@@ -1796,7 +1805,7 @@ export class YellowGame implements Game {
         },
       });
     };
-    for (const n of this.npcs) if (!n.hidden) add(n, n.object.sprite, n.emote);
+    for (const n of this.npcs) if (!n.hidden) add(n, n.object.sprite, n.emote, n.object);
     if (this.pikachu?.visible) add(this.pikachu, SPRITE.SPRITE_PIKACHU);
     add(this.me, this.save.surfing ? SPRITE.SPRITE_SEEL : this.save.bike ? SPRITE.SPRITE_RED_BIKE ?? SPRITE.SPRITE_RED : SPRITE.SPRITE_RED, (this.me as Npc).emote);
     drawn.sort((a, b) => a.y - b.y).forEach(d => d.draw());
@@ -1817,6 +1826,15 @@ export class YellowGame implements Game {
   private animTiles = new Map<number, { x: number; y: number; tile: number }[]>();
   private animateTiles(c: CanvasRenderingContext2D, camX: number, camY: number, now: number) {
     const map = this.header, tileset = this.rom.tileset(map.tileset);
+    if (this.crystalLook(map)) {
+      const frame = Math.floor(now / 280);
+      for (const t of this.crystal.animatedTiles(map, this.blocksVersion)) {
+        const x = t.x - camX, y = t.y - camY;
+        if (x < -8 || y < -8 || x > 320 || y > 240) continue;
+        c.drawImage(this.crystal.frame(map, t.tile, frame), x, y);
+      }
+      return;
+    }
     if (!tileset.animation) return;
     let list = this.animTiles.get(map.id);
     if (!list) {
@@ -1838,6 +1856,10 @@ export class YellowGame implements Game {
       if (x < -8 || y < -8 || x > 320 || y > 240) continue;
       c.drawImage(this.gfx.animatedTile(map, t.tile, this.palette, frame), x, y);
     }
+  }
+  /** Whether a map is drawn with Crystal's graphics. */
+  private crystalLook(map: MapHeader) {
+    return this.save.settings.look !== "yellow" && this.crystal.covers(map);
   }
   private drawEmote(c: CanvasRenderingContext2D, kind: Emote, x: number, y: number) {
     c.fillStyle = "#fff";
