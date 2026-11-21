@@ -326,7 +326,8 @@ export class Engine {
     const move = moves[id];
     if (!move) throw Error("Invalid Astra partner");
     const mon = this.makePokemon(id, 6);
-    return this.teachMove(mon, move, mon.moves.indexOf(0));
+    // A partner may already know its signature move (Crystal Legacy's Growlithe knows Ember at 6).
+    return mon.moves.includes(move) ? mon : this.teachMove(mon, move, mon.moves.indexOf(0));
   }
   healPokemon(mon: Pokemon): Pokemon {
     return this.call({ op: "heal", mon });
