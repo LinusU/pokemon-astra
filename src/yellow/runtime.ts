@@ -19,6 +19,7 @@ import { yellowSummary, type YellowSave } from "./save";
 import { MAP_SCRIPTS, SHARED_TEXTS, type Actor, type BattleOutcome, type Emote, type Game } from "./script";
 import { textPages } from "./textbox";
 import { asmPlan } from "./asm";
+import { gen1Moves, specialMoves, withMoves } from "./learnsets";
 import { SAFARI_MAPS, safariBattle } from "./safari";
 import { safariGameOver } from "./scripts/safari";
 import { crystalMusic } from "./music";
@@ -1216,7 +1217,14 @@ export class YellowGame implements Game {
   }
   private async battleTrainer(klass: number, index: number, options: { canLose?: boolean; endText?: number } = {}) {
     const party = this.rom.trainerParty(klass, index);
-    const opponents = party.map(m => this.ctx.engine.makePokemon(this.rom.dex(m.species), m.level));
+    const pp = (move: number) => this.ctx.engine.move(move).pp;
+    const opponents = party.map(m => withMoves(this.ctx.engine.makePokemon(this.rom.dex(m.species), m.level), gen1Moves(this.rom, m.species, m.level), pp));
+    for (const { mon, slot, move } of specialMoves(this.rom, klass, index)) {
+      if (!opponents[mon]) continue;
+      const moves = [...opponents[mon].moves];
+      moves[slot] = move;
+      opponents[mon] = withMoves(opponents[mon], moves.filter((m, i) => m || i < slot), pp);
+    }
     const prize = this.rom.trainerMoney(klass) * (party[party.length - 1]?.level ?? 1);
     const outcome = await this.battle({ party: opponents, prizeMoney: prize }, {
       trainer: /^RIVAL/.test(this.rom.trainerClassName(klass)) ? this.save.rival : titleCase(this.rom.trainerClassName(klass)),

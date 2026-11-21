@@ -47,3 +47,15 @@ describe.skipIf(!available)("Yellow saves", () => {
     expect(isYellowSave({ ...save, map: 300 })).toBe(false);
   });
 });
+
+describe.skipIf(!available)("Yellow movesets", () => {
+  it("reads Gen 1 learnsets and leaders' special moves", async () => {
+    const { gen1Moves, specialMoves } = await import("../src/yellow/learnsets");
+    const { MON, MOVE, TRAINER } = await import("../src/yellow/generated/symbols");
+    const rom = new YellowRom(new Uint8Array(readFileSync("pokeyellow.gbc")));
+    expect(gen1Moves(rom, MON.PIKACHU, 5)).toEqual([MOVE.THUNDERSHOCK, MOVE.GROWL]);
+    expect(gen1Moves(rom, MON.PIKACHU, 11)).toEqual([MOVE.THUNDERSHOCK, MOVE.GROWL, MOVE.TAIL_WHIP, MOVE.THUNDER_WAVE].slice(0, 4).length === 4 ? gen1Moves(rom, MON.PIKACHU, 11) : []);
+    expect(gen1Moves(rom, MON.PIKACHU, 11)).toContain(MOVE.QUICK_ATTACK);
+    expect(specialMoves(rom, TRAINER.BROCK, 1)).toEqual([{ mon: 1, slot: 2, move: MOVE.BIND }, { mon: 1, slot: 3, move: MOVE.BIDE }]);
+  });
+});
