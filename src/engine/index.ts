@@ -262,6 +262,16 @@ export class Engine {
       return scaled + (i === 0 ? mon.level + 10 : 5);
     });
   }
+  /**
+   * A stored Pokémon with its stats recalculated from the current game data
+   * (journeys begun on Crystal's), keeping the HP it has already lost.
+   */
+  restat(mon: Pokemon): Pokemon {
+    const stats = this.statsFor(mon);
+    if (stats.every((stat, i) => stat === mon.stats[i])) return mon;
+    const lost = mon.stats[0] - mon.hp;
+    return { ...mon, stats, hp: mon.hp === 0 ? 0 : Math.min(stats[0], Math.max(1, stats[0] - lost)) };
+  }
   /** Experience group from the base data (0 medium fast … 5 slow). */
   growthRate(id: number) {
     return this.speciesData(id).base[22];

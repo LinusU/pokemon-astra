@@ -136,6 +136,9 @@ async function start(host: YellowHost, entry: JourneyEntry, rom: import("./rom")
     return host.journeys("Your browser could not read that journey.");
   }
   if (!isYellowSave(data)) return host.journeys("That Yellow journey could not be read. Export it from the journey list to keep a copy.");
+  // Journeys begun on Crystal's data get the current data's stats.
+  data.party = data.party.map(mon => host.engine.restat(mon));
+  data.storage = data.storage.map(mon => host.engine.restat(mon));
   host.layer.replaceChildren();
   game = new YellowGame({
     engine: host.engine, rom, input: host.input, menuInput: host.menuInput, layer: host.layer, canvas: host.canvas,

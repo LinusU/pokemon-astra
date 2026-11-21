@@ -328,6 +328,9 @@ document.addEventListener("visibilitychange", () => {
 });
 function prepareSave(data: Save) {
   const ready = normalizeSavePosition(restoreExpeditions(data));
+  ready.party = ready.party.map(mon => engine.restat(mon));
+  ready.storage = ready.storage.map(mon => engine.restat(mon));
+  if (ready.egg) ready.egg = { ...ready.egg, mon: engine.restat(ready.egg.mon) };
   restoreVisits(ready);
   sortCollection(ready.storage);
   return ready;
