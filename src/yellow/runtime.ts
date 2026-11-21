@@ -10,7 +10,7 @@ import type { GameAudio } from "../game/audio";
 import type { MenuInput } from "../ui/menu-input";
 import type { MusicScene } from "../game/music";
 import { escapeHtml, panel } from "../ui/shell";
-import { BattlePresenter, escapeAnnounced } from "../ui/battle";
+import { BattleLaunch, type FinishedBattle } from "../ui/battle-launch";
 import { JourneyConflict, type JourneyStore } from "../game/storage";
 import { EVENT, HS, ITEM, MAP, MAP_OBJECT, MAP_SCRIPT, MAP_TEXT, MON, RAM, SPRITE, SYM, TEXT_PREDEFS, TRAINER } from "./generated/symbols";
 import { YellowRom, type MapHeader, type MapObject, type TextOp } from "./rom";
@@ -667,7 +667,7 @@ export class YellowGame implements Game {
         else this.ctx.menuInput.update(this.ctx.layer, input, now, false);
       }
     } else if (this.mode === "battle") {
-      if (input.hit("b")) this.battlePresenter?.back();
+      if (input.hit("b")) this.battleLaunch?.back();
       else this.ctx.menuInput.update(this.ctx.layer, input, now, true);
     }
     this.updateMovers(dt);
@@ -1295,7 +1295,7 @@ export class YellowGame implements Game {
   }
 
   // ------------------------------------------------------------ battles
-  private battlePresenter?: BattlePresenter;
+  private battleLaunch?: BattleLaunch;
   private crystalItems?: Map<number, number>;
   /** Gen 1 item id -> Crystal item id, matched by name. */
   crystalItem(id: number) {
@@ -1490,70 +1490,39 @@ export class YellowGame implements Game {
     const bag = this.battleBag();
     if (options.noCatch) bag.balls = [];
     this.battleItems = new Set([...bag.balls, ...bag.items].map(([id]) => id));
-    const battle = engine.startBattle({
-      party: this.save.party, opponent, balls: bag.balls, items: bag.items, money: this.save.money,
-      badges: this.badgeMask(), seen: this.save.seen, caught: this.save.caught,
+    const launch = new BattleLaunch(this.ctx, {
+      start: {
+        party: this.save.party, opponent, balls: bag.balls, items: bag.items, money: this.save.money,
+        badges: this.badgeMask(), seen: this.save.seen, caught: this.save.caught,
+      },
+      trainerName: options.trainer,
+      speed: this.save.settings.battleSpeed,
+      itemName: id => engine.itemName(id),
+      party: () => this.save.party,
+      music: cue => {
+        this.battleCue = cue === "Capture" ? "capture" : options.trainer ? (options.klass && isLeader(options.klass) ? "gymVictory" : "trainerVictory") : "wildVictory";
+        this.ctx.sound.refreshMusic();
+      },
+      auto: this.autoBattle,
     });
     const previous = this.mode;
+    this.battleLaunch = launch;
     this.mode = "battle";
     this.inBattle = { trainer: !!options.trainer, klass: options.klass };
     this.ctx.sound.refreshMusic();
-    this.ctx.layer.innerHTML = '<div class="encounter-transition" aria-hidden="true"></div>';
     return new Promise(resolve => {
       const finish = (outcome: BattleOutcome) => {
+        this.battleLaunch = undefined;
         this.inBattle = undefined;
         this.mode = previous === "battle" ? "script" : previous;
         this.ctx.layer.replaceChildren();
         this.ctx.sound.refreshMusic();
         resolve(outcome);
       };
-      const present = () => {
-        let s = battle.snapshot();
-        if (this.autoBattle) {
-          // Development: play the battle on the native engine without the presenter.
-          for (let turns = 0; !s.outcome && turns < 500; turns++) {
-            const legal = s.legal as Record<string, { slot?: number } | undefined>[];
-            const moves = s.state.player.active.moves;
-            const power = (i: number) => {
-              const slot = legal[i]?.Move?.slot;
-              return slot === undefined || !moves[slot] ? -1 : engine.move(moves[slot]).power;
-            };
-            let best = -1;
-            legal.forEach((_, i) => { if (power(i) > (best < 0 ? -1 : power(best))) best = i; });
-            s = battle.act(best >= 0 ? best : 0);
-          }
-        }
-        if (s.outcome && s.result) return void this.battleResult(s, options, finish);
-        this.battlePresenter = new BattlePresenter({
-          layer: this.ctx.layer,
-          trainerName: options.trainer,
-          caught: this.save.caught,
-          snapshot: s,
-          act: index => battle.act(index),
-          sprite: this.ctx.sprite,
-          species: id => engine.species(id),
-          move: (id, dvs) => engine.move(id, dvs),
-          cry: this.ctx.cry,
-          music: cue => {
-            this.battleCue = cue === "Capture" ? "capture" : options.trainer ? (options.klass && isLeader(options.klass) ? "gymVictory" : "trainerVictory") : "wildVictory";
-            this.ctx.sound.refreshMusic();
-          },
-          sound: id => this.ctx.sound.soundEffect(id),
-          animationSound: (...args) => this.ctx.sound.battleAnimation(...args),
-          itemName: id => engine.itemName(id),
-          party: () => this.save.party,
-          speed: this.save.settings.battleSpeed,
-          finish: () => {
-            this.battlePresenter = undefined;
-            present();
-          },
-          error: e => {
-            console.error(e);
-            finish("draw");
-          },
-        });
-      };
-      window.setTimeout(present, this.autoBattle ? 0 : 620);
+      launch.finished.then(battle => this.battleResult(battle, options, finish), e => {
+        console.error(e);
+        finish("draw");
+      });
     });
   }
   inBattle?: { trainer: boolean; klass?: number };
@@ -1562,8 +1531,8 @@ export class YellowGame implements Game {
   autoBattle = false;
   battleCue?: string;
 
-  private async battleResult(s: ReturnType<ReturnType<Engine["startBattle"]>["snapshot"]>, options: { trainer?: string; canLose?: boolean }, finish: (o: BattleOutcome) => void) {
-    const result = s.result!;
+  private async battleResult(battle: FinishedBattle, options: { trainer?: string; canLose?: boolean }, finish: (o: BattleOutcome) => void) {
+    const result = battle.result;
     this.battleCue = undefined;
     // Pikachu grows fonder as it levels up and sulks when it faints.
     const before = this.save.party.find(m => m.species === 25 && m.ot_id === this.save.vars.otId);
@@ -1572,8 +1541,8 @@ export class YellowGame implements Game {
       const change = (after.level - before.level) * 5 - (before.hp > 0 && after.hp === 0 ? 3 : 0);
       after.happiness = Math.max(0, Math.min(255, after.happiness + change));
     }
-    this.save.party = result.party.slice(0, 6);
-    for (const mon of result.party.slice(6)) this.save.storage.push({ ...mon, ot_name: mon.ot_name || this.save.name });
+    this.save.party = battle.party;
+    for (const mon of battle.overflow) this.save.storage.push({ ...mon, ot_name: mon.ot_name || this.save.name });
     this.save.money = result.money;
     // Return the native bag counts to Gen 1 item ids.
     for (const [key] of Object.entries(this.save.items)) {
@@ -1586,10 +1555,7 @@ export class YellowGame implements Game {
     }
     this.save.seen = result.world.seen.filter(n => n <= 251);
     this.save.caught = result.world.caught.filter(n => n <= 251);
-    const outcome = s.outcome!.toLowerCase();
-    const won = ["win", "won", "victory"].includes(outcome);
-    const caught = result.caught !== null && result.caught !== undefined;
-    const lost = !won && !caught && (["lose", "loss", "lost", "defeat"].includes(outcome) || !this.save.party.some(m => m.hp > 0));
+    const caught = battle.end === "caught", lost = battle.end === "loss";
     this.ctx.layer.replaceChildren();
     this.mode = "script";
     if (caught) {
@@ -1609,8 +1575,8 @@ export class YellowGame implements Game {
     }
     await this.evolveAfterBattle(result.may_evolve);
     this.persist();
-    const escaped = outcome === "draw" && escapeAnnounced(s.events);
-    finish(won ? "win" : caught ? "caught" : escaped ? "run" : outcome === "draw" ? "run" : "draw");
+    // Escapes and draws both send the player on their way.
+    finish(battle.end === "win" ? "win" : caught ? "caught" : "run");
   }
 
   /** The map script, as it runs once the player has control again. */
