@@ -3,6 +3,7 @@ import { expeditionState } from "../world/expeditions";
 import { gymState } from "../world/gyms";
 import { ABILITIES, WORLD, type Ability, type Requirement } from "../world";
 import { barrierAt, exitOpen } from "./navigation";
+import { bodyTouches } from "./free-movement";
 import type { Pokemon } from "../engine";
 
 export type Save = {
@@ -262,20 +263,15 @@ export function normalizeSavePosition(save: Save): Save {
         Math.abs(o.x + 0.5 - x) < 0.6 &&
         Math.abs(o.y + 0.5 - y) < 0.6,
     ) &&
-    [
-      [-0.22, -0.22],
-      [0.22, -0.22],
-      [-0.22, 0.22],
-      [0.22, 0.22],
-    ].every(([dx, dy]) => {
-      const gate = barrierAt(map, x + dx, y + dy);
+    !bodyTouches(x, y, (px, py) => {
+      const gate = barrierAt(map, px, py);
       if (gate && !exitOpen(gate, (r) => meetsRequirement(save, r), save.flags))
-        return false;
-      const tile = map.tiles[Math.floor(y + dy)]?.[Math.floor(x + dx)];
+        return true;
+      const tile = map.tiles[Math.floor(py)]?.[Math.floor(px)];
       return (
-        !!tile &&
-        !"#orwBCPTS".includes(tile) &&
-        (tile !== "~" || save.abilities.includes("surf"))
+        !tile ||
+        "#orwBCPTS".includes(tile) ||
+        (tile === "~" && !save.abilities.includes("surf"))
       );
     });
   // Map revisions can also strand a player on an otherwise walkable island.

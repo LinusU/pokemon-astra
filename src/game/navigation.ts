@@ -1,5 +1,6 @@
 import { WORLD, type Exit, type Requirement, type WorldMap } from "../world";
 import { interactionDistance } from "./actors";
+import { bodyTouches } from "./free-movement";
 
 export const fieldActions: Record<string, [string, string, string]> = {
   cut: [
@@ -236,13 +237,8 @@ export function connectedBlocked(
   surf: boolean,
   permitted: (exit: Exit) => boolean,
 ) {
-  return [
-    [-0.22, -0.22],
-    [0.22, -0.22],
-    [-0.22, 0.22],
-    [0.22, 0.22],
-  ].some(([dx, dy]) => {
-    const tile = connectedTile(map, x + dx, y + dy, permitted);
+  return bodyTouches(x, y, (px, py) => {
+    const tile = connectedTile(map, px, py, permitted);
     return !tile || "#orwBCPTS".includes(tile) || (tile === "~" && !surf);
   });
 }

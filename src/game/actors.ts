@@ -1,4 +1,5 @@
 import { isWildEncounter, type WorldMap, type WorldObject } from "../world";
+import { BODY_RADIUS, bodyTouches } from "./free-movement";
 
 export type Facing = "up" | "down" | "left" | "right";
 export interface ActorState {
@@ -30,17 +31,12 @@ export function terrainBlocked(
   x: number,
   y: number,
   surf = false,
-  radius = 0.22,
+  radius = BODY_RADIUS,
 ) {
-  return [
-    [-radius, -radius],
-    [radius, -radius],
-    [-radius, radius],
-    [radius, radius],
-  ].some(([dx, dy]) => {
-    const tile = map.tiles[Math.floor(y + dy)]?.[Math.floor(x + dx)];
+  return bodyTouches(x, y, (px, py) => {
+    const tile = map.tiles[Math.floor(py)]?.[Math.floor(px)];
     return !tile || "#orwBCPTS".includes(tile) || (tile === "~" && !surf);
-  });
+  }, radius);
 }
 export function facingToward(dx: number, dy: number): Facing {
   return Math.abs(dx) > Math.abs(dy)

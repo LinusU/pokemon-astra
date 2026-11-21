@@ -61,7 +61,7 @@ Not included: link-cable features, the Game Boy Printer, the Surfing Pikachu min
 | Touch | Lower-screen D-pad | A | B; MENU |
 | Standard gamepad / 8BitDo | D-pad or left stick | A (button 0) | B (button 1); Start (button 9) |
 
-Shift runs faster. Connect the FlipPad in a browser-supported Gamepad API mode, then press a button. The last actively used controller is selected so an idle receiver does not steal input. Choose **Options → Controller A/B** to swap the confirm and back buttons. The choice is saved with the journey. Controller tests use simulated pad events. Physical FlipPad and iOS hardware remain unverified.
+Hold B or Shift to run, in both adventures. Connect the FlipPad in a browser-supported Gamepad API mode, then press a button. The last actively used controller is selected so an idle receiver does not steal input. Choose **Options → Controller A/B** to swap the confirm and back buttons. The choice is saved with the journey. Controller tests use simulated pad events. Physical FlipPad and iOS hardware remain unverified.
 
 Open **Menu → Map** for a zoomable regional atlas. Select towns and numbered routes to see their connections, or open **Local map** to locate a Center, Mart, route landmark or journal destination. Tap a map symbol or press left and right to browse. A blocked crossing shows which field action can open it. In the Pokédex, select a habitat record and press A to locate it on the region map. The record gives directions from your current location. Press B to return to the same record.
 

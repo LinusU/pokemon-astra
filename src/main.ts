@@ -23,7 +23,8 @@ import { awardBadge, badgeMask, fieldHabitats, fieldTeam } from "./game/badges";
 import { fishingPool } from "./game/pokedex";
 import { Input } from "./game/input";
 import { Renderer } from "./game/render";
-import { WorldActors, facingToward, interactionTarget } from "./game/actors";
+import { WorldActors, interactionTarget, type Facing } from "./game/actors";
+import { heldHeading, walkFreely, walkSpeed, type Position } from "./game/free-movement";
 import {
   barrierTarget,
   fieldActions,
@@ -1809,12 +1810,8 @@ function update(dt: number) {
       return;
     }
   }
-  const moving = (a: "right" | "left" | "down" | "up") =>
-    Number(input.held(a) || input.hit(a));
-  let dx = moving("right") - moving("left"),
-    dy = moving("down") - moving("up");
-  const heading = dx || dy ? facingToward(dx, dy) : undefined;
-  if (heading) save.facing = heading;
+  const heading = heldHeading(input, save.facing as Facing);
+  if (heading) save.facing = heading.facing;
   if (input.hit("a")) {
     interact();
     return;
@@ -1827,30 +1824,20 @@ function update(dt: number) {
     bumpLatched = false;
     return;
   }
-  const len = Math.hypot(dx, dy);
-  dx /= len;
-  dy /= len;
-  if (currentMap.tiles[Math.floor(save.y)]?.[Math.floor(save.x)] === "i") {
-    glide = iceLanding(currentMap, save, heading, blocked);
+  const onIce = (p: Position) => currentMap.tiles[Math.floor(p.y)]?.[Math.floor(p.x)] === "i";
+  if (onIce(save)) {
+    glide = iceLanding(currentMap, save, heading.facing, blocked);
     return;
   }
-  const dist = dt * (input.held("speed") ? 7.2 : 5.2);
+  const dist = dt * walkSpeed(input);
   const oldX = save.x,
     oldY = save.y;
-  // Short collision steps keep movement smooth and prevent tunnelling on slow frames.
-  const steps = Math.max(1, Math.ceil(dist / 0.12));
-  for (let i = 0; i < steps; i++) {
-    const nx = save.x + (dx * dist) / steps,
-      ny = save.y + (dy * dist) / steps;
-    if (!blocked(nx, save.y)) save.x = nx;
-    if (!blocked(save.x, ny)) save.y = ny;
-    if (currentMap.tiles[Math.floor(save.y)]?.[Math.floor(save.x)] === "i") {
-      const entered = Math.floor(save.x) !== Math.floor(oldX)
-        ? dx > 0 ? "right" : "left" : dy > 0 ? "down" : "up";
-      save.facing = entered;
-      glide = iceLanding(currentMap, save, entered, blocked);
-      break;
-    }
+  walkFreely(save, heading, dist, blocked, onIce);
+  if (onIce(save)) {
+    const entered = Math.floor(save.x) !== Math.floor(oldX)
+      ? heading.dx > 0 ? "right" : "left" : heading.dy > 0 ? "down" : "up";
+    save.facing = entered;
+    glide = iceLanding(currentMap, save, entered, blocked);
   }
   const moved = Math.hypot(save.x - oldX, save.y - oldY);
   if (moved === 0) {
