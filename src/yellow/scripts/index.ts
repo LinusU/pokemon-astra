@@ -8,3 +8,4 @@ import "./celadon";
 import "./saffron";
 import "./fuchsia-cinnabar";
 import "./indigo";
+import "./safari";
