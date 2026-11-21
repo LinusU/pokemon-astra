@@ -44,6 +44,8 @@ export interface YellowSave {
   surfing?: boolean;
   repel?: number;
   safari?: { steps: number; balls: number };
+  /** The Route 5 Day-Care: the Pokémon left there and the steps walked since. */
+  daycare?: { mon: Pokemon; steps: number };
   settings: { battleSpeed: number; music?: boolean; swapGamepadAB?: boolean };
 }
 

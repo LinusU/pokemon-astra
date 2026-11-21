@@ -60,7 +60,11 @@ export interface Game {
    * cartridge shows them as the opponent's closing line).
    */
   trainerBattle(klass: string, index: number, options?: { canLose?: boolean; win?: string; lose?: string }): Promise<boolean>;
-  wildBattle(species: string, level: number, options?: { stationary?: boolean; noRun?: boolean }): Promise<BattleOutcome>;
+  /**
+   * A scripted wild battle. `ghost` marks Pokémon Tower ghosts, which cannot be
+   * fought without the Silph Scope (the player can only run).
+   */
+  wildBattle(species: string, level: number, options?: { stationary?: boolean; ghost?: boolean }): Promise<BattleOutcome>;
 
   warp(map: string, x: number, y: number, facing?: Facing): Promise<void>;
   heal(): void;
@@ -101,6 +105,13 @@ export interface Game {
   predefText(id: number): Promise<void>;
   /** The argument byte of the hidden object being inspected. */
   readonly hiddenArg: number;
+  /**
+   * Redirects one of the current map's warps (0-based index), as elevators do.
+   * The change lasts until the map is set up again; elevators set it on entry.
+   */
+  setWarp(index: number, map: string, warp: number): void;
+  /** The Hall of Fame ceremony and credits. */
+  hallOfFame(): Promise<void>;
   /** For script-specific feedback while porting. */
   log(message: string): void;
 }

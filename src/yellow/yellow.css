@@ -28,3 +28,4 @@
 .panel.yellow-choice .journey-list button { text-align: left; }
 .yellow-intro label { display: flex; flex-direction: column; gap: 2px; margin: .3em 0; }
 .yellow-intro input { font-family: "VT323", monospace; font-size: 22px; padding: 2px 6px; text-transform: uppercase; max-width: 12em; }
+.yellow-ghost img { filter: brightness(0.15) contrast(0.6) blur(1px); opacity: .85; }

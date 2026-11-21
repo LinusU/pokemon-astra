@@ -1043,12 +1043,12 @@ export class YellowGame implements Game {
     if (after) await this.text(after);
     return won;
   }
-  async showcase(species: string, lines: string[]) {
+  async showcase(species: string, lines: string[], ghost = false) {
     const dex = this.rom.dex(MON[species]);
     const previous = this.mode;
     this.mode = "menu";
-    this.ctx.layer.innerHTML = `<section class="battle-scene yellow-showcase" data-arena="field"><div class="battle-field"><div class="battle-mon battle-enemy"><img alt="" src="${this.ctx.sprite(dex)}"></div></div><div class="battle-box"><div class="battle-copy" aria-live="polite"></div></div></section>`;
-    this.ctx.cry(dex);
+    this.ctx.layer.innerHTML = `<section class="battle-scene yellow-showcase" data-arena="field"><div class="battle-field"><div class="battle-mon battle-enemy${ghost ? " yellow-ghost" : ""}"><img alt="" src="${this.ctx.sprite(dex)}"></div></div><div class="battle-box"><div class="battle-copy" aria-live="polite"></div></div></section>`;
+    if (!ghost) this.ctx.cry(dex);
     const copy = this.ctx.layer.querySelector<HTMLElement>(".battle-copy")!;
     for (const line of lines) {
       copy.textContent = line.replaceAll("{PLAYER}", this.save.name).replaceAll("{RIVAL}", this.save.rival);
@@ -1063,6 +1063,21 @@ export class YellowGame implements Game {
   }
   private showcaseNext?: () => void;
   block(bx: number, by: number) { return this.rom.blockAt(this.header, bx, by); }
+  setWarp(index: number, map: string, warp: number) {
+    const id = MAP[map];
+    if (id === undefined || !this.header.warps[index]) return;
+    this.header.warps = this.header.warps.map((w, i) => i === index ? { ...w, map: id, warp } : w);
+  }
+  async hallOfFame() {
+    const { hallOfFame } = await import("./ceremony");
+    const previous = this.mode;
+    this.mode = "menu";
+    try {
+      await hallOfFame(this);
+    } finally {
+      this.mode = previous === "menu" ? "script" : previous;
+    }
+  }
   dex(species: string) {
     const id = MON[species];
     if (id === undefined) throw Error(`Unknown species ${species}`);
@@ -1149,8 +1164,12 @@ export class YellowGame implements Game {
     });
     return outcome === "win";
   }
-  async wildBattle(species: string | number, level: number, options: { stationary?: boolean } = {}): Promise<BattleOutcome> {
+  async wildBattle(species: string | number, level: number, options: { stationary?: boolean; ghost?: boolean } = {}): Promise<BattleOutcome> {
     const internal = typeof species === "string" ? MON[species] : species;
+    if (options.ghost && !this.hasItem("SILPH_SCOPE")) {
+      await this.showcase("GASTLY", ["A GHOST appeared!", "Darn! The GHOST can't be ID'd!", "Get out... Get out...", `${this.save.name} got away safely!`], true);
+      return "run";
+    }
     return this.battle({ species: this.rom.dex(internal), level, stationary: options.stationary }, {});
   }
   private battle(opponent: Parameters<Engine["startBattle"]>[0]["opponent"], options: { trainer?: string; canLose?: boolean; klass?: number }): Promise<BattleOutcome> {
