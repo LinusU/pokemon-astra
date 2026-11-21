@@ -116,8 +116,10 @@ const CONST = Object.fromEntries(["NUM_CITY_MAPS", "FIRST_ROUTE_MAP", "FIRST_IND
 // TMs and HMs are defined with their own macros after the item list.
 {
   const text = read("constants/item_constants.asm");
-  let hm = values.get("HM01") ?? 0xc4, tm = values.get("TM01") ?? 0xc9;
+  // HM01 follows the last ordinary item; the TMs follow the HMs.
+  let hm = values.get("HM01") ?? 0xc4;
   for (const m of text.matchAll(/^\s*add_hm\s+([A-Z_]+)/gm)) groups.ITEM["HM_" + m[1]] = hm++;
+  let tm = hm;
   for (const m of text.matchAll(/^\s*add_tm\s+([A-Z_]+)/gm)) groups.ITEM["TM_" + m[1]] = tm++;
 }
 // Music ids are offsets into each audio bank's header table.

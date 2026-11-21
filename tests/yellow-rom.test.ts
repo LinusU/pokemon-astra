@@ -68,3 +68,10 @@ describe.skipIf(!available)("Yellow script coverage", () => {
     expect(coverageGaps(rom)).toEqual([]);
   });
 });
+
+describe("Yellow item constants", () => {
+  it("number TMs after the HMs", async () => {
+    const { ITEM } = await import("../src/yellow/generated/symbols");
+    expect([ITEM.HM_CUT, ITEM.HM_FLASH, ITEM.TM_MEGA_PUNCH, ITEM.TM_THUNDERBOLT, ITEM.TM_SUBSTITUTE]).toEqual([0xc4, 0xc8, 0xc9, 0xe0, 0xfa]);
+  });
+});
