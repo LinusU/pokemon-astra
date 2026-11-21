@@ -32,3 +32,4 @@
 .mart-quantity span { min-width:20cqw; font-size:8cqw; }
 .mart-quantity button { width:11cqw; height:75%; background:#e3e9d1; }
 .mart-bill { justify-content:space-evenly; border-top:1px solid #a7b49b; font-size:4.8cqw; }
+.mart-rows .ball-sprite { margin-right: 0.28em; }

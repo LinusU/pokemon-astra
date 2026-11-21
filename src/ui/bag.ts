@@ -1,3 +1,4 @@
+import { ballSprite } from "./ball-sprite";
 import { trackMenuCursor } from "./menu-cursor";
 import type { Action } from "../game/input";
 import { giveFromBag } from "../game/items";
@@ -153,6 +154,9 @@ export function mountBag(
   function select(key: string | undefined, moveFocus: boolean) {
     byPocket[state.pocket!] = key;
     const item = selected();
+    if (state.pocket === "balls") {
+      bag.querySelector(".astra-bag-icon")!.innerHTML = (item && ballSprite(item.key)) || "<i></i>";
+    }
     let active: HTMLButtonElement | undefined;
     for (const row of bag.querySelectorAll<HTMLButtonElement>(
       "[data-bag-item]",
@@ -194,7 +198,7 @@ export function mountBag(
       <nav aria-label="Pockets">${pockets.map((name) => `<button type="button" data-pocket-tab="${name}" aria-pressed="${name === pocket}">${pocketLabels[name]}</button>`).join("")}</nav>
       <div class="astra-bag-inventory">
         <div class="astra-bag-icon" aria-hidden="true"><i></i></div>
-        <div class="astra-bag-rows" aria-label="${pocketLabels[pocket]}">${shown.map(({ key, name, count }) => `<button type="button" data-bag-item="${escapeHtml(key)}"><span>${escapeHtml(name)}</span><span class="astra-bag-count">×${count}</span></button>`).join("")}</div>
+        <div class="astra-bag-rows" aria-label="${pocketLabels[pocket]}">${shown.map(({ key, name, count }) => `<button type="button" data-bag-item="${escapeHtml(key)}"><span>${pocket === "balls" ? ballSprite(key) : ""}${escapeHtml(name)}</span><span class="astra-bag-count">×${count}</span></button>`).join("")}</div>
       </div>
       <div class="astra-bag-details" aria-live="polite"><p class="astra-bag-description"></p><p class="astra-bag-unavailable" hidden></p></div>`;
     button("[data-bag-cancel]")!.onclick = back;

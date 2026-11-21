@@ -1,0 +1,12 @@
+.ball-sprite {
+  display: inline-block;
+  width: 1em;
+  aspect-ratio: 1;
+  vertical-align: -0.12em;
+  background: url("./art/poke-balls.png") var(--shell-x, 0%) center / 500% 100% no-repeat;
+  image-rendering: pixelated;
+}
+.ball-sprite[data-ball="great_ball"] { --shell-x: 25%; }
+.ball-sprite[data-ball="ultra_ball"] { --shell-x: 50%; }
+.ball-sprite[data-ball="master_ball"] { --shell-x: 75%; }
+.ball-sprite[data-ball="safari_ball"] { --shell-x: 100%; }

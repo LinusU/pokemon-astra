@@ -234,3 +234,15 @@
     grid-template-columns: 22% minmax(0, 1fr);
   }
 }
+
+.astra-bag-icon:has(.ball-sprite)::before,
+.astra-bag-icon:has(.ball-sprite)::after {
+  content: none;
+}
+.astra-bag-icon .ball-sprite {
+  width: 100%;
+  filter: drop-shadow(0 0.14em #273b3833);
+}
+.astra-bag-rows .ball-sprite {
+  margin-right: 0.28em;
+}

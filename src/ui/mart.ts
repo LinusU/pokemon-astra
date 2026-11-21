@@ -1,3 +1,4 @@
+import { ballSprite } from "./ball-sprite";
 import type { Action } from "../game/input";
 import { MEDICINE } from "../game/medicine";
 import type { Save } from "../game/save";
@@ -58,7 +59,7 @@ export function mountMart(host: HTMLElement, options: Options) {
       <div class="mart-bill"><span>Total <b>₽${quantity * chosen.cost}</b></span><span>Left <b>₽${save.money - quantity * chosen.cost}</b></span></div></div>`
       : `<div class="mart-stock"><div class="mart-rule">Item <div>${items.length > rows ? `<button data-page="-1" aria-label="Previous stock page" ${!start ? "disabled" : ""}>◂</button>
         ${start / rows + 1}/${Math.ceil(items.length / rows)} <button data-page="1" aria-label="Next stock page" ${start + rows >= items.length ? "disabled" : ""}>▸</button>` : "Price"}</div></div>
-      <div class="mart-rows">${items.slice(start, start + rows).map((item, i) => `<button data-item="${item.key}" aria-current="${i + start === index}"><strong>${html(name(item.key))}</strong><span>₽${item.cost}</span></button>`).join("")}</div></div>`;
+      <div class="mart-rows">${items.slice(start, start + rows).map((item, i) => `<button data-item="${item.key}" aria-current="${i + start === index}"><strong>${ballSprite(item.key)}${html(name(item.key))}</strong><span>₽${item.cost}</span></button>`).join("")}</div></div>`;
     root.innerHTML = `<header><h2>Astra Mart</h2><span>Funds <b>₽${save.money}</b></span></header>
       <nav aria-label="Departments">${departments.map(d => `<button data-tab="${d}" ${buying ? "disabled" : ""} aria-pressed="${tab === d}">${d}</button>`).join("")}</nav>
       ${controls}<div class="mart-summary"><div><strong>${html(name(chosen.key))}</strong><span>In Bag ${owned()}</span></div>
