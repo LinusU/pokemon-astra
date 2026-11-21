@@ -54,6 +54,8 @@ defineMap("Route5Gate", {
 });
 ```
 
+With free movement (the default), `g.player.x`/`y` are still whole squares: the square under the player's centre. `onStep` runs when the centre enters a new square, so the player can be up to half a square off the square's centre when it runs. `g.move`, `g.approach` and `g.emote` first glide the player to the centre, so scenes that move people always start from whole squares.
+
 Use `generic: true` when a map's original script only does things the runtime already handles (for example it just runs the trainer loop with a small difference that doesn't matter), so the coverage tool counts it as done.
 
 ## Translating common asm
