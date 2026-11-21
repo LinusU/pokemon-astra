@@ -334,15 +334,6 @@
   from { opacity: 0; }
   to { opacity: 1; }
 }
-.battle-scene.capture .battle-enemy img {
-  opacity: 0;
-}
-.battle-scene.capture:is(.caught, .escape) .battle-enemy:after {
-  animation: ball-shake calc(450ms * var(--battle-speed, 1)) var(--wobbles, 0) ease-in-out;
-}
-.battle-scene.capture.caught .battle-enemy:after {
-  filter: brightness(1.15);
-}
 @keyframes battle-faint {
   to {
     transform: translateY(75%);
@@ -364,11 +355,6 @@
     transform: scale(1);
     opacity: 1;
   }
-}
-@keyframes ball-shake {
-  0%, 100% { transform: translateX(0) rotate(0); }
-  25% { transform: translateX(-12%) rotate(-20deg); }
-  75% { transform: translateX(12%) rotate(20deg); }
 }
 .battle-exp {
   height: 4px;
@@ -443,16 +429,6 @@
 .conceal-player .battle-player,
 .conceal-player .battle-player-hud {
   visibility: hidden;
-}
-.battle-scene.capture .battle-enemy:after {
-  content: "";
-  display: block;
-  width: 24%;
-  height: 24%;
-  background: linear-gradient(#e44f44 0 42%, #273d32 42% 57%, #f4f4db 57%);
-  border: 3px solid #273d32;
-  border-radius: 50%;
-  box-shadow: none;
 }
 .battle-field {
   background:
@@ -573,41 +549,6 @@
   from { opacity: 0; transform: translateY(-8px); }
   to { opacity: 1; transform: translateY(0); }
 }
-.battle-scene.capture .battle-enemy:after {
-  position: absolute;
-  left: 38%;
-  top: 45%;
-  width: 24%;
-  height: auto;
-  aspect-ratio: 1;
-  box-sizing: border-box;
-  z-index: 3;
-  text-shadow: none;
-}
-.battle-scene.capture.throwing .battle-enemy:after {
-  animation: ball-throw 0.45s ease-out both;
-}
-.battle-scene.capture.throwing .battle-enemy img {
-  animation: capture-flash 0.45s steps(2, end) both;
-}
-@keyframes ball-throw {
-  from {
-    transform: translate(-350%, 180%);
-  }
-  to {
-    transform: translate(0, 0);
-  }
-}
-@keyframes capture-flash {
-  0%,
-  65% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-  }
-}
-
 .battle-scene.encounter {
   animation: battle-reveal 180ms ease-out both;
 }
@@ -621,9 +562,6 @@
 }
 
 .battle-mon.faint { animation-duration: calc(650ms * var(--battle-speed, 1)); }
-.battle-scene.capture.throwing .battle-enemy:after,
-.battle-scene.capture.throwing .battle-enemy img { animation-duration: calc(450ms * var(--battle-speed, 1)); }
-
 .battle-controls {
   grid-auto-rows: max-content;
 }

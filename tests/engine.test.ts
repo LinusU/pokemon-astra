@@ -1,7 +1,8 @@
+import { captureTiming } from "../src/ui/capture";
 import { describe, it, expect } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
 import { isWildEncounter, WORLD } from "../src/world";
-import { bagKeyForItem, nativeItemId } from "../src/game/items";
+import { bagKeyForItem, ballIds, nativeItemId } from "../src/game/items";
 import { Engine } from "../src/engine";
 import { HEAL_TRACK, OVERWORLD_SOUNDS } from "../src/game/audio";
 import { MUSIC_TRACKS } from "../src/game/music";
@@ -219,6 +220,25 @@ describe.skipIf(!available)("Crystal ROM native bridge", () => {
     const escaped = engine.battleSound(256, 5, { wobbles: 2, caught: false })!.cues;
     expect(escaped.filter((cue) => cue.kind === "effect" && cue.id === 179)).toHaveLength(2);
     expect(escaped.at(-1)).toMatchObject({ kind: "effect", id: 41 });
+  });
+  it("times the visible capture checks to the cartridge's bounce, wobble and escape cues", async () => {
+    const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});
+    const engine = new Engine(instance.exports as never, readFileSync("pokecrystal11.gbc"));
+    for (const ball of Object.values(ballIds)) {
+      for (const outcome of [
+        ...[0, 1, 2, 3].map(wobbles => ({ wobbles, caught: false })),
+        { wobbles: 3, caught: true },
+      ]) {
+        const timing = captureTiming(ball, outcome);
+        const sound = engine.battleSound(256, ball, outcome)!;
+        expect(timing.end).toBe(sound.frames);
+        const frames = (id: number) => sound.cues
+          .filter(cue => cue.kind === "effect" && cue.id === id).map(cue => cue.frame);
+        expect(frames(179)).toEqual(Array.from({ length: outcome.wobbles }, (_, i) => timing.firstCheck + 49 * i));
+        expect(frames(41)).toEqual(outcome.caught ? [54] : [54, timing.result]);
+        expect(frames(174)).toEqual([timing.bounce]);
+      }
+    }
   });
   it("offers only balls and items that are actually in the inventory", async () => {
     const { instance } = await WebAssembly.instantiate(

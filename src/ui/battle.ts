@@ -6,6 +6,7 @@ import type { CaptureSoundState } from "../engine/battle-sound";
 import { battleStatus, mountParty } from "./party";
 import { escapeHtml } from "./shell";
 import { battleBagKey, itemInfo, mountBag, type BagItem, type BagState } from "./bag";
+import { playCapture } from "./capture";
 import { playMove } from "./move-animation";
 import { moveComparison } from "./learn-move";
 import { findMoveVisual, healingSparkle, nativeConditionVisual, type MoveVisual } from "./move-visuals";
@@ -467,6 +468,7 @@ export class BattlePresenter {
   private typing = false;
   private message = "";
   private timer = 0;
+  private stopCapture?: () => void;
   private stopMove?: () => void;
   private disposed = false;
   constructor(private o: Options) {
@@ -725,18 +727,6 @@ export class BattlePresenter {
       else this.next();
       return;
     }
-    if (!this.trainerBattle && event.BallWobbles != null) {
-      const b = event.BallWobbles;
-      this.root.classList.add("capture", b.caught ? "caught" : "escape");
-      const ball = this.root.querySelector<HTMLElement>(".battle-enemy")!;
-      ball.style.setProperty("--wobbles", String(b.wobbles));
-      this.delay(500 + b.wobbles * 450, () => {
-        this.clearCapture();
-        if (b.caught) this.conceal("enemy");
-        this.next();
-      });
-      return;
-    }
     if (event.Animation) {
       const a = event.Animation;
       const user = a.user === "Player" ? "player" : "enemy";
@@ -763,12 +753,13 @@ export class BattlePresenter {
           this.next();
           return;
         }
-        this.playAnimationSound(user, a, (950 + capture.wobbles * 450) / Math.max(0.25, this.o.speed), capture);
-        this.root.classList.add("capture", "throwing");
-        this.delay(450, () => {
-          this.root.classList.remove("throwing");
-          this.next();
-        });
+        this.queue.shift(); // Play the paired native throw and wobble events as one sequence.
+        this.stopCapture = playCapture(this.root.querySelector(".battle-field")!, a.param, capture, this.o.speed,
+          duration => this.playAnimationSound(user, a, duration, capture),
+          () => {
+            if (!capture.caught) this.clearCapture();
+            this.next();
+          });
         return;
       }
       if (a.anim >= 259) {
@@ -848,7 +839,8 @@ export class BattlePresenter {
     });
   }
   private clearCapture() {
-    this.root.classList.remove("capture", "throwing", "caught", "escape");
+    this.stopCapture?.();
+    this.stopCapture = undefined;
   }
   private hp(h: { target: Side | { Party: number }; from: number; to: number; max: number }) {
     const reserve = typeof h.target === "object" && h.target.Party !== this.shownSlots.player
@@ -1221,6 +1213,7 @@ export class BattlePresenter {
     this.disposed = true;
     clearTimeout(this.timer);
     this.stopMove?.();
+    this.clearCapture();
     this.closeBag();
     this.root.remove();
   }
