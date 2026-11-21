@@ -11,6 +11,21 @@ const KEY_ITEMS = new Set([
 ]);
 const name = (id: number) => Object.keys(ITEM).find(k => ITEM[k] === id) ?? "";
 
+/** Gen 1 item id -> Crystal item id, matched by name without accents or punctuation ("POKé BALL" is "POKE BALL" in Crystal). */
+export function crystalItemMap(engine: { itemName(id: number): string }, rom: { itemName(id: number): string }) {
+  const norm = (name: string) => name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const byName = new Map<string, number>();
+  for (let i = 1; i < 256; i++) {
+    try { byName.set(norm(engine.itemName(i)), i); } catch { /* unused id */ }
+  }
+  const map = new Map<number, number>();
+  for (let i = 1; i <= 0x53; i++) {
+    const crystal = byName.get(norm(rom.itemName(i)));
+    if (crystal) map.set(i, crystal);
+  }
+  return map;
+}
+
 export function itemPocket(id: number) {
   const n = name(id);
   if (id >= 1 && id <= 4 || n === "SAFARI_BALL") return "balls";

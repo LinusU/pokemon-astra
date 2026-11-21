@@ -20,6 +20,7 @@ import { MAP_SCRIPTS, SHARED_TEXTS, type Actor, type BattleOutcome, type Emote, 
 import { textPages } from "./textbox";
 import { asmPlan } from "./asm";
 import { gen1Moves, specialMoves, withMoves } from "./learnsets";
+import { crystalItemMap } from "./items";
 import { SAFARI_MAPS, safariBattle } from "./safari";
 import { safariGameOver } from "./scripts/safari";
 import { crystalMusic } from "./music";
@@ -1071,15 +1072,7 @@ export class YellowGame implements Game {
   /** Gen 1 item id -> Crystal item id, matched by name. */
   crystalItem(id: number) {
     if (!this.crystalItems) {
-      const byName = new Map<string, number>();
-      for (let i = 1; i < 256; i++) {
-        try { byName.set(this.ctx.engine.itemName(i).toUpperCase().replace(/[^A-Z0-9]/g, ""), i); } catch { /* unused id */ }
-      }
-      this.crystalItems = new Map();
-      for (let i = 1; i <= 0x53; i++) {
-        const crystal = byName.get(this.rom.itemName(i).toUpperCase().replace(/[^A-Z0-9]/g, ""));
-        if (crystal) this.crystalItems.set(i, crystal);
-      }
+      this.crystalItems = crystalItemMap(this.ctx.engine, this.rom);
     }
     return this.crystalItems.get(id);
   }

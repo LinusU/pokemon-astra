@@ -75,3 +75,19 @@ describe("Yellow item constants", () => {
     expect([ITEM.HM_CUT, ITEM.HM_FLASH, ITEM.TM_MEGA_PUNCH, ITEM.TM_THUNDERBOLT, ITEM.TM_SUBSTITUTE]).toEqual([0xc4, 0xc8, 0xc9, 0xe0, 0xfa]);
   });
 });
+
+const crystal = existsSync("pokecrystal11.gbc") && existsSync("public/astra_native.wasm");
+describe.skipIf(!available || !crystal)("Yellow items in Crystal battles", () => {
+  it("maps every battle item, Poké Balls included", async () => {
+    const { Engine } = await import("../src/engine");
+    const { crystalItemMap } = await import("../src/yellow/items");
+    const { ITEM } = await import("../src/yellow/generated/symbols");
+    const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});
+    const engine = new Engine(instance.exports as never, readFileSync("pokecrystal11.gbc"));
+    const rom = new YellowRom(new Uint8Array(readFileSync("pokeyellow.gbc")));
+    const map = crystalItemMap(engine, rom);
+    for (const item of ["POKE_BALL", "GREAT_BALL", "ULTRA_BALL", "MASTER_BALL", "POTION", "FULL_RESTORE", "POKE_DOLL", "X_ACCURACY", "MAX_ELIXER"])
+      expect(map.get(ITEM[item]), item).toBeGreaterThan(0);
+    expect(engine.itemName(map.get(ITEM.POKE_BALL)!)).toBe("POKE BALL");
+  });
+});
