@@ -68,7 +68,7 @@ export class YellowWorld {
   /** The collision tile of a square, looking through connections and the border. */
   tile(map: MapHeader, x: number, y: number) {
     const place = this.resolve(map, x, y);
-    if (place) return this.rom.tileAt(this.map(place.map), place.x, place.y);
+    if (place) return this.rom.tileAt(place.map === map.id ? map : this.map(place.map), place.x, place.y);
     return this.rom.tileAt(map, x, y);
   }
   passable(map: MapHeader, x: number, y: number) {

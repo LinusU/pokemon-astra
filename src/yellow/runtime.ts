@@ -11,7 +11,7 @@ import type { MusicScene } from "../game/music";
 import { escapeHtml, panel } from "../ui/shell";
 import { BattlePresenter, escapeAnnounced } from "../ui/battle";
 import { JourneyConflict, type JourneyStore } from "../game/storage";
-import { EVENT, HS, ITEM, MAP, MAP_OBJECT, MAP_SCRIPT, MAP_TEXT, MON, RAM, SPRITE, SYM, TRAINER } from "./generated/symbols";
+import { EVENT, HS, ITEM, MAP, MAP_OBJECT, MAP_SCRIPT, MAP_TEXT, MON, RAM, SPRITE, SYM, TEXT_PREDEFS, TRAINER } from "./generated/symbols";
 import { YellowRom, type MapHeader, type MapObject, type TextOp } from "./rom";
 import { YellowWorld, STEP, opposite, type Facing } from "./world";
 import { YellowGraphics, mapPalette, type Rgb } from "./gfx";
@@ -461,7 +461,10 @@ export class YellowGame implements Game {
 
   // ------------------------------------------------------------ maps
   private enterMap(id: number, fromWarp: boolean) {
-    this.header = this.world.map(id);
+    // A private copy of the blocks lets scripts open doors and move gates.
+    const base = this.world.map(id);
+    this.header = { ...base, blocks: base.blocks.slice() };
+    this.blocksVersion++;
     this.save.map = id;
     if (id < 0x25) {
       this.save.lastMap = id;
@@ -484,6 +487,15 @@ export class YellowGame implements Game {
     this.musicOverride = undefined;
     this.ctx.sound.refreshMusic();
     this.placePikachu();
+    // Map setup (blocks, objects) runs before the map is shown.
+    void MAP_SCRIPTS[this.header.label]?.onEnter?.(this);
+  }
+  private blocksVersion = 0;
+  setBlock(bx: number, by: number, block: number) {
+    if (bx < 0 || by < 0 || bx >= this.header.width || by >= this.header.height) return;
+    this.header.blocks[by * this.header.width + bx] = block;
+    this.blocksVersion++;
+    this.animTiles.delete(this.header.id);
   }
   get scene() { return this.mode === "battle" ? "battle" : "world"; }
   /** Battle themes by opponent, then the map's own song. */
@@ -531,11 +543,6 @@ export class YellowGame implements Game {
     const pikachu = this.pikachu;
     this.enterMap(place.map, false);
     if (pikachu && this.pikachu) Object.assign(this.pikachu, { x: pikachu.x, y: pikachu.y, from: pikachu.from, trail: pikachu.trail, visible: pikachu.visible });
-    void this.runOnEnter();
-  }
-
-  private async runOnEnter() {
-    await MAP_SCRIPTS[this.header.label]?.onEnter?.(this);
   }
 
   /** Teleports to a map square, as a script warp or a door. */
@@ -549,7 +556,6 @@ export class YellowGame implements Game {
       if (facing) this.me.facing = facing;
       this.enterMap(id, true);
     });
-    await this.runOnEnter();
     await MAP_SCRIPTS[this.header.label]?.onStep?.(this);
   }
 
@@ -569,7 +575,6 @@ export class YellowGame implements Game {
       this.enterMap(target, true);
     });
     target = this.header.id;
-    await this.runOnEnter();
     // Leaving a building through a door steps the player out onto the street.
     if (this.world.door(this.header, this.me.x, this.me.y)) {
       await this.walk("player", ["down"]);
@@ -798,7 +803,6 @@ export class YellowGame implements Game {
 
   /** Map scripts, trainer sightlines and grass encounters after each step. */
   private async afterArrival(entering: boolean) {
-    if (entering) await this.runOnEnter();
     await MAP_SCRIPTS[this.header.label]?.onStep?.(this);
     if (this.mode !== "world" && this.mode !== "script") return;
     const spotted = trainerTrigger(this, this.trainers, this.npcs.filter(n => !n.hidden));
@@ -855,6 +859,16 @@ export class YellowGame implements Game {
     }
     const hidden = this.rom.hiddenObjects(this.header.id).find(h => h.x === this.me.x + dx && h.y === this.me.y + dy);
     if (hidden) return this.hiddenObject(hidden);
+    // Bookshelves, statues and displays in buildings without their own sign.
+    if (this.me.facing === "up") {
+      const tile = this.world.tile(this.header, this.me.x, this.me.y - 1);
+      for (let o = SYM.BookshelfTileIDs; this.rom.u8(o) !== 0xff; o += 3) {
+        if (this.rom.u8(o) === this.header.tileset && this.rom.u8(o + 1) === tile) {
+          this.ctx.sound.overworld("interact");
+          return this.predefText(this.rom.u8(o + 2));
+        }
+      }
+    }
   }
 
   private async pickUp(npc: Npc) {
@@ -875,8 +889,7 @@ export class YellowGame implements Game {
   private async hiddenObject(h: { x: number; y: number; arg: number; routine: string }) {
     const handler = SHARED_TEXTS["hidden:" + h.routine];
     if (handler) {
-      this.textVar("wNameBuffer", h.arg);
-      this.hiddenArg = h;
+      this.hidden = h;
       return handler(this);
     }
     if (h.routine === "HiddenItems" || h.routine === "HiddenCoins") {
@@ -904,7 +917,13 @@ export class YellowGame implements Game {
     if (h.routine === "OpenPokemonCenterPC" || h.routine === "OpenRedsPC" || h.routine === "BillsHousePC") return this.service("pc");
     this.log(`Hidden object ${h.routine}`);
   }
-  hiddenArg?: { x: number; y: number; arg: number; routine: string };
+  private hidden?: { x: number; y: number; arg: number; routine: string };
+  get hiddenArg() { return this.hidden?.arg ?? 0; }
+  predefText(id: number) {
+    const label = TEXT_PREDEFS[id - 1];
+    if (!label) return Promise.resolve();
+    return this.text(label);
+  }
 
   /** Runs an interaction or cutscene with the player locked. */
   async runScript(action: () => Promise<void> | void) {
@@ -1043,6 +1062,68 @@ export class YellowGame implements Game {
     this.mode = previous === "menu" ? "script" : previous;
   }
   private showcaseNext?: () => void;
+  block(bx: number, by: number) { return this.rom.blockAt(this.header, bx, by); }
+  dex(species: string) {
+    const id = MON[species];
+    if (id === undefined) throw Error(`Unknown species ${species}`);
+    return this.rom.dex(id);
+  }
+  async trade(index: number) {
+    const { inGameTrade } = await import("./trades");
+    await inGameTrade(this, index);
+  }
+  async choosePartyMon(title: string, usable: (mon: Pokemon) => boolean = () => true) {
+    const { mountParty } = await import("../ui/party");
+    const previous = this.mode;
+    this.mode = "menu";
+    const slot = await new Promise<number | undefined>(resolve => {
+      this.ctx.layer.replaceChildren();
+      mountParty(this.ctx.layer, {
+        title, confirm: "Choose",
+        rows: this.save.party.map(mon => ({
+          name: mon.nickname || this.ctx.engine.species(mon.species).name, sprite: this.ctx.sprite(mon), level: mon.level,
+          status: mon.status, hp: mon.hp, maxHp: mon.stats[0], disabled: !usable(mon),
+        })),
+        onSelect: resolve, onBack: () => resolve(undefined),
+      });
+    });
+    this.ctx.layer.replaceChildren();
+    this.mode = previous === "menu" ? "script" : previous;
+    return slot;
+  }
+  async showDex(species: string) {
+    const dex = this.dex(species);
+    this.register(dex, false);
+    const data = this.ctx.engine.species(dex), entry = this.ctx.engine.dexEntry(dex);
+    const { specimenCard } = await import("../ui/specimen");
+    const previous = this.mode;
+    this.mode = "menu";
+    await new Promise<void>(resolve => {
+      specimenCard(this.ctx.layer, "Pokédex", { ...data, ...entry, image: this.ctx.sprite(dex) }, `№${String(dex).padStart(3, "0")}`, "Close", resolve);
+    });
+    this.ctx.layer.replaceChildren();
+    this.mode = previous === "menu" ? "script" : previous;
+  }
+  async rename(slot: number) {
+    const mon = this.save.party[slot];
+    if (!mon) return false;
+    const previous = this.mode;
+    this.mode = "menu";
+    const name = await new Promise<string | undefined>(resolve => {
+      const p = panel(this.ctx.layer, "Nickname", `<label class="yellow-intro">New name<input id="nickname" maxlength="10" value="${escapeHtml(mon.nickname)}" autocomplete="off"></label><div class="buttons"><button id="confirm">OK</button><button class="secondary" id="back">Cancel</button></div>`);
+      const input = p.querySelector<HTMLInputElement>("#nickname")!;
+      input.focus();
+      input.select();
+      p.querySelector<HTMLButtonElement>("#confirm")!.onclick = () => resolve(input.value.toUpperCase().replace(/[^A-Z0-9 .'-]/g, "").trim().slice(0, 10) || undefined);
+      p.querySelector<HTMLButtonElement>("#back")!.onclick = () => resolve(undefined);
+    });
+    this.ctx.layer.replaceChildren();
+    this.mode = previous === "menu" ? "script" : previous;
+    if (!name) return false;
+    mon.nickname = name;
+    this.textVar("wNameBuffer", name);
+    return true;
+  }
   follower(on: boolean) {
     this.save.vars.pikachuStarter = on ? 1 : 0;
     this.placePikachu();
@@ -1284,7 +1365,7 @@ export class YellowGame implements Game {
     const bx0 = Math.floor(camX / 32), by0 = Math.floor(camY / 32);
     for (let by = by0; by <= by0 + 8; by++)
       for (let bx = bx0; bx <= bx0 + 10; bx++) c.drawImage(border, bx * 32 - camX, by * 32 - camY);
-    c.drawImage(this.gfx.map(map, this.palette), -camX, -camY);
+    c.drawImage(this.gfx.map(map, this.palette, this.blocksVersion), -camX, -camY);
     for (const conn of map.connections) {
       const target = this.world.map(conn.map);
       const img = this.gfx.map(target, mapPalette(this.rom, target, this.save.lastMap));

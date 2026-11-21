@@ -81,8 +81,8 @@ export class YellowGraphics {
   }
 
   /** A whole map drawn from its blocks, at 32×32 pixels per block. */
-  map(map: MapHeader, palette: Rgb[]): HTMLCanvasElement {
-    const key = `${map.id}:${palette.flat().join(",")}`;
+  map(map: MapHeader, palette: Rgb[], version = 0): HTMLCanvasElement {
+    const key = `${map.id}:${version}:${palette.flat().join(",")}`;
     const cached = this.maps.get(key);
     if (cached) return cached;
     const tileset = this.rom.tileset(map.tileset);

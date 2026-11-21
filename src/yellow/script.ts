@@ -27,6 +27,8 @@ export interface Game {
 
   /** Shows text by cartridge label or by the current map's TEXT_* id / number. */
   text(ref: string | number, options?: { wait?: boolean }): Promise<void>;
+  /** Shows a literal line. Prefer cartridge text; use this only for Astra's own additions. */
+  say(text: string, wait?: boolean): Promise<void>;
   /** Asks yes or no after the text just shown. */
   yesNo(): Promise<boolean>;
   /** Strings for text commands that print RAM (item and Pokémon names, numbers). */
@@ -81,6 +83,24 @@ export interface Game {
   follower(on: boolean): void;
   /** Multiple-choice menu; resolves to the index or undefined for B. */
   choose(title: string, options: string[]): Promise<number | undefined>;
+  /** ReplaceTileBlock: changes a 32×32 block of the current map (block coordinates). */
+  setBlock(bx: number, by: number, block: number): void;
+  /** The block id at block coordinates of the current map. */
+  block(bx: number, by: number): number;
+  /** An in-game trade (TRADE_FOR_* index), with the cartridge's dialogue. */
+  trade(index: number): Promise<void>;
+  /** Picks a party Pokémon; resolves to its slot or undefined. */
+  choosePartyMon(title: string, usable?: (mon: Pokemon) => boolean): Promise<number | undefined>;
+  /** Shows a species' Pokédex entry and registers it as seen. */
+  showDex(species: string): Promise<void>;
+  /** Lets the player rename a party Pokémon (the Name Rater). */
+  rename(slot: number): Promise<boolean>;
+  /** National Pokédex number of a species constant. */
+  dex(species: string): number;
+  /** Shows a text predef by its 1-based id (TextPredefs). */
+  predefText(id: number): Promise<void>;
+  /** The argument byte of the hidden object being inspected. */
+  readonly hiddenArg: number;
   /** For script-specific feedback while porting. */
   log(message: string): void;
 }
