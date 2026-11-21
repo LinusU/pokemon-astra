@@ -189,10 +189,14 @@ const wanted = [...sym.keys()].filter(name =>
     "CeladonPrizeMenu", "PrizeDifferentMenuPtrs", "RedsHouse1FDefaultText", "WaterTilesets", "EvosMovesPointerTable",
     "MonPartyData", "IndigoPlateauStatues", "FossilsList", "SuperRodData", "FishingSlots", "GoodRodMons",
     "SpecialWarpData", "BadgeMaps", "BadgeMaps.end", "DungeonWarpList", "DungeonWarpData", "SafariZoneEncounterLevels",
-    "Music_PalletTown", "SuperRodFishingSlots", "TechnicalMachines", "FlowerTile1", "FlowerTile2", "FlowerTile3", "TalkToTrainer", "TextScriptEnd", "CGBBasePalettes", "WaterTilesets", "ShoreTiles", "TilePairCollisionsWater", "WarpTileListPointers",
+    "Music_PalletTown", "PlayPikachuSoundClip", "PrintText", "Bankswitch", "CheckFightingMapTrainers", "DisplayEnemyTrainerTextAndStartBattle", "EndTrainerBattle", "EnableAutoTextBoxDrawing", "ExecuteCurMapScriptInTable", "CallFunctionInTable", "SuperRodFishingSlots", "TechnicalMachines", "FlowerTile1", "FlowerTile2", "FlowerTile3", "TalkToTrainer", "TextScriptEnd", "CGBBasePalettes", "WaterTilesets", "ShoreTiles", "TilePairCollisionsWater", "WarpTileListPointers",
   ].includes(name) || /^(Tileset|Overworld|RedsHouse|Mart|Forest|Dojo|Pokecenter|Gym|House|ForestGate|Museum|Underground|Gate|Ship|ShipPort|Cemetery|Interior|Cavern|Lobby|Mansion|Lab|Club|Facility|Plateau|BeachHouse)_(GFX|Block|Coll)$/.test(name) ||
   /Sprite$/.test(name) || /^Music_[A-Za-z0-9]+$/.test(name) || /^Pikachu/.test(name),
 );
+// Routines that map texts reach with callfar, farcall or jpfar.
+for (const file of readdirSync(join(root, "scripts")).filter(f => f.endsWith(".asm")))
+  for (const m of read(`scripts/${file}`).matchAll(/\b(?:callfar|farcall|jpfar|farjp)\s+(\w+)/g))
+    if (sym.has(m[1]) && !wanted.includes(m[1])) wanted.push(m[1]);
 // Routines that hidden objects call by address.
 for (const m of read("data/events/hidden_objects.asm").matchAll(/hidden_object\s+[^,]+,[^,]+,[^,]+,\s*(\w+)/g))
   if (sym.has(m[1]) && !wanted.includes(m[1])) wanted.push(m[1]);

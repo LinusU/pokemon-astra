@@ -96,7 +96,7 @@ export function isYellowSave(data: unknown): data is YellowSave {
     Array.isArray(s.party) && s.party.length <= 6 && Array.isArray(s.storage) &&
     counts(s.items) && counts(s.pcItems) && int(s.money, 0, 999999) && int(s.coins, 0, 9999) && int(s.badges, 0, 255) &&
     ints(s.seen, 1, 251) && ints(s.caught, 1, 251) && !!s.pikachu && int(s.pikachu.happiness, 0, 255) &&
-    ints(s.visited, 0, 255) && int(s.steps, 0, Number.MAX_SAFE_INTEGER) && int(s.seconds, 0, Number.MAX_SAFE_INTEGER) &&
+    ints(s.visited, 0, 255) && int(s.steps, 0, Number.MAX_SAFE_INTEGER) && typeof s.seconds === "number" && s.seconds >= 0 && Number.isFinite(s.seconds) &&
     !!s.settings && int(s.settings.battleSpeed, 1, 3);
 }
 

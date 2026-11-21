@@ -18,6 +18,7 @@ import { YellowGraphics, mapPalette, type Rgb } from "./gfx";
 import { yellowSummary, type YellowSave } from "./save";
 import { MAP_SCRIPTS, SHARED_TEXTS, type Actor, type BattleOutcome, type Emote, type Game } from "./script";
 import { textPages } from "./textbox";
+import { asmPlan } from "./asm";
 import { crystalMusic } from "./music";
 import { openYellowMenu } from "./menu";
 import { trainerTrigger, trainerHeaders, type TrainerHeader } from "./trainers";
@@ -350,7 +351,7 @@ export class YellowGame implements Game {
     await this.runText(this.rom.label(at) ?? `@${at}`, at, options);
   }
   /** Runs a text entry: printed text, text_asm handlers and special scripts. */
-  private async runText(label: string, at: number, options: { wait?: boolean } = {}) {
+  private async runText(label: string, at: number, options: { wait?: boolean } = {}): Promise<void> {
     const ops = this.rom.text(at);
     const asm = ops.find(op => op.op === "asm");
     const script = ops.find(op => op.op === "script") as Extract<TextOp, { op: "script" }> | undefined;
@@ -360,9 +361,23 @@ export class YellowGame implements Game {
     if (!asm) return;
     const handler = this.textHandler(label);
     if (handler) return handler(this);
-    const trainer = this.trainerTalk((asm as { at: number }).at);
-    if (trainer) return this.talkToTrainer(trainer);
-    if (this.rom.u8((asm as { at: number }).at) === 0xc3 && this.rom.u16((asm as { at: number }).at + 1) === SYM.TextScriptEnd) return;
+    const plan = asmPlan(this.rom, this.header.bank, (asm as { at: number }).at);
+    if (plan.kind === "end") return;
+    if (plan.kind === "print") {
+      if (plan.pikachu !== undefined) this.ctx.cry(25);
+      for (const at of plan.at) await this.runText(this.rom.label(at) ?? `@${at}`, at, options);
+      return;
+    }
+    if (plan.kind === "trainer") {
+      const trainer = this.trainers.find(t => t.at === plan.at);
+      if (trainer) return this.talkToTrainer(trainer);
+    }
+    if (plan.kind === "far") {
+      const routine = this.rom.label(plan.at);
+      const far = routine && this.textHandler(routine);
+      if (far) return far(this);
+      label = routine ?? label;
+    }
     this.log(`No handler for ${label}`);
     if (!printed.length) await this.say("…");
   }
@@ -535,6 +550,7 @@ export class YellowGame implements Game {
       this.enterMap(id, true);
     });
     await this.runOnEnter();
+    await MAP_SCRIPTS[this.header.label]?.onStep?.(this);
   }
 
   private async useWarp(index: number) {
@@ -559,6 +575,7 @@ export class YellowGame implements Game {
       await this.walk("player", ["down"]);
       this.standingOnWarp = false;
     }
+    await MAP_SCRIPTS[this.header.label]?.onStep?.(this);
     this.persist();
   }
 
@@ -585,7 +602,9 @@ export class YellowGame implements Game {
     if (this.mode === "text") {
       if (input.hit("a") || input.hit("b")) this.advanceText();
     } else if (this.mode === "menu") {
-      if (this.yesNoResolve) {
+      if (this.showcaseNext) {
+        if (input.hit("a") || input.hit("b")) this.showcaseNext();
+      } else if (this.yesNoResolve) {
         const buttons = [...this.ctx.layer.querySelectorAll<HTMLButtonElement>(".yellow-yesno button")];
         const focused = buttons.indexOf(document.activeElement as HTMLButtonElement);
         if (input.hit("up") || input.hit("down")) buttons[focused === 0 ? 1 : 0]?.focus({ preventScroll: true });
@@ -898,6 +917,7 @@ export class YellowGame implements Game {
       await this.say(`Something went wrong: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       this.mode = "world";
+      void this.persist();
     }
   }
 
@@ -928,14 +948,6 @@ export class YellowGame implements Game {
   }
 
   // ------------------------------------------------------------ trainers
-  private trainerTalk(asmAt: number): TrainerHeader | undefined {
-    // ld hl, header ; call TalkToTrainer ; jp TextScriptEnd
-    if (this.rom.u8(asmAt) !== 0x21 || this.rom.u8(asmAt + 3) !== 0xcd) return;
-    const target = this.rom.u16(asmAt + 4);
-    if (target !== SYM.TalkToTrainer) return;
-    const header = this.rom.far(this.header.bank, this.rom.u16(asmAt + 1));
-    return this.trainers.find(t => t.at === header);
-  }
   private trainerNpc(header: TrainerHeader) {
     return this.npcs.find(n => n.object.index === header.object);
   }
@@ -1004,17 +1016,53 @@ export class YellowGame implements Game {
     for (let i = 0; i < 8; i++) if (this.save.badges & (1 << i)) mask |= 1 << order[i];
     return mask;
   }
-  async trainerBattle(klass: string, index: number, options: { canLose?: boolean } = {}) {
+  async trainerBattle(klass: string, index: number, options: { canLose?: boolean; win?: string; lose?: string } = {}) {
     const id = TRAINER[klass];
     if (id === undefined) throw Error(`Unknown trainer class ${klass}`);
-    return this.battleTrainer(id, index, options);
+    const won = await this.battleTrainer(id, index, options);
+    const after = won ? options.win : options.lose;
+    if (after) await this.text(after);
+    return won;
+  }
+  async showcase(species: string, lines: string[]) {
+    const dex = this.rom.dex(MON[species]);
+    const previous = this.mode;
+    this.mode = "menu";
+    this.ctx.layer.innerHTML = `<section class="battle-scene yellow-showcase" data-arena="field"><div class="battle-field"><div class="battle-mon battle-enemy"><img alt="" src="${this.ctx.sprite(dex)}"></div></div><div class="battle-box"><div class="battle-copy" aria-live="polite"></div></div></section>`;
+    this.ctx.cry(dex);
+    const copy = this.ctx.layer.querySelector<HTMLElement>(".battle-copy")!;
+    for (const line of lines) {
+      copy.textContent = line.replaceAll("{PLAYER}", this.save.name).replaceAll("{RIVAL}", this.save.rival);
+      await new Promise<void>(resolve => {
+        this.showcaseNext = resolve;
+        copy.onclick = () => resolve();
+      });
+    }
+    this.showcaseNext = undefined;
+    this.ctx.layer.replaceChildren();
+    this.mode = previous === "menu" ? "script" : previous;
+  }
+  private showcaseNext?: () => void;
+  follower(on: boolean) {
+    this.save.vars.pikachuStarter = on ? 1 : 0;
+    this.placePikachu();
+  }
+  choose(title: string, options: string[]) {
+    return import("./services").then(async ({ choose }) => {
+      const previous = this.mode;
+      this.mode = "menu";
+      const pick = await choose(this, title, options);
+      this.ctx.layer.replaceChildren();
+      this.mode = previous === "menu" ? "script" : previous;
+      return pick;
+    });
   }
   private async battleTrainer(klass: number, index: number, options: { canLose?: boolean; endText?: number } = {}) {
     const party = this.rom.trainerParty(klass, index);
     const opponents = party.map(m => this.ctx.engine.makePokemon(this.rom.dex(m.species), m.level));
     const prize = this.rom.trainerMoney(klass) * (party[party.length - 1]?.level ?? 1);
     const outcome = await this.battle({ party: opponents, prizeMoney: prize }, {
-      trainer: this.rom.trainerClassName(klass).replace(/^(.)(.*)$/, (_, a, b) => a + b.toLowerCase()),
+      trainer: /^RIVAL/.test(this.rom.trainerClassName(klass)) ? this.save.rival : titleCase(this.rom.trainerClassName(klass)),
       canLose: options.canLose,
       klass,
     });

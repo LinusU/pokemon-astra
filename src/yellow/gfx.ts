@@ -53,6 +53,8 @@ const tintOf = (sprite: number): Rgb => {
   return SPRITE_TINTS.blue;
 };
 
+const POKEMON_SPRITES = new Set(["SPRITE_PIKACHU", "SPRITE_SEEL", "SPRITE_SANDSHREW", "SPRITE_ODDISH", "SPRITE_BULBASAUR",
+  "SPRITE_JIGGLYPUFF", "SPRITE_CLEFAIRY", "SPRITE_CHANSEY", "SPRITE_MONSTER", "SPRITE_BIRD", "SPRITE_FAIRY", "SPRITE_SNORLAX"].map(n => SPRITE[n]));
 function canvas(w: number, h: number) {
   const c = document.createElement("canvas");
   c.width = w;
@@ -135,7 +137,10 @@ export class YellowGraphics {
     if (cached) return cached;
     const c = canvas(16, 16), ctx = c.getContext("2d")!;
     const tint = tintOf(sprite);
-    const colors: (Rgb | undefined)[] = [undefined, palette[0], tint.map((v, i) => Math.round((v + palette[1][i]) / 2)) as Rgb, palette[3]];
+    // Pokémon sprites are mostly their lightest shade, so their body takes a pale tint.
+    const creature = POKEMON_SPRITES.has(sprite);
+    const light = creature ? tint.map(v => Math.round(v * 0.55 + 255 * 0.45)) as Rgb : palette[0];
+    const colors: (Rgb | undefined)[] = [undefined, light, tint.map((v, i) => Math.round((v * 2 + palette[1][i]) / 3)) as Rgb, palette[3]];
     const image = ctx.createImageData(16, 16);
     const base = sheet.offset + frameIndex * 64;
     // Each frame is four tiles: top-left, top-right, bottom-left, bottom-right.

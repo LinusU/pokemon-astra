@@ -37,3 +37,13 @@ describe.skipIf(!available)("Pokémon Yellow cartridge data", () => {
     expect(rom.dex(rom.internal(25))).toBe(25);
   });
 });
+
+describe.skipIf(!available)("Yellow saves", () => {
+  it("round-trip a fresh journey with play time", async () => {
+    const { freshYellowSave, isYellowSave } = await import("../src/yellow/save");
+    const rom = new YellowRom(new Uint8Array(readFileSync("pokeyellow.gbc")));
+    const save = { ...freshYellowSave(rom, "RED", "BLUE"), seconds: 12.75, steps: 3 };
+    expect(isYellowSave(JSON.parse(JSON.stringify(save)))).toBe(true);
+    expect(isYellowSave({ ...save, map: 300 })).toBe(false);
+  });
+});

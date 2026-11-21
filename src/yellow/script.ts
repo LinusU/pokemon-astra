@@ -53,7 +53,11 @@ export interface Game {
   giveMon(species: string, level: number, options?: { nickname?: string; message?: boolean }): Promise<Pokemon | undefined>;
   partyHas(species: string): boolean;
 
-  trainerBattle(klass: string, index: number, options?: { canLose?: boolean; intro?: string; music?: string }): Promise<boolean>;
+  /**
+   * A scripted trainer battle. `win`/`lose` name texts shown afterwards (the
+   * cartridge shows them as the opponent's closing line).
+   */
+  trainerBattle(klass: string, index: number, options?: { canLose?: boolean; win?: string; lose?: string }): Promise<boolean>;
   wildBattle(species: string, level: number, options?: { stationary?: boolean; noRun?: boolean }): Promise<BattleOutcome>;
 
   warp(map: string, x: number, y: number, facing?: Facing): Promise<void>;
@@ -71,11 +75,19 @@ export interface Game {
   vars: Record<string, number>;
   /** Opens a mart, PC or other shared service. */
   service(kind: "mart" | "nurse" | "pc" | "bills_pc", arg?: number[]): Promise<void>;
+  /** A battle-styled cut-in with a Pokémon and lines of narration. */
+  showcase(species: string, lines: string[]): Promise<void>;
+  /** Starts or stops the starter Pikachu following the player. */
+  follower(on: boolean): void;
+  /** Multiple-choice menu; resolves to the index or undefined for B. */
+  choose(title: string, options: string[]): Promise<number | undefined>;
   /** For script-specific feedback while porting. */
   log(message: string): void;
 }
 
 export interface MapScript {
+  /** The original map script needs nothing beyond the shared runtime (trainers, texts). */
+  generic?: boolean;
   /** Runs once whenever the map is entered, before the player gains control. */
   onEnter?(g: Game): void | Promise<void>;
   /** Runs when the player arrives on a square or regains control. */
