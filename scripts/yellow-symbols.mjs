@@ -16,7 +16,7 @@ for (const line of read("pokeyellow.sym").split("\n")) {
   const m = /^([0-9a-f]{2}):([0-9a-f]{4}) (\S+)$/.exec(line.trim());
   if (!m) continue;
   const bank = parseInt(m[1], 16), addr = parseInt(m[2], 16);
-  if (addr >= 0xc000 && addr < 0xe000) ram.set(m[3], addr);
+  if ((addr >= 0xc000 && addr < 0xe000) || (addr >= 0xff80 && addr < 0xffff)) ram.set(m[3], addr);
   if (addr >= 0x8000) continue; // RAM labels are not cartridge data.
   if (bank === 0 && addr >= 0x4000) continue;
   sym.set(m[3], bank === 0 ? addr : bank * 0x4000 + (addr - 0x4000));
@@ -202,7 +202,7 @@ for (const m of read("data/events/hidden_objects.asm").matchAll(/hidden_object\s
   if (sym.has(m[1]) && !wanted.includes(m[1])) wanted.push(m[1]);
 const addresses = Object.fromEntries(wanted.sort().map(n => [n, sym.get(n)]));
 // Work RAM read by text commands, so the runtime can fill in names and numbers.
-const ramNames = new Set(["wEventFlags", "wPlayerName", "wRivalName", "wPlayerMoney", "wPlayerCoins", "wStringBuffer", "wNameBuffer", "wcd6d", "wPikachuHappiness"]);
+const ramNames = new Set(["hOaksAideRequirement", "hOaksAideNumMonsOwned", "hOaksAideRewardItem", "wEventFlags", "wPlayerName", "wRivalName", "wPlayerMoney", "wPlayerCoins", "wStringBuffer", "wNameBuffer", "wcd6d", "wPikachuHappiness"]);
 const walk = dir => readdirSync(join(root, dir), { withFileTypes: true }).flatMap(e =>
   e.isDirectory() ? walk(join(dir, e.name)) : e.name.endsWith(".asm") ? [join(dir, e.name)] : []);
 for (const file of [...walk("text"), ...walk("scripts"), ...walk("engine"), ...walk("data"), ...walk("home")])

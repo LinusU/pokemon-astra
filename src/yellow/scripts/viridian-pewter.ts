@@ -1,5 +1,6 @@
 // Ported Yellow map scripts: Viridian City, Route 1, Route 2, Route 22, Pewter City. See docs/YELLOW_PORTING.md.
 import { MAP } from "../generated/symbols";
+import { oaksAide } from "./shared";
 import { defineMap, type Game } from "../script";
 
 // ---------------------------------------------------------------- Viridian City
@@ -129,11 +130,10 @@ defineMap("ViridianMart", {
       g.show(MART_OLD_MAN_1);
     }
   },
-  // API REQUEST: ViridianMart swaps its text table (wCurMapTextPtr) to ViridianMart_TextPointers2 once
-  // EVENT_OAK_GOT_PARCEL is set, so that the clerk sells things instead of saying "say hi to Oak".
-  // The runtime always reads the first table; the clerk (object 1) keeps greeting with the Oak line until
-  // it can redirect a map's text id, e.g. a `texts["TEXT_VIRIDIANMART_CLERK"]` override for plain text
-  // entries. Workaround: none; the mart itself stays closed.
+  texts: {
+    // Once Oak has his parcel the map switches to ViridianMart_TextPointers2 and the clerk opens the shop.
+    TEXT_VIRIDIANMART_CLERK: g => g.text(g.ev("EVENT_OAK_GOT_PARCEL") ? "ViridianMartClerkText" : "ViridianMartClerkSayHiToOakText"),
+  },
 });
 
 defineMap("ViridianNicknameHouse", {
@@ -319,36 +319,13 @@ defineMap("Route22Gate", {
 
 // ---------------------------------------------------------------- Route 2
 
-/** Professor Oak's aide trades an item for owning enough different Pokémon. */
-async function oaksAide(g: Game, requirement: number, item: string, name: string) {
-  g.textVar("wOaksAideRewardItemName", name);
-  // API REQUEST: the aide's greeting prints hOaksAideRequirement, which is not a known text variable;
-  // the count is left out of the line until a variable for it exists.
-  try { g.textVar("hOaksAideRequirement", requirement); } catch { /* not available */ }
-  await g.text("OaksAideHiText");
-  if (!(await g.yesNo())) {
-    await g.text("OaksAideComeBackText");
-    return false;
-  }
-  if (g.save.caught.length < requirement) {
-    await g.text("OaksAideUhOhText");
-    return false;
-  }
-  await g.text("OaksAideHereYouGoText");
-  if (!g.give(item)) {
-    await g.text("OaksAideNoRoomText");
-    return false;
-  }
-  await g.text("OaksAideGotItemText");
-  return true;
-}
 
 defineMap("Route2Gate", {
   generic: true,
   texts: {
     async Route2GateOaksAideText(g) {
       if (!g.ev("EVENT_GOT_HM05")) {
-        if (!(await oaksAide(g, 10, "HM_FLASH", "HM05"))) return;
+        if (!(await oaksAide(g, 10, "HM_FLASH"))) return;
         g.set("EVENT_GOT_HM05");
       }
       await g.text("Route2GateOaksAideText.FlashExplanationText");

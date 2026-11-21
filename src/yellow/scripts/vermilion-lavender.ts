@@ -1,37 +1,12 @@
 // Ported Yellow map scripts. See docs/YELLOW_PORTING.md.
 // Vermilion City, the S.S. Anne, Route 11/12, Rock Tunnel, Lavender Town and Pokémon Tower.
 import { MAP } from "../generated/symbols";
+import { oaksAide } from "./shared";
 import { defineMap, SHARED_TEXTS, type Game } from "../script";
 
 const at = (g: Game, x: number, y: number) => g.player.x === x && g.player.y === y;
 const random = (n: number) => Math.floor(Math.random() * n);
 
-/** Oak's Aide: gives `item` if the player owns at least `need` species. Returns true when the item was handed over. */
-async function oaksAide(g: Game, need: number, item: string) {
-  // API REQUEST: textVar has no names for hOaksAideRequirement / hOaksAideNumMonsOwned (HRAM), so the numbers in
-  // the aide's lines are blank until the runtime registers them. They are set here when it does.
-  const tryVar = (name: string, value: string | number) => { try { g.textVar(name, value); } catch { /* unknown name */ } };
-  const owned = g.save.caught.filter(n => n <= 151).length;
-  tryVar("hOaksAideRequirement", need);
-  tryVar("hOaksAideNumMonsOwned", owned);
-  g.textVar("wOaksAideRewardItemName", item.replaceAll("_", ""));
-  await g.text("OaksAideHiText", { wait: false });
-  if (!(await g.yesNo())) {
-    await g.text("OaksAideComeBackText");
-    return false;
-  }
-  if (owned < need) {
-    await g.text("OaksAideUhOhText");
-    return false;
-  }
-  await g.text("OaksAideHereYouGoText");
-  if (!g.give(item)) {
-    await g.text("OaksAideNoRoomText");
-    return false;
-  }
-  await g.text("OaksAideGotItemText");
-  return true;
-}
 
 // Both Snorlax maps' flute hooks chain onto each other.
 type FluteHook = (g: Game) => Promise<boolean>;
@@ -596,14 +571,14 @@ defineMap("PokemonTower5F", {
   async onStep(g) {
     // The purified zone heals the party once, on entering.
     const inZone = g.player.x >= 10 && g.player.x <= 11 && g.player.y >= 8 && g.player.y <= 9;
+    // BIT_NO_BATTLES: no wild battles inside the purified zone.
+    g.vars.noWildBattles = inZone ? 1 : 0;
     if (!inZone) {
       g.reset("EVENT_IN_PURIFIED_ZONE");
       return;
     }
     if (g.ev("EVENT_IN_PURIFIED_ZONE")) return;
     g.set("EVENT_IN_PURIFIED_ZONE");
-    // API REQUEST: BIT_NO_BATTLES (no wild encounters while inside the zone); the zone is small, so encounters
-    // here are only suppressed by the player moving out again.
     g.heal();
     await g.fade();
     await g.delay(6);

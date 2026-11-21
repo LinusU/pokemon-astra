@@ -105,3 +105,27 @@ SHARED_TEXTS.BookOrSculptureText = async g => {
 SHARED_TEXTS.ElevatorText = g => g.text("ElevatorText");
 SHARED_TEXTS.TownMapText = async g => g.say("A map of the KANTO region.");
 void SYM;
+
+/** Professor Oak's aides give an item once the player owns enough species (engine/events/oaks_aide.asm). */
+export async function oaksAide(g: Game, need: number, item: string) {
+  const owned = g.save.caught.filter(n => n <= 151).length;
+  g.textVar("hOaksAideRequirement", need);
+  g.textVar("hOaksAideNumMonsOwned", owned);
+  g.textVar("wOaksAideRewardItemName", g.itemName(item));
+  await g.text("OaksAideHiText", { wait: false });
+  if (!(await g.yesNo())) {
+    await g.text("OaksAideComeBackText");
+    return false;
+  }
+  if (owned < need) {
+    await g.text("OaksAideUhOhText");
+    return false;
+  }
+  await g.text("OaksAideHereYouGoText");
+  if (!g.give(item)) {
+    await g.text("OaksAideNoRoomText");
+    return false;
+  }
+  await g.text("OaksAideGotItemText");
+  return true;
+}
