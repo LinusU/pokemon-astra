@@ -615,7 +615,12 @@ impl Engine {
         if a >= BASE_STAT_LEVEL + 2 {
             return;
         }
-        if self.mem.rb(W_BATTLE_MON_TYPE1) < SPECIAL && self.mem.rb(W_BATTLE_MON_TYPE2) < SPECIAL {
+        let t1 = self.mem.rb(W_BATTLE_MON_TYPE1);
+        if self.data.rules.ghost_special_dark_physical && t1 == DARK {
+            return;
+        }
+        let special_type1 = t1 >= SPECIAL || (self.data.rules.ghost_special_dark_physical && t1 == GHOST);
+        if !special_type1 && self.mem.rb(W_BATTLE_MON_TYPE2) < SPECIAL {
             return;
         }
         // .encourage
@@ -787,12 +792,18 @@ impl Engine {
     /// Shared scan of `wPlayerUsedMoves` of `AI_Smart_Counter` (`special` =
     /// false) and `AI_Smart_MirrorCoat` (`special` = true).
     fn ai_smart_counter_like(&mut self, hl: u16, special: bool, name: &'static str) {
-        let is_wanted = |e: &Engine| -> bool {
+        // `last`: the check of the player's last move. In Crystal Legacy's
+        // Mirror Coat it treats Ghost as physical and Dark as special (it
+        // copies Counter's), unlike its scan of the player's moves.
+        let is_wanted = |e: &Engine, last: bool| -> bool {
             let power = e.mem.rb(W_ENEMY_MOVE_STRUCT + u16::from(MOVE_POWER));
             if power == 0 {
                 return false;
             }
             let t = e.mem.rb(W_ENEMY_MOVE_STRUCT + u16::from(MOVE_TYPE));
+            if e.data.rules.ghost_special_dark_physical && (t == GHOST || t == DARK) {
+                return if special && !last { t == GHOST } else { t == DARK };
+            }
             if special { t >= SPECIAL } else { t < SPECIAL }
         };
         let mut b = 0u8;
@@ -802,7 +813,7 @@ impl Engine {
                 continue;
             }
             self.ai_get_enemy_move(mv);
-            if is_wanted(self) {
+            if is_wanted(self, false) {
                 b += 1;
             }
         }
@@ -816,7 +827,7 @@ impl Engine {
                 return;
             }
             self.ai_get_enemy_move(last);
-            if !is_wanted(self) {
+            if !is_wanted(self, true) {
                 return;
             }
         }
@@ -1032,11 +1043,14 @@ impl Engine {
     /// `AI_Smart_Conversion2`.
     fn ai_smart_conversion2(&mut self, hl: u16) {
         // BUG: "Smart" AI discourages Conversion2 after the first turn
-        let discourage = if self.mem.rb(W_LAST_PLAYER_MOVE) != 0 {
+        // (Crystal Legacy's fix: `jr z`, before the player's first move.)
+        let last = self.mem.rb(W_LAST_PLAYER_MOVE);
+        let discourage = if (last != 0) != self.data.rules.bug_fixes {
             true
         } else {
-            // The original indexes `Moves` with `a - 1` = $ff here: move 0.
-            let ty = self.data.mv(0).kind;
+            // The player's last move's type; in Crystal `a` is 0 here, so its
+            // `a - 1` = $ff indexes move 0.
+            let ty = self.data.mv(last).kind;
             self.mem.wb(W_PLAYER_MOVE_STRUCT + u16::from(MOVE_TYPE), ty);
             self.mem.wb(H_BATTLE_TURN, 0);
             self.battle_check_type_matchup();
@@ -1071,7 +1085,8 @@ impl Engine {
             }
             // 80% chance to greatly encourage this move if the enemy is badly poisoned.
             // BUG: "Smart" AI encourages Mean Look if its own Pokémon is badly poisoned
-            if self.mem.bit(W_ENEMY_SUB_STATUS5, SUBSTATUS_TOXIC) {
+            let toxic = if self.data.rules.bug_fixes { W_PLAYER_SUB_STATUS5 } else { W_ENEMY_SUB_STATUS5 };
+            if self.mem.bit(toxic, SUBSTATUS_TOXIC) {
                 break 'out false;
             }
             // 80% chance to greatly encourage this move if the player is either in love,
@@ -1136,10 +1151,12 @@ impl Engine {
             // .greatly_discourage
             return self.ai_inc(hl, 2);
         }
-        if t1 >= SPECIAL {
+        let dark_physical = self.data.rules.ghost_special_dark_physical;
+        if t1 >= SPECIAL && !(dark_physical && t1 == DARK) {
             return;
         }
-        if self.mem.rb(W_BATTLE_MON_TYPE2) >= SPECIAL {
+        let t2 = self.mem.rb(W_BATTLE_MON_TYPE2);
+        if t2 >= SPECIAL && !(dark_physical && t2 == DARK) {
             return;
         }
         if self.ai_80_20() {

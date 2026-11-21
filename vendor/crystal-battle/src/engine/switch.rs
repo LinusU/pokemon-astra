@@ -168,7 +168,15 @@ impl Engine {
         self.mem.wb(W_CRY_TRACKS, 0xf0);
         let species = self.mem.rb(W_BATTLE_MON_SPECIES);
         self.show(crate::battle::Event::Cry(species));
-        self.small_far_flag_action(W_BATTLE_PARTICIPANTS_NOT_FAINTED, last, FlagAction::Reset);
+        if self.data.rules.bug_fixes {
+            // Crystal Legacy's fix: the whole `UpdateFaintedPlayerMon` for it.
+            let cur = self.mem.rb(W_CUR_BATTLE_MON);
+            self.mem.wb(W_CUR_BATTLE_MON, last);
+            self.update_fainted_player_mon();
+            self.mem.wb(W_CUR_BATTLE_MON, cur);
+        } else {
+            self.small_far_flag_action(W_BATTLE_PARTICIPANTS_NOT_FAINTED, last, FlagAction::Reset);
+        }
         self.show(crate::battle::Event::Faint(crate::battle::Side::Player));
         self.text(r::BATTLE_TEXT_MON_FAINTED);
         Ok(true)
@@ -498,7 +506,11 @@ impl Engine {
             let carry = b & 1 != 0;
             b >>= 1;
             if carry {
-                a = self.boost_stat(hl);
+                let left = self.boost_stat(hl);
+                // Crystal Legacy's fix: push af / pop af around the call.
+                if !self.data.rules.bug_fixes {
+                    a = left;
+                }
             }
             hl += 2;
             b >>= 1;
@@ -532,8 +544,25 @@ impl Engine {
     // --- send-out / withdraw texts (their text_asm logic) ------------------------------
 
     /// Enemy HP as a quarter-percentage: `hMultiplicand+1..2` × 25 ÷ (max HP / 4).
-    /// (Max HP below 4 divides by zero; the original freezes.)
+    /// (Max HP below 4 divides by zero; the original freezes.) Crystal
+    /// Legacy halves the max HP until it fits a byte, and 100 with it.
     fn enemy_hp_percent_of(&mut self) -> u8 {
+        if self.data.rules.bug_fixes {
+            let max = self.mem.rw(W_ENEMY_MON_MAX_HP);
+            let (mut hi, mut lo, mut c) = ((max >> 8) as u8, max as u8, 100u8);
+            while hi != 0 {
+                // rra / rr b / srl c
+                let carry = hi & 1;
+                hi >>= 1;
+                lo = carry << 7 | lo >> 1;
+                c >>= 1;
+            }
+            self.mem.wb(H_MULTIPLIER, c);
+            self.multiply();
+            self.mem.wb(H_DIVISOR, lo);
+            self.divide(4);
+            return self.mem.rb(H_QUOTIENT + 3);
+        }
         self.mem.wb(H_MULTIPLIER, 25);
         self.multiply();
         let max = self.mem.rw(W_ENEMY_MON_MAX_HP);

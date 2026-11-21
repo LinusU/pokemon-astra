@@ -310,8 +310,10 @@ impl Engine {
         if self.mem.rb(hp) | self.mem.rb(hp + 1) == 0 {
             return self.beat_up_fail();
         }
-        // `cp [hl]` compares wCurBattleMon with the HP's low byte.
-        let status = if self.mem.rb(W_CUR_BATTLE_MON) == self.mem.rb(hp + 1) {
+        // `cp [hl]` compares wCurBattleMon with the HP's low byte; Crystal
+        // Legacy's `cp c` with the Beat Up mon's index.
+        let index = if self.data.rules.bug_fixes { cur } else { self.mem.rb(hp + 1) };
+        let status = if self.mem.rb(W_CUR_BATTLE_MON) == index {
             W_BATTLE_MON_STATUS
         } else {
             self.get_beatup_mon_location(MON_STATUS)
@@ -403,6 +405,9 @@ impl Engine {
         if self.mem.rb(W_BEAT_UP_HIT_AT_LEAST_ONCE) != 0 {
             return Ok(Cmd::Next);
         }
+        if self.data.rules.bug_fixes {
+            self.mem.wb(W_ATTACK_MISSED, 1);
+        }
         self.print_but_it_failed();
         Ok(Cmd::Next)
     }
@@ -427,23 +432,41 @@ impl Engine {
     /// `BattleCommand_BellyDrum`.
     /// BUG: Belly Drum sharply boosts Attack even with under 50% HP.
     pub fn battle_command_belly_drum(&mut self) -> Flow<Cmd> {
+        if self.data.rules.bug_fixes {
+            // Crystal Legacy checks the HP first.
+            let bc = self.get_half_max_hp();
+            if self.check_user_has_enough_hp(bc) {
+                self.battle_command_attack_up2()?;
+                if self.mem.rb(W_ATTACK_MISSED) == 0 {
+                    return self.belly_drum_succeeds(bc);
+                }
+            }
+            self.animate_failed_move()?;
+            self.print_but_it_failed();
+            return Ok(Cmd::Next);
+        }
         self.battle_command_attack_up2()?;
         if self.mem.rb(W_ATTACK_MISSED) == 0 {
             let bc = self.get_half_max_hp();
             if self.check_user_has_enough_hp(bc) {
-                self.animate_current_move()?;
-                self.subtract_hp_from_user(bc);
-                self.update_user_in_party();
-                for _ in 0..MAX_STAT_LEVEL - BASE_STAT_LEVEL - 1 {
-                    self.battle_command_attack_up2()?;
-                }
-                self.text(r::BELLY_DRUM_TEXT);
-                return Ok(Cmd::Next);
+                return self.belly_drum_succeeds(bc);
             }
         }
         // .failed
         self.animate_failed_move()?;
         self.print_but_it_failed();
+        Ok(Cmd::Next)
+    }
+
+    /// Belly Drum's success: the HP `bc` paid, Attack raised to the maximum.
+    fn belly_drum_succeeds(&mut self, bc: u16) -> Flow<Cmd> {
+        self.animate_current_move()?;
+        self.subtract_hp_from_user(bc);
+        self.update_user_in_party();
+        for _ in 0..MAX_STAT_LEVEL - BASE_STAT_LEVEL - 1 {
+            self.battle_command_attack_up2()?;
+        }
+        self.text(r::BELLY_DRUM_TEXT);
         Ok(Cmd::Next)
     }
 
@@ -645,12 +668,16 @@ impl Engine {
             return Ok(Cmd::Next);
         }
         let mtype = self.mem.rb(W_STRING_BUFFER1 + u16::from(MOVE_TYPE));
-        if special != (mtype >= SPECIAL) {
+        if special != self.is_special_type(mtype) {
             return Ok(Cmd::Next);
         }
         let hi = self.mem.rb(W_CUR_DAMAGE);
         let lo = self.mem.rb(W_CUR_DAMAGE + 1);
         if hi | lo == 0 {
+            // Crystal Legacy's `.failed`: the effect failed, too.
+            if self.data.rules.bug_fixes {
+                self.mem.wb(W_EFFECT_FAILED, 1);
+            }
             return Ok(Cmd::Next);
         }
         let doubled = (u16::from(hi) << 8 | u16::from(lo)) << 1;
@@ -916,8 +943,15 @@ impl Engine {
         self.multiply();
         self.mem.wb(H_DIVISOR, 25);
         self.divide(4);
-        self.damage_regs[2] = self.mem.rb(H_QUOTIENT + 3);
+        self.damage_regs[2] = self.happiness_power_floor(self.mem.rb(H_QUOTIENT + 3));
         Ok(Cmd::Next)
+    }
+
+    /// Return's and Frustration's power: at least 1 under [`Rules::bug_fixes`].
+    ///
+    /// [`Rules::bug_fixes`]: crate::data::game::Rules::bug_fixes
+    pub(super) fn happiness_power_floor(&self, power: u8) -> u8 {
+        if self.data.rules.bug_fixes && power == 0 { 1 } else { power }
     }
 
     /// `BattleCommand_HiddenPower`.

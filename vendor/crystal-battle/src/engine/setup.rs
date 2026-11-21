@@ -160,6 +160,11 @@ impl Engine {
     /// `CalcExpAtLevel` for level `d`: `(a/b)*n^3 + c*n^2 + d*n - e` into
     /// `hMultiplicand..+2` (the three bytes of `hProduct + 1..3`).
     pub fn calc_exp_at_level(&mut self, d: u8) {
+        if self.data.rules.bug_fixes && d == 1 {
+            // Crystal Legacy: Pokémon have 0 experience at level 1.
+            self.mem.fill(H_PRODUCT, 4, 0);
+            return;
+        }
         let growth = self.mem.rb(W_BASE_GROWTH_RATE);
         let rate = *self.data.growth_rate(growth);
         // Cube the level
@@ -432,6 +437,9 @@ impl Engine {
             // .stat_exp_awarded
             de += 2;
         }
+        if self.data.rules.max_level_takes_no_exp && self.mem.rb(bc + u16::from(MON_LEVEL)) >= MAX_LEVEL {
+            return 0;
+        }
         self.mem.wb(H_MULTIPLICAND, 0);
         self.mem.wb(H_MULTIPLICAND + 1, 0);
         let base_exp = self.mem.rb(W_ENEMY_MON_BASE_EXP);
@@ -568,8 +576,13 @@ impl Engine {
     fn evenly_divide_exp_among_participants(&mut self) {
         let mut b = self.mem.rb(W_BATTLE_PARTICIPANTS_NOT_FAINTED);
         let mut count = 0u8;
-        for _ in 0..PARTY_LENGTH {
-            count += b & 1;
+        for slot in 0..PARTY_LENGTH {
+            // Crystal Legacy doesn't count those at the level cap.
+            let capped = self.data.rules.max_level_takes_no_exp
+                && self.mem.rb(W_PARTY_MON1_LEVEL + u16::from(slot) * super::battle::PARTY_LEN) >= MAX_LEVEL;
+            if !capped {
+                count += b & 1;
+            }
             b >>= 1;
         }
         if count < 2 {
@@ -1069,14 +1082,27 @@ impl Engine {
             self.init_enemy_mon_dvs(mode);
         }
         // .Happiness
-        self.mem.wb(W_ENEMY_MON_HAPPINESS, BASE_HAPPINESS);
+        let party = self.data.rules.trainer_party_stats;
+        let cur = self.mem.rb(W_CUR_PARTY_MON);
+        let happiness = if party && mode != WILD_BATTLE {
+            self.mem.rb(self.get_party_location(W_OT_PARTY_MON1_HAPPINESS, cur))
+        } else {
+            BASE_HAPPINESS
+        };
+        self.mem.wb(W_ENEMY_MON_HAPPINESS, happiness);
         let level = self.mem.rb(W_CUR_PARTY_LEVEL);
         self.mem.wb(W_ENEMY_MON_LEVEL, level);
-        self.calc_mon_stats(
-            W_ENEMY_MON_D_VS - u16::from(MON_DVS - MON_STAT_EXP + 1),
-            W_ENEMY_MON_MAX_HP,
-            false,
-        );
+        if party && mode == TRAINER_BATTLE {
+            // Crystal Legacy: with the party's stat experience.
+            let hl = self.get_party_location(W_OT_PARTY_MON1_STAT_EXP, cur) - 1;
+            self.calc_mon_stats(hl, W_ENEMY_MON_MAX_HP, true);
+        } else {
+            self.calc_mon_stats(
+                W_ENEMY_MON_D_VS - u16::from(MON_DVS - MON_STAT_EXP + 1),
+                W_ENEMY_MON_MAX_HP,
+                false,
+            );
+        }
         if mode == TRAINER_BATTLE {
             // .OpponentParty: the rest comes from the party struct.
             let cur = self.mem.rb(W_CUR_PARTY_MON);
@@ -1144,10 +1170,16 @@ impl Engine {
         self.mem.wb(base + 1, v);
         let species = self.mem.rb(W_TEMP_ENEMY_MON_SPECIES);
         self.mem.wb(W_NAMED_OBJECT_INDEX, species);
-        self.get_pokemon_name();
+        // Crystal Legacy looks the name up after the check (for a nickname).
+        if !self.data.rules.trainer_party_stats {
+            self.get_pokemon_name();
+        }
         // Did we catch it?
         if mode == 0 {
             return;
+        }
+        if self.data.rules.trainer_party_stats {
+            self.get_pokemon_name();
         }
         // Update enemy nickname
         self.copy_name(W_ENEMY_MON_NICKNAME, W_STRING_BUFFER1);
@@ -1156,12 +1188,22 @@ impl Engine {
         self.small_far_flag_action(W_POKEDEX_SEEN, species.wrapping_sub(1), FlagAction::Set);
         self.mem.copy(W_ENEMY_STATS, W_ENEMY_MON_STATS, u16::from(NUM_BATTLE_STATS) * 2);
         // BUG: PRZ and BRN stat reductions don't apply to switched Pokémon (kept)
+        if self.data.rules.bug_fixes {
+            // Crystal Legacy's fix.
+            self.apply_status_effect_on_enemy_stats();
+        }
     }
 
     /// `LoadEnemyMon`'s `.InitDVs` .. `.Magikarp`: the trainer class DVs, or a wild
     /// mon's (roaming, forced shiny or random, with the Unown and Magikarp filters).
     fn init_enemy_mon_dvs(&mut self, mode: u8) {
-        let (mut b, mut c) = self.get_trainer_dvs();
+        let (mut b, mut c) = if self.data.rules.trainer_party_stats && mode != WILD_BATTLE {
+            // Crystal Legacy: the party's DVs.
+            let dvs = self.get_party_location(W_OT_PARTY_MON1_D_VS, self.mem.rb(W_CUR_PARTY_MON));
+            (self.mem.rb(dvs), self.mem.rb(dvs + 1))
+        } else {
+            self.get_trainer_dvs()
+        };
         if mode == WILD_BATTLE {
             let battle_type = self.mem.rb(W_BATTLE_TYPE);
             if battle_type == BATTLETYPE_ROAMING {
@@ -1219,19 +1261,23 @@ impl Engine {
             return false;
         }
         // BUG: Magikarp length limits have a unit conversion error (kept)
+        // Crystal Legacy's fix compares feet and inches.
+        let fixed = self.data.rules.bug_fixes;
+        let (feet_cap, inches_4, inches_3, feet_floor) =
+            if fixed { (5, 4, 3, 3) } else { (6, 1616u16 as u8, 1600u16 as u8, (1024u16 >> 8) as u8) };
         self.calc_magikarp_length(W_ENEMY_MON_D_VS, W_PLAYER_ID);
         // No reason to keep going if length > 1536 mm (i.e. if HIGH(length) > 6 feet)
-        if self.mem.rb(W_MAGIKARP_LENGTH) == 6 {
+        if self.mem.rb(W_MAGIKARP_LENGTH) == feet_cap {
             // 5% chance of skipping both size checks
             if self.random("LoadEnemyMon") >= percent(5) {
                 // Try again if length >= 1616 mm (i.e. if LOW(length) >= 4 inches)
-                if self.mem.rb(W_MAGIKARP_LENGTH + 1) >= 1616u16 as u8 {
+                if self.mem.rb(W_MAGIKARP_LENGTH + 1) >= inches_4 {
                     return true;
                 }
                 // 20% chance of skipping this check
                 if self.random("LoadEnemyMon") >= percent(20) - 1 {
                     // Try again if length >= 1600 mm (i.e. if LOW(length) >= 3 inches)
-                    if self.mem.rb(W_MAGIKARP_LENGTH + 1) >= 1600u16 as u8 {
+                    if self.mem.rb(W_MAGIKARP_LENGTH + 1) >= inches_3 {
                         return true;
                     }
                 }
@@ -1239,10 +1285,11 @@ impl Engine {
         }
         // .CheckMagikarpArea
         // BUG: Magikarp in Lake of Rage are shorter, not longer (kept)
-        if self.mem.rb(W_MAP_GROUP) == GROUP_LAKE_OF_RAGE {
+        // Crystal Legacy's fix floors the Lake of Rage only (`jr nz`).
+        if (self.mem.rb(W_MAP_GROUP) == GROUP_LAKE_OF_RAGE) != fixed {
             return false;
         }
-        if self.mem.rb(W_MAP_NUMBER) == MAP_LAKE_OF_RAGE {
+        if (self.mem.rb(W_MAP_NUMBER) == MAP_LAKE_OF_RAGE) != fixed {
             return false;
         }
         // 40% chance of not flooring
@@ -1250,7 +1297,7 @@ impl Engine {
             return false;
         }
         // Try again if length < 1024 mm (i.e. if HIGH(length) < 3 feet)
-        self.mem.rb(W_MAGIKARP_LENGTH) < (1024u16 >> 8) as u8
+        self.mem.rb(W_MAGIKARP_LENGTH) < feet_floor
     }
 
     /// `GetTrainerDVs`: the DVs of `wOtherTrainerClass` in `bc`.

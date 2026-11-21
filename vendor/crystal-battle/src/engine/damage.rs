@@ -19,6 +19,10 @@ use crate::defs::*;
 const DAMAGE_CAP: u16 = 999 - 2;
 const MIN_DAMAGE: u8 = 2;
 
+/// Crystal Legacy's `wIsConfusionDamage`: the byte Crystal leaves unused after
+/// `wTurnEnded`.
+pub const W_IS_CONFUSION_DAMAGE: u16 = W_TURN_ENDED + 1;
+
 impl Engine {
     // --- items ---------------------------------------------------------------
 
@@ -508,7 +512,8 @@ impl Engine {
         }
         // BUG: Beat Up may fail to raise Substitute
         let effect = self.battle_var(BATTLE_VARS_MOVE_EFFECT);
-        if matches!(effect, EFFECT_MULTI_HIT | EFFECT_DOUBLE_HIT | EFFECT_POISON_MULTI_HIT) {
+        let beat_up = self.data.rules.bug_fixes && effect == EFFECT_BEAT_UP;
+        if beat_up || matches!(effect, EFFECT_MULTI_HIT | EFFECT_DOUBLE_HIT | EFFECT_POISON_MULTI_HIT) {
             self.battle_command_raise_sub()?;
         }
         self.end_move_effect();
@@ -653,6 +658,10 @@ impl Engine {
                     // .only_one_beatup
                     // BUG: Beat Up works incorrectly with only one Pokemon in the party
                     self.res_battle_var_bit(BATTLE_VARS_SUBSTATUS3, SUBSTATUS_IN_LOOP);
+                    if self.data.rules.bug_fixes {
+                        // Crystal Legacy goes on with the script (`ret`).
+                        return Ok(Cmd::Next);
+                    }
                     self.battle_command_beat_up_fail_text()?;
                     self.end_move_effect();
                     return Ok(Cmd::Next);
@@ -1014,6 +1023,18 @@ impl Engine {
         self.attack_damage(false)
     }
 
+    /// Whether moves of type `t` are special: from Fire on in Crystal; Ghost
+    /// too but not Dark under [`Rules::ghost_special_dark_physical`].
+    ///
+    /// [`Rules::ghost_special_dark_physical`]: crate::data::game::Rules::ghost_special_dark_physical
+    pub(super) fn is_special_type(&self, t: u8) -> bool {
+        if self.data.rules.ghost_special_dark_physical {
+            t == GHOST || (t != DARK && t >= SPECIAL)
+        } else {
+            t >= SPECIAL
+        }
+    }
+
     /// Shared body of `PlayerAttackDamage` / `EnemyAttackDamage` (mirror images).
     fn attack_damage(&mut self, player: bool) -> bool {
         self.reset_damage();
@@ -1039,7 +1060,7 @@ impl Engine {
 
         let hl: u16;
         let mut bc: u16;
-        if self.mem.rb(mtype) < SPECIAL {
+        if !self.is_special_type(self.mem.rb(mtype)) {
             // physical
             bc = self.mem.rw(def);
             if self.mem.bit(screens, SCREENS_REFLECT) {
@@ -1111,7 +1132,15 @@ impl Engine {
         } else {
             (W_ENEMY_MOVE_STRUCT_TYPE, W_ENEMY_S_ATK_LEVEL, W_PLAYER_S_DEF_LEVEL, W_ENEMY_ATK_LEVEL, W_PLAYER_DEF_LEVEL)
         };
-        let (a_level, d_level) = if self.mem.rb(mtype) < SPECIAL {
+        let t = self.mem.rb(mtype);
+        // Crystal Legacy's enemy side tests `cp DARK / jr nc` where its player
+        // side tests the category: only Ghost and Dark use the special levels.
+        let special = if self.data.rules.ghost_special_dark_physical && !player {
+            t == GHOST || t >= DARK
+        } else {
+            self.is_special_type(t)
+        };
+        let (a_level, d_level) = if !special {
             (self.mem.rb(atk), self.mem.rb(def))
         } else {
             (self.mem.rb(sp_atk), self.mem.rb(sp_def))
@@ -1146,7 +1175,9 @@ impl Engine {
         }
         // Double the stat
         // BUG: Thick Club and Light Ball can make (Special) Attack wrap around above 1024
-        value << 1
+        let doubled = value << 1;
+        // Crystal Legacy caps it at MAX_STAT_VALUE.
+        if self.data.rules.bug_fixes && doubled > MAX_STAT_VALUE { MAX_STAT_VALUE } else { doubled }
     }
 
     /// `DittoMetalPowder`: takes and returns `(b, c)` = (attack, defense).
@@ -1187,6 +1218,7 @@ impl Engine {
 
     /// `HitSelfInConfusion`: sets up confusion damage for `BattleCommand_DamageCalc`
     /// (power 40, the user's level, its attack and defense).
+    /// Crystal Legacy also sets [`W_IS_CONFUSION_DAMAGE`].
     pub fn hit_self_in_confusion(&mut self) {
         self.reset_damage();
         let (def, screens, level) = if self.is_player_turn() {
@@ -1202,6 +1234,9 @@ impl Engine {
         let hl = self.mem.rw(def - 2);
         let (b, c) = self.truncate_hl_bc(hl, bc);
         self.damage_regs = [b, c, 40, level];
+        if self.data.rules.bug_fixes {
+            self.mem.wb(W_IS_CONFUSION_DAMAGE, 1);
+        }
     }
 
     // --- DamageCalc ----------------------------------------------------------------
@@ -1228,6 +1263,24 @@ impl Engine {
                 return Ok(Cmd::Next);
             }
         }
+        if self.data.rules.bug_fixes {
+            // Not confusion damage.
+            self.mem.wb(W_IS_CONFUSION_DAMAGE, 0);
+        }
+        self.damage_calc_from([b, c, d, e])
+    }
+
+    /// Crystal Legacy's `ConfusionDamageCalc`: the damage from
+    /// [`Engine::damage_regs`], skipping `BattleCommand_DamageCalc`'s start.
+    pub fn confusion_damage_calc(&mut self) -> Flow<Cmd> {
+        self.damage_calc_from(self.damage_regs)
+    }
+
+    /// The rest of `BattleCommand_DamageCalc` (Crystal Legacy's
+    /// `ConfusionDamageCalc` label) for attack `b`, defense `c`, power `d`
+    /// and level `e`, without type-boosting items while
+    /// [`W_IS_CONFUSION_DAMAGE`] is set.
+    pub fn damage_calc_from(&mut self, [b, mut c, d, e]: [u8; 4]) -> Flow<Cmd> {
 
         // Minimum defense value is 1.
         if c == 0 {
@@ -1269,9 +1322,10 @@ impl Engine {
         self.mem.wb(H_DIVISOR, 50);
         self.divide(4);
 
-        // Item boosts
+        // Item boosts (Crystal Legacy: not for confusion damage)
         let (_, item_effect, item_param) = self.get_user_item();
-        if item_effect != 0 {
+        let confused = self.data.rules.bug_fixes && self.mem.rb(W_IS_CONFUSION_DAMAGE) != 0;
+        if item_effect != 0 && !confused {
             if let Some(&(_, boost_type)) = self.data.tables.type_boost_items.iter().find(|&&(effect, _)| effect == item_effect) {
                 // Type
                 if self.battle_var(BATTLE_VARS_MOVE_TYPE) == boost_type {
@@ -1378,10 +1432,13 @@ impl Engine {
         if effect == EFFECT_LEVEL_DAMAGE {
             a = 0;
         } else if effect == EFFECT_PSYWAVE {
+            let level = b;
             b = (b >> 1).wrapping_add(b);
+            // Crystal draws from 1 up to 1.5 × level; Crystal Legacy from the level.
+            let low = if self.data.rules.bug_fixes { level } else { 1 };
             let r = loop {
                 let r = self.battle_random("BattleCommand_ConstantDamage");
-                if r != 0 && r < b {
+                if r >= low && r < b {
                     break r;
                 }
             };

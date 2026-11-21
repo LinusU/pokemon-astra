@@ -45,6 +45,79 @@ pub struct GameData {
     /// Per trainer class id (256 entries): the index of its first party in
     /// [`GameData::trainer_parties`], `u16::MAX` for none.
     pub trainer_class_first_party: &'static [u16],
+    /// What the game's battle code does differently from Crystal's.
+    pub rules: Rules,
+}
+
+/// The ways a game's battle code differs from Pokémon Crystal's: the
+/// changes a pokecrystal fork makes to the code rather than to its data.
+/// Each flag is off in [`Rules::CRYSTAL`]; [`Rules::CRYSTAL_LEGACY`] turns on
+/// Crystal Legacy's (V1.3.1) changes, ported from its source.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Rules {
+    /// Ghost moves are special and Dark moves physical, wherever the battle
+    /// asks: damage, critical hits, Counter, Mirror Coat and the AI. Crystal
+    /// goes by the type's place in the type list, special from Fire on.
+    pub ghost_special_dark_physical: bool,
+    /// Crystal Legacy's fixes to the battle's known bugs (most in pokecrystal's
+    /// `docs/bugs_and_glitches.md`):
+    /// - Return and Frustration have at least 1 power.
+    /// - A wild Pokémon's Teleport can fail against a higher level.
+    /// - Belly Drum raises Attack only once the user has the HP.
+    /// - Counter and Mirror Coat with no damage to return set `wEffectFailed`.
+    /// - Thick Club and Light Ball double a stat to at most 999.
+    /// - Psywave deals from the user's level up to 1.5 times it.
+    /// - Beat Up reads the right party member's status, raises a Substitute
+    ///   again after failing, and plays its whole script with one Pokémon
+    ///   (one that never hit triggers no King's Rock).
+    /// - The player hurting itself in confusion leaves type-boosting items and
+    ///   Explosion's halving out. The enemy's self-hit runs the damage update
+    ///   a second time, as Legacy's `CheckEnemyTurn` does.
+    /// - Sleep, poison and paralysis moves fail on any status and name it
+    ///   ([`Message::AlreadyBurned`] and [`Message::AlreadyFrozen`] are new);
+    ///   other failures say the target evaded or is protecting itself.
+    /// - The AI's switching checks the types it means to (`CheckTypeMatchup`
+    ///   keeps the type it is given).
+    /// - Lock-On and Mind Reader reach a Pokémon that is flying or underground.
+    /// - With a move disabled, PP Ups don't count as PP left.
+    /// - A Pokémon fainted by Pursuit as it switches out loses its status
+    ///   (and happiness) like any fainted Pokémon.
+    /// - Between turns, faints are handled until neither side's Pokémon is
+    ///   fainted.
+    /// - A wild Magikarp's length filters work in feet and inches, and the
+    ///   Lake of Rage's is the one with a minimum.
+    /// - An enemy sent out paralyzed or burned has its Speed or Attack cut.
+    /// - Level 1 needs no experience (`CalcExpAtLevel`).
+    /// - The Glacier Badge's Special Defense boost doesn't depend on what
+    ///   the other badges' boosts left in `a`.
+    /// - "Go!" or "Come back!" goes by the enemy's HP in true percentages.
+    /// - The AI's item use starts from its first item each time (it can't
+    ///   use its base reward as one); its Full Heal cures Nightmare and
+    ///   confusion; it sees a pending Future Sight as redundant, discourages
+    ///   Conversion2 only before the player's first move, and encourages
+    ///   Mean Look on a badly poisoned player.
+    ///
+    /// [`Message::AlreadyBurned`]: crate::battle::Message::AlreadyBurned
+    /// [`Message::AlreadyFrozen`]: crate::battle::Message::AlreadyFrozen
+    pub bug_fixes: bool,
+    /// The Zephyr Badge makes traded Pokémon up to level 16 obey (Crystal:
+    /// 10 until the Hive Badge).
+    pub zephyr_badge_obedience: bool,
+    /// A trainer's Pokémon fights with its own DVs, happiness and stat
+    /// experience from the party (Crystal: the trainer class's DVs, base
+    /// happiness, no stat experience).
+    pub trainer_party_stats: bool,
+    /// Level-100 Pokémon take no experience (Crystal Legacy's level cap
+    /// outside hard mode): no award or message, though they still gain stat
+    /// experience, and they don't count when experience is divided.
+    pub max_level_takes_no_exp: bool,
+}
+
+impl Rules {
+    /// Pokémon Crystal's own code.
+    pub const CRYSTAL: Rules = Rules { ghost_special_dark_physical: false, bug_fixes: false, zephyr_badge_obedience: false, trainer_party_stats: false, max_level_takes_no_exp: false };
+    /// Crystal Legacy's code.
+    pub const CRYSTAL_LEGACY: Rules = Rules { ghost_special_dark_physical: true, bug_fixes: true, zephyr_badge_obedience: true, trainer_party_stats: true, max_level_takes_no_exp: true };
 }
 
 /// A trainer's party (`data/trainers/parties.asm`).
@@ -331,8 +404,9 @@ impl GameData {
         &super::crystal::CRYSTAL
     }
 
-    /// Pokémon Crystal Legacy's data (V1.3.1). It has no trainer parties: a
-    /// trainer battle brings its own.
+    /// Pokémon Crystal Legacy's data (V1.3.1), with its rules
+    /// ([`Rules::CRYSTAL_LEGACY`]). It has no trainer parties: a trainer
+    /// battle brings its own.
     #[cfg(feature = "crystal-legacy")]
     pub fn crystal_legacy() -> &'static GameData {
         &super::crystal_legacy::CRYSTAL_LEGACY

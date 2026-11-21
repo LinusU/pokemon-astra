@@ -407,6 +407,13 @@ impl Engine {
                         self.text(r::HURT_ITSELF_TEXT);
                         self.hit_self_in_confusion();
                         self.battle_command_damage_calc()?;
+                        if self.data.rules.bug_fixes {
+                            // Crystal Legacy adds a `ConfusionDamageCalc` after the
+                            // first, which leaves `b` (the Attack) 0: it adds no
+                            // damage, only runs the update of wCurDamage again.
+                            let [_, c, d, e] = self.damage_regs;
+                            self.damage_calc_from([0, c, d, e])?;
+                        }
                         self.battle_command_lower_sub()?;
                         self.mem.wb(W_BATTLE_AFTER_ANIM, 0);
                         self.hit_confusion_anim();
@@ -505,7 +512,12 @@ impl Engine {
         self.text(r::HURT_ITSELF_TEXT);
         self.mem.wb(W_CRITICAL_HIT, 0);
         self.hit_self_in_confusion();
-        self.battle_command_damage_calc()?;
+        if self.data.rules.bug_fixes {
+            // Crystal Legacy: no Explosion halving, no type-boosting items.
+            self.confusion_damage_calc()?;
+        } else {
+            self.battle_command_damage_calc()?;
+        }
         self.battle_command_lower_sub()?;
         self.mem.wb(W_BATTLE_AFTER_ANIM, 0);
         self.hit_confusion_anim();
@@ -554,6 +566,8 @@ impl Engine {
             50
         } else if badges & (1 << HIVEBADGE) != 0 {
             30
+        } else if self.data.rules.zephyr_badge_obedience && badges & (1 << ZEPHYRBADGE) != 0 {
+            16
         } else {
             10
         };
@@ -998,6 +1012,18 @@ impl Engine {
     /// types at `hl`, into `wTypeMatchup`.
     pub fn check_type_matchup(&mut self, hl: u16) {
         let d = self.battle_var(BATTLE_VARS_MOVE_TYPE);
+        self.type_matchup_of(d, hl);
+    }
+
+    /// `CheckTypeMatchup` as the AI calls it, meaning type `a`. Crystal
+    /// overwrites `a` with the move's type; Crystal Legacy keeps it.
+    pub fn ai_check_type_matchup(&mut self, a: u8, hl: u16) {
+        if self.data.rules.bug_fixes { self.type_matchup_of(a, hl) } else { self.check_type_matchup(hl) }
+    }
+
+    /// The effectiveness of type `d` against the types at `hl`, into
+    /// `wTypeMatchup`.
+    fn type_matchup_of(&mut self, d: u8, hl: u16) {
         let (b, c) = (self.mem.rb(hl), self.mem.rb(hl + 1));
         self.mem.wb(W_TYPE_MATCHUP, EFFECTIVE);
         for &matchup in self.data.type_matchups {
