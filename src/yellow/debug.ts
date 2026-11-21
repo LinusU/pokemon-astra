@@ -47,6 +47,8 @@ export function attachDebug(game: YellowGame) {
     async step(dir: Facing, count = 1) {
       for (let i = 0; i < count; i++) {
         if (g.me.facing !== dir) g.me.facing = dir;
+        // Square steps: drop any free-movement offset first.
+        g.me.free = undefined;
         const map = g.header;
         g.tryStep(dir);
         await api.settle();
