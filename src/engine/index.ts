@@ -268,6 +268,10 @@ export class Engine {
       return scaled + (i === 0 ? mon.level + 10 : 5);
     });
   }
+  /** Experience group from the base data (0 medium fast … 5 slow). */
+  growthRate(id: number) {
+    return this.rom[0x51424 + (id - 1) * 32 + 22];
+  }
   breedingData(id: number) {
     const base = 0x51424 + (id - 1) * 32;
     const groups = this.rom[base + 23];

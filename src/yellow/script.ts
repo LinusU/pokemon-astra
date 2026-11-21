@@ -99,6 +99,10 @@ export interface Game {
   showDex(species: string): Promise<void>;
   /** Lets the player rename a party Pokémon (the Name Rater). */
   rename(slot: number): Promise<boolean>;
+  /** Adds experience to a Pokémon (Day-Care, Rare Candy): level, stats and new moves follow. */
+  gainExp(mon: Pokemon, exp: number): Promise<Pokemon>;
+  /** The cartridge's name for an item constant ("HM05", "ITEMFINDER"). */
+  itemName(item: string): string;
   /** National Pokédex number of a species constant. */
   dex(species: string): number;
   /** Shows a text predef by its 1-based id (TextPredefs). */
@@ -132,7 +136,11 @@ export interface MapScript {
    * is in front. Resolves true when it handled the press.
    */
   onInteract?(g: Game): Promise<boolean>;
-  /** Handlers for text_asm entries, keyed by their cartridge label. */
+  /**
+   * Handlers for text_asm entries, keyed by their cartridge label. A handler
+   * keyed by a TEXT_* constant replaces that text id entirely (for maps that
+   * switch text tables).
+   */
   texts?: Record<string, (g: Game) => Promise<void>>;
 }
 

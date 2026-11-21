@@ -344,7 +344,7 @@ export class YellowGame implements Game {
 
   // ------------------------------------------------------------ text
   /** Shows text from a cartridge label, a TEXT_* name or a map text id. */
-  async text(ref: string | number, options: { wait?: boolean } = {}) {
+  async text(ref: string | number, options: { wait?: boolean } = {}): Promise<void> {
     if (typeof ref === "string" && ref.startsWith("TEXT_")) {
       const id = MAP_TEXT[this.header.label]?.[ref];
       if (id === undefined) throw Error(`Unknown text ${ref} on ${this.header.label}`);
@@ -355,7 +355,11 @@ export class YellowGame implements Game {
     if (at === undefined) throw Error(`Unknown text label ${ref}`);
     await this.runText(ref, at, options);
   }
-  private async textId(id: number, options: { wait?: boolean } = {}) {
+  private async textId(id: number, options: { wait?: boolean } = {}): Promise<void> {
+    const constants = MAP_TEXT[this.header.label] ?? {};
+    const name = Object.keys(constants).find(k => constants[k] === id);
+    const override = name && MAP_SCRIPTS[this.header.label]?.texts?.[name];
+    if (override) return override(this);
     const at = this.rom.mapText(this.header, id);
     await this.runText(this.rom.label(at) ?? `@${at}`, at, options);
   }
@@ -475,6 +479,7 @@ export class YellowGame implements Game {
     const fromOutside = !this.header || this.header.id < 0x25;
     this.header = { ...base, blocks: base.blocks.slice() };
     this.strength = false;
+    this.save.vars.noWildBattles = 0;
     if (id < 0x25) this.save.vars.dark = 0;
     else if (id === MAP.ROCK_TUNNEL_1F && fromOutside && fromWarp) this.save.vars.dark = 1;
     this.blocksVersion++;
@@ -853,6 +858,7 @@ export class YellowGame implements Game {
   }
 
   private async encounter() {
+    if (this.save.vars.noWildBattles) return;
     if (this.encounterCooldown > 0) {
       this.encounterCooldown--;
       return;
@@ -969,7 +975,7 @@ export class YellowGame implements Game {
   }
   private hidden?: { x: number; y: number; arg: number; routine: string };
   get hiddenArg() { return this.hidden?.arg ?? 0; }
-  predefText(id: number) {
+  predefText(id: number): Promise<void> {
     const label = TEXT_PREDEFS[id - 1];
     if (!label) return Promise.resolve();
     return this.text(label);
@@ -1140,6 +1146,11 @@ export class YellowGame implements Game {
     } finally {
       this.mode = previous === "menu" ? "script" : previous;
     }
+  }
+  itemName(item: string) { return this.rom.itemName(this.itemId(item)); }
+  async gainExp(mon: Pokemon, exp: number) {
+    const { gainExperience } = await import("./growth");
+    return gainExperience(this, mon, exp);
   }
   dex(species: string) {
     const id = MON[species];

@@ -38,8 +38,8 @@ defineMap("MtMoonB2F", {
       await superNerd(g);
     }
     if (!g.ev("EVENT_BEAT_MT_MOON_3_JESSIE_JAMES") && x === 3 && y === 5) await jessieAndJames(g);
-    // API REQUEST: the original sets BIT_NO_BATTLES while the player stands in the fossil area
-    // (x 11-14, y 5-8) after beating the Super Nerd. There is no API to suppress wild battles.
+    // BIT_NO_BATTLES: no wild battles in the fossil area once the Super Nerd is beaten.
+    g.vars.noWildBattles = g.ev("EVENT_BEAT_MT_MOON_EXIT_SUPER_NERD") && x >= 11 && x <= 14 && y >= 5 && y <= 8 ? 1 : 0;
   },
   texts: {
     MtMoonB2FSuperNerdText: superNerd,
@@ -556,17 +556,7 @@ function speciesName(dex: number) {
 }
 const monName = (mon: { nickname: string; species: number }) => mon.nickname || speciesName(mon.species).printed;
 
-/** Levels the Pokémon grows from one experience point per step walked (Gen 1 Day-Care). */
-function levelsGrown(level: number, steps: number) {
-  let exp = steps, now = level;
-  while (now < 100) {
-    const need = (now + 1) ** 3 - now ** 3;
-    if (exp < need) break;
-    exp -= need;
-    now++;
-  }
-  return now - level;
-}
+
 
 defineMap("Daycare", {
   generic: true,
@@ -600,7 +590,7 @@ async function depositMon(g: Game) {
 async function collectMon(g: Game, kept: { mon: import("../../engine").Pokemon; steps: number }) {
   const { mon } = kept;
   const gained = Math.max(0, g.save.steps - kept.steps);
-  const grown = levelsGrown(mon.level, gained);
+  const grown = (await g.gainExp(mon, gained)).level - mon.level;
   g.textVar("wNameBuffer", monName(mon));
   g.textVar("wDayCareMonName", monName(mon));
   if (grown === 0) await g.text("DaycareGentlemanText.MonNeedsMoreTimeText");
@@ -617,12 +607,8 @@ async function collectMon(g: Game, kept: { mon: import("../../engine").Pokemon; 
   g.money -= cost;
   g.sfx("SFX_PURCHASE");
   await g.text("DaycareGentlemanText.HeresYourMonText");
-  // API REQUEST: Game has no way to level a Pokémon up (recalculate stats, learn moves).
-  // Workaround: raise the level and experience and restore HP without recomputing other stats.
-  mon.level += grown;
-  mon.exp += gained;
-  mon.hp = mon.stats[0];
-  g.save.party.push(mon);
+  const grownMon = await g.gainExp(mon, gained);
+  g.save.party.push({ ...grownMon, hp: grownMon.stats[0] });
   g.save.daycare = undefined;
   if (mon.species === 25) g.follower(true);
   g.cry(speciesName(mon.species).key);
