@@ -194,8 +194,9 @@ describe.skipIf(!romAvailable)("real native battle events", () => {
     const engine = new Engine(instance.exports as never, readFileSync("pokecrystal11.gbc"));
     const battle = engine.startBattle({
       party: [engine.makePokemon(129, 6)],
-      opponent: { species: 39, level: 5 },
-      seed: 1,
+      // Crystal Legacy's Jigglypuff knows Sing, Pound and Defense Curl at 6; this seed curls.
+      opponent: { species: 39, level: 6 },
+      seed: 8,
     });
     const move = battle.snapshot().legal.findIndex((action: any) => action.Move?.slot === 0);
     const events = battle.act(move).events as any[];
@@ -227,8 +228,9 @@ describe.skipIf(!romAvailable)("real native battle events", () => {
     expect(
       (battle.snapshot().events as any[]).some((e) => e.Message?.WildAppeared),
     ).toBe(true);
+    const ember = engine.makePokemon(58, 6).moves.indexOf(52);
     const index = (battle.snapshot().legal as any[]).findIndex(
-      (a) => a.Move?.slot === 0,
+      (a) => a.Move?.slot === ember,
     );
     const events = battle.act(index).events as any[];
     const used = events.findIndex((e) => e.Message?.UsedMove);
@@ -454,6 +456,7 @@ describe.skipIf(!romAvailable)("complete native battle decisions", () => {
     reserve.moves = [33, 45, 39, 22];
     reserve.pp = reserve.moves.map((id) => engine.move(id).pp);
     const lead = engine.makeStarter(58);
+    const ember = lead.moves.indexOf(52);
     const enemy = engine.makePokemon(10, 5);
     for (const expShare of [false, true]) {
       const battle = engine.startBattle({
@@ -490,7 +493,7 @@ describe.skipIf(!romAvailable)("complete native battle decisions", () => {
           expect(snapshot.state.player.party?.[1].moves).toEqual(reserve.moves);
         }
         const action = actions.findIndex((a) =>
-          learning ? a.LearnMove?.slot === 2 : a.Move?.slot === 2,
+          learning ? a.LearnMove?.slot === 2 : a.Move?.slot === ember,
         );
         expect(action).toBeGreaterThanOrEqual(0);
         battle.act(action);

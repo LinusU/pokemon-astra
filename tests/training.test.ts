@@ -33,14 +33,14 @@ describe.skipIf(!existsSync("pokecrystal11.gbc") || !existsSync("public/astra_na
     save = JSON.parse(JSON.stringify(save));
     expect(isValidSave(save)).toBe(true);
     resolveEvolutionMove(save, save.party[0].moves.indexOf(0), engine);
-    expect(save.party[0].moves).toEqual([106, 33, 93, 0]);
-    expect(save.party[0].pp[2]).toBe(engine.move(93).pp);
+    expect(save.party[0].moves).toEqual([106, 33, 81, 93]);
+    expect(save.party[0].pp[3]).toBe(engine.move(93).pp);
     queueEvolutionMoves(save, 0, engine);
     expect(save.pendingMoves).toBeUndefined();
   });
   it("keeps incumbent moves and PP when declining a post-evolution lesson", () => {
     const save = freshSave();
-    const eevee = engine.makePokemon(133, 16);
+    const eevee = engine.makePokemon(133, 20);
     save.party = [engine.evolvePokemon(eevee, 134)];
     queueEvolutionMoves(save, 0, engine);
     expect(save.pendingMoves?.moves).toEqual([55]);

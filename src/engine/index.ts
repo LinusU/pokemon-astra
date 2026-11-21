@@ -109,6 +109,13 @@ function flowingText(text: string) {
   return text.replace(/-\n(?=type\b|strike\b)/g, "-").replace(/-\n/g, "").replace(/\n/g, " ").replaceAll("POKéMON", "Pokémon");
 }
 
+/** A species in the battle engine's game data: `BaseData`'s 32 bytes, evolutions and level-up moves. */
+interface SpeciesData {
+  base: number[];
+  evolutions: { method: number; parameter: number; condition?: number; species: number }[];
+  learnset: { level: number; move: number }[];
+}
+
 export class Engine {
   constructor(
     private wasm: Exports,
@@ -148,10 +155,21 @@ export class Engine {
     if (result.error) throw Error(result.error);
     return result as T;
   }
+  private speciesCache = new Map<number, SpeciesData>();
+  /** A species' base data, evolutions and level-up moves: the battle engine's game data (Crystal Legacy's). */
+  private speciesData(id: number): SpeciesData {
+    if (!Number.isInteger(id) || id < 1 || id > 251) throw Error("Invalid species");
+    let data = this.speciesCache.get(id);
+    if (!data) {
+      data = this.call<SpeciesData>({ op: "species_data", id });
+      this.speciesCache.set(id, data);
+    }
+    return data;
+  }
   species(id: number): { id: number; name: string; types: number[] } {
     const v = this.call<{ id: number; name: string }>({ op: "species", id });
-    const p = 0x51424 + (id - 1) * 32;
-    return { ...v, types: [this.rom[p + 7], this.rom[p + 8]] };
+    const base = this.speciesData(id).base;
+    return { ...v, types: [base[7], base[8]] };
   }
   private cartridgeText(offset: number) {
     let text = "", cursor = offset;
@@ -178,16 +196,14 @@ export class Engine {
   }
   move(id: number, dvs?: PokemonPortrait["dvs"]) {
     if (id < 1 || id > 251) throw Error("Invalid move");
-    const move = this.call<{ id: number; name: string; pp: number; type?: number; power?: number }>({
+    const move = this.call<{ id: number; name: string; pp: number; type: number; power: number; accuracy: number }>({
       op: "move",
       id,
       dvs: id === 237 && dvs !== undefined ? dvWord(dvs) : undefined,
     });
-    const offset = 0x41afb + (id - 1) * 7;
     const pointer = 0x2cb52 + (id - 1) * 2; // MoveDescriptions, bank 0x0b in Crystal 1.1.
     const description = this.cartridgeText(0x2c000 + ((this.rom[pointer] | (this.rom[pointer + 1] << 8)) & 0x3fff));
-    return { ...move, power: move.power ?? this.rom[offset + 2], type: move.type ?? this.rom[offset + 3],
-      description: flowingText(description.text.replace("\n2nd turn", " · 2nd turn")) };
+    return { ...move, description: flowingText(description.text.replace("\n2nd turn", " · 2nd turn")) };
   }
   training({ species, level, exp }: Pokemon) {
     return this.call<{ next: number | null; percent: number }>({ op: "training", species, level, exp });
@@ -195,39 +211,9 @@ export class Engine {
   itemName(id: number) {
     return this.call<string>({ op: "item_name", id });
   }
-  /** Original Crystal evolution records and level-up moves, read from the imported ROM. */
-  evolutionData(id: number): {
-    evolutions: {
-      method: number;
-      parameter: number;
-      condition?: number;
-      species: number;
-    }[];
-    learnset: { level: number; move: number }[];
-  } {
-    if (id < 1 || id > 251) throw Error("Invalid species");
-    const p = 0x425b1 + (id - 1) * 2;
-    let i = 0x40000 + ((this.rom[p] | (this.rom[p + 1] << 8)) & 0x3fff);
-    const evolutions: {
-      method: number;
-      parameter: number;
-      condition?: number;
-      species: number;
-    }[] = [];
-    while (this.rom[i]) {
-      const method = this.rom[i++],
-        parameter = this.rom[i++];
-      let condition: number | undefined;
-      if (method === 5) condition = this.rom[i++];
-      const species = this.rom[i++];
-      evolutions.push({ method, parameter, condition, species });
-    }
-    i++;
-    const learnset: { level: number; move: number }[] = [];
-    while (this.rom[i]) {
-      learnset.push({ level: this.rom[i], move: this.rom[i + 1] });
-      i += 2;
-    }
+  /** Evolution records (`EVOLVE_*` method, parameter, condition) and level-up moves, from the battle engine's game data. */
+  evolutionData(id: number): Pick<SpeciesData, "evolutions" | "learnset"> {
+    const { evolutions, learnset } = this.speciesData(id);
     return { evolutions, learnset };
   }
   /** Apply a selected evolution while preserving individual values and damage. */
@@ -251,7 +237,7 @@ export class Engine {
     };
   }
   statsFor(mon: Pokemon, id = mon.species): number[] {
-    const base = 0x51424 + (id - 1) * 32;
+    const base = this.speciesData(id).base;
     const atk = mon.dvs[0] >> 4,
       def = mon.dvs[0] & 15,
       spd = mon.dvs[1] >> 4,
@@ -271,19 +257,19 @@ export class Engine {
         Math.min(255, Math.ceil(Math.sqrt(exp[i]))) / 4,
       );
       const scaled = Math.floor(
-        (((this.rom[base + 1 + i] + dv) * 2 + contribution) * mon.level) / 100,
+        (((base[1 + i] + dv) * 2 + contribution) * mon.level) / 100,
       );
       return scaled + (i === 0 ? mon.level + 10 : 5);
     });
   }
   /** Experience group from the base data (0 medium fast … 5 slow). */
   growthRate(id: number) {
-    return this.rom[0x51424 + (id - 1) * 32 + 22];
+    return this.speciesData(id).base[22];
   }
   breedingData(id: number) {
-    const base = 0x51424 + (id - 1) * 32;
-    const groups = this.rom[base + 23];
-    return { genderRatio: this.rom[base + 13], cycles: this.rom[base + 15],
+    const base = this.speciesData(id).base;
+    const groups = base[23];
+    return { genderRatio: base[13], cycles: base[15],
       groups: [groups >> 4, groups & 15] };
   }
   private earlierStages?: Map<number, number>;
@@ -298,14 +284,15 @@ export class Engine {
     while (this.earlierStages.has(id)) id = this.earlierStages.get(id)!;
     return id;
   }
+  /** Egg moves and the TM/HM moves a species can learn. Crystal Legacy keeps Crystal's egg moves and TM list, so those come from the cartridge. */
   inheritableMoves(id: number) {
     const moves = new Set<number>();
     const ptr = 0x23b11 + (id - 1) * 2;
     let cursor = 0x20000 + ((this.rom[ptr] | (this.rom[ptr + 1] << 8)) & 0x3fff);
     while (this.rom[cursor] !== 0xff) moves.add(this.rom[cursor++]);
-    const flags = 0x51424 + (id - 1) * 32 + 24;
+    const base = this.speciesData(id).base;
     for (let i = 0; this.rom[0x1167a + i]; i++) {
-      if (this.rom[flags + (i >> 3)] & (1 << (i & 7))) moves.add(this.rom[0x1167a + i]);
+      if (base[24 + (i >> 3)] & (1 << (i & 7))) moves.add(this.rom[0x1167a + i]);
     }
     return moves;
   }

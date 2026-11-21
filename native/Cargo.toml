@@ -5,7 +5,7 @@ edition = "2024"
 [lib]
 crate-type = ["cdylib", "rlib"]
 [dependencies]
-crystal-battle = { path = "../vendor/crystal-battle" }
+crystal-battle = { path = "../vendor/crystal-battle", features = ["crystal-legacy"] }
 pokemon-synthesizer = { path = "../vendor/pokemon-synthesizer" }
 pokemon-sprite-compression = { path = "../vendor/pokemon-sprite-compression" }
 serde = { version = "1", features = ["derive"] }

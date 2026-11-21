@@ -102,10 +102,10 @@ type LegalAction = "Fight" | "Run" | {
 // Used to choose actions only. The actual outcome, PP, health and all rewards
 // come from the native battle engine.
 function damageEstimate(user: Combatant, target: Combatant, moveId: number, ignoreAccuracy = false): number {
-  const { power, type } = move(moveId);
+  const { power, type, accuracy: hitChance } = move(moveId);
   const estimatedPower = moveId === 222 ? 71 : power;
   const special = type >= 20;
-  const accuracy = rom[0x41afb + (moveId - 1) * 7 + 4] / 255;
+  const accuracy = hitChance / 255;
   const effectiveness = types(target.species).reduce(
     (ratio, defense) => ratio * (typeChart.get(`${type}:${defense}`) ?? 1),
     1,

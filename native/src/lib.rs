@@ -1,6 +1,6 @@
 use crystal_battle::{
     battle::{Battle, BattleSetup, Outcome, Pokemon, PromptSite, Status},
-    data::{GameData, move_pp, names},
+    data::{GameData, game::Evolution, move_pp, names},
     engine::sym::{W_AMULET_COIN, W_CUR_PARTY_MON},
 };
 use serde_json::{Value, json};
@@ -11,10 +11,19 @@ struct Encounter {
 }
 thread_local! { static BATTLE: RefCell<Option<Encounter>> = const { RefCell::new(None) }; static OUTPUT: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) }; }
 
+/// The game data every adventure plays with: Crystal Legacy's species, moves
+/// and items.
+fn data() -> &'static GameData {
+    GameData::crystal_legacy()
+}
+/// Full PP of a move slot for a PP byte (its PP Up count), in [`data`].
+fn full_pp(move_id: u8, pp_byte: u8) -> u8 {
+    if move_id == 0 { 0 } else { move_pp::max_pp_of(data().mv(move_id).pp, pp_byte) }
+}
 fn make_mon(id: u8, level: u8) -> Result<Pokemon, String> {
     let cfg = json!({"battle":{"type":"wild_encounter"},"player_party":[{"species":names::species_name(id),"level":level}],"enemy_party":[{"species":"RATTATA","level":2}]});
     let cfg = serde_json::from_value(cfg).map_err(|e| format!("{e}"))?;
-    let (setup, _) = BattleSetup::from_config(&cfg, 12345)?;
+    let (setup, _) = BattleSetup::from_config_in(data(), &cfg, 12345)?;
     setup
         .party
         .into_iter()
@@ -47,7 +56,7 @@ fn snapshot(encounter: &Encounter) -> Value {
     let exp_progress: Vec<_> = engine
         .read_party(false)
         .iter()
-        .map(|mon| GameData::crystal().experience_progress(mon.species, mon.level, mon.exp))
+        .map(|mon| data().experience_progress(mon.species, mon.level, mon.exp))
         .collect();
     let learning_slot = b
         .decision()
@@ -90,9 +99,29 @@ fn run(v: Value) -> Result<Value, String> {
             }
             Ok(json!({"id":id,"name":names::species_name(id)}))
         }
+        "species_data" => {
+            let id = v["id"].as_u64().unwrap_or(0) as u8;
+            if !(1..=251).contains(&id) {
+                return Err("Invalid species".into());
+            }
+            let species = data().species(id);
+            let evolutions: Vec<Value> = species.evolutions.iter().map(|evolution| match *evolution {
+                Evolution::Level { level, species } => json!({"method":1,"parameter":level,"species":species}),
+                Evolution::Item { item, species } => json!({"method":2,"parameter":item,"species":species}),
+                Evolution::Trade { item, species } => json!({"method":3,"parameter":item,"species":species}),
+                Evolution::Happiness { time, species } => json!({"method":4,"parameter":time,"species":species}),
+                Evolution::Stat { level, cmp, species } => json!({"method":5,"parameter":level,"condition":cmp,"species":species}),
+            }).collect();
+            let learnset: Vec<Value> = species.learnset.iter().map(|&(level, mv)| json!({"level":level,"move":mv})).collect();
+            Ok(json!({"base":species.base_data_bytes().to_vec(),"evolutions":evolutions,"learnset":learnset}))
+        }
         "move" => {
             let id = v["id"].as_u64().unwrap_or(0) as u8;
-            let mut info = json!({"id":id,"name":names::move_name(id),"pp":move_pp::max_pp(id,0)});
+            if !(1..=251).contains(&id) {
+                return Err("Invalid move".into());
+            }
+            let mv = data().mv(id);
+            let mut info = json!({"id":id,"name":names::move_name(id),"pp":full_pp(id,0),"type":mv.kind,"power":mv.power,"accuracy":mv.accuracy});
             if id == crystal_battle::defs::HIDDEN_POWER {
                 if let Some(dvs) = v["dvs"].as_u64() {
                     let word = u16::try_from(dvs).map_err(|_| "Invalid DVs")?;
@@ -117,9 +146,8 @@ fn run(v: Value) -> Result<Value, String> {
                 .as_u64()
                 .filter(|n| *n <= 0xffffff)
                 .ok_or("Invalid experience")? as u32;
-            let data = GameData::crystal();
-            let next = (level < 100).then(|| data.experience_at_level(species, level + 1));
-            Ok(json!({"next":next, "percent":data.experience_progress(species, level, exp)}))
+            let next = (level < 100).then(|| data().experience_at_level(species, level + 1));
+            Ok(json!({"next":next, "percent":data().experience_progress(species, level, exp)}))
         }
         "item_name" => {
             let id = v["id"]
@@ -142,7 +170,7 @@ fn run(v: Value) -> Result<Value, String> {
             m.hp = m.stats[0];
             m.status = 0;
             for i in 0..4 {
-                m.pp[i] = move_pp::max_pp(m.moves[i], m.pp[i]) | (m.pp[i] & 0xc0);
+                m.pp[i] = full_pp(m.moves[i], m.pp[i]) | (m.pp[i] & 0xc0);
             }
             Ok(json!(m))
         }
@@ -154,7 +182,7 @@ fn run(v: Value) -> Result<Value, String> {
             }
             setup.party.truncate(6);
             let b = Battle::start_with_training(
-                GameData::crystal(),
+                data(),
                 &setup,
                 v["seed"].as_u64().unwrap_or(1),
                 v["training_level"].as_u64().unwrap_or(0).min(100) as u8,
@@ -300,22 +328,25 @@ mod tests {
         let mon = make_mon(58, 6).unwrap();
         let cfg = json!({"battle":{"type":"wild_encounter"},"player_party":[{"species":"GROWLITHE","level":6}],"enemy_party":[{"species":"RATTATA","level":3}]});
         let cfg = serde_json::from_value(cfg).unwrap();
-        let (mut setup, _) = BattleSetup::from_config(&cfg, 1).unwrap();
+        let (mut setup, _) = BattleSetup::from_config_in(data(), &cfg, 1).unwrap();
+        // An attacking move: Legacy's Growlithe starts with Roar, which ends the battle.
+        let attack = (0..4u8).find(|&slot| data().mv(mon.moves[usize::from(slot)]).power > 0).unwrap();
         setup.party = vec![mon];
-        let mut b = Battle::start(GameData::crystal(), &setup, 1).unwrap();
+        let mut b = Battle::start(data(), &setup, 1).unwrap();
         for _ in 0..100 {
             let Some(d) = b.decision() else { break };
             let action = *d
                 .legal
                 .iter()
-                .find(|a| matches!(a, crystal_battle::battle::Action::Move { .. }))
+                .find(|a| matches!(a, crystal_battle::battle::Action::Move { slot } if *slot == attack))
                 .unwrap_or(&d.legal[0]);
             b.step(action).unwrap();
         }
         let result = b.result().expect("battle should end");
         assert_eq!(result.party[0].species, 58);
         assert!(result.party[0].exp > 270);
-        assert!(result.party[0].pp[0] < 25);
+        let used = usize::from(attack);
+        assert!(result.party[0].pp[used] < data().mv(result.party[0].moves[used]).pp);
     }
 }
 #[cfg(test)]
@@ -331,9 +362,9 @@ mod learn_tests {
         mon.stats = [500, 500, 500, 500, 500, 500];
         let cfg = json!({"battle":{"type":"wild_encounter"},"player_party":[{"species":"BULBASAUR","level":6}],"enemy_party":[{"species":"CATERPIE","level":20}]});
         let cfg = serde_json::from_value(cfg).unwrap();
-        let (mut setup, _) = BattleSetup::from_config(&cfg, 42).unwrap();
+        let (mut setup, _) = BattleSetup::from_config_in(data(), &cfg, 42).unwrap();
         setup.party = vec![mon];
-        let mut battle = Battle::start(GameData::crystal(), &setup, 42).unwrap();
+        let mut battle = Battle::start(data(), &setup, 42).unwrap();
         for _ in 0..50 {
             let d = battle.decision().expect("ended before learn prompt");
             if d.site == PromptSite::LearnMove {

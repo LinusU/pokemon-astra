@@ -12,7 +12,9 @@ describe.skipIf(!available)("Crystal ROM native bridge", () => {
   it("lets fixed shrine guardians fight and be weakened before a regular ball", async () => {
     const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});
     const engine = new Engine(instance.exports as never, readFileSync("pokecrystal11.gbc"));
-    const smeargle = { ...engine.makePokemon(235, 100), moves: [206, 147, 150, 0], pp: [40, 15, 40, 0] };
+    // Legacy's guardians know Thunderbolt or Flamethrower at 60: this Smeargle outlasts them.
+    const smeargle = { ...engine.makePokemon(235, 100), moves: [206, 147, 150, 0], pp: [40, 15, 40, 0],
+      hp: 999, stats: [999, 999, 999, 999, 999, 999] };
     for (const species of [243, 244]) {
       for (const stationary of [false, true]) {
         const battle = engine.startBattle({ party: [smeargle], opponent: { species, level: 60, stationary },

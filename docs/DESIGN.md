@@ -78,7 +78,7 @@ Legendary expeditions: Articuno in Frostvault after Waterfall, Zapdos in Copperw
 
 ## Systems and pace
 
-- Accurate battles driven by the supplied `crystal-battle` Rust engine compiled to WASM, not a simplified damage calculator. Preserve HP, status, PP, experience, bag, money and catches from native results. Display legal actions, forced switches, move learning and evolution prompts correctly.
+- Accurate battles driven by the supplied `crystal-battle` Rust engine compiled to WASM, not a simplified damage calculator. Every adventure plays with Crystal Legacy's (V1.3.1) game data: base stats, learnsets, evolutions, TM/HM sets and moves. Preserve HP, status, PP, experience, bag, money and catches from native results. Display legal actions, forced switches, move learning and evolution prompts correctly.
 - Use `pokemon-sprite-compression` to decode the player's Crystal ROM, `pokemon-synthesizer` for music/cries. Never embed or publish a ROM or extracted proprietary asset files. Pin/vendor library source and acknowledge upstream limitations rather than claiming missing channels are implemented.
 - 251-entry Pokédex, six-member party, storage, switching, healing, shops, catch rewards, experience, evolution and native move learning. Full save/import/export, autosave, versioned schema, persistent ROM in IndexedDB.
 - Running default; normalized diagonal movement with swept collision and soft camera, eight-direction free positioning, interaction facing and generous radius. Grass encounter cooldown and step-distance accumulation. Repels, quick dialogue, battle speed 1×/2×/3×, instant healing, minimal mandatory grinding.
