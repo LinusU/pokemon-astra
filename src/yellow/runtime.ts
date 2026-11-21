@@ -1260,12 +1260,15 @@ export class YellowGame implements Game {
       await this.showcase("GASTLY", ["A GHOST appeared!", "Darn! The GHOST can't be ID'd!", "Get out... Get out...", `${this.save.name} got away safely!`], true);
       return "run";
     }
-    return this.battle({ species: this.rom.dex(internal), level, stationary: options.stationary }, {});
+    // An identified ghost still can't be caught, so no balls go into that battle.
+    return this.battle({ species: this.rom.dex(internal), level, stationary: options.stationary }, { noCatch: options.ghost });
   }
-  private battle(opponent: Parameters<Engine["startBattle"]>[0]["opponent"], options: { trainer?: string; canLose?: boolean; klass?: number }): Promise<BattleOutcome> {
+  private battle(opponent: Parameters<Engine["startBattle"]>[0]["opponent"], options: { trainer?: string; canLose?: boolean; klass?: number; noCatch?: boolean }): Promise<BattleOutcome> {
     const engine = this.ctx.engine;
     if (!this.save.party.some(m => m.hp > 0)) return Promise.resolve("lose");
     const bag = this.battleBag();
+    if (options.noCatch) bag.balls = [];
+    this.battleItems = new Set([...bag.balls, ...bag.items].map(([id]) => id));
     const battle = engine.startBattle({
       party: this.save.party, opponent, balls: bag.balls, items: bag.items, money: this.save.money,
       badges: this.badgeMask(), seen: this.save.seen, caught: this.save.caught,
@@ -1327,6 +1330,7 @@ export class YellowGame implements Game {
     });
   }
   inBattle?: { trainer: boolean; klass?: number };
+  private battleItems = new Set<number>();
   /** Development: resolve battles instantly on the native engine. */
   autoBattle = false;
   battleCue?: string;
@@ -1340,7 +1344,8 @@ export class YellowGame implements Game {
     // Return the native bag counts to Gen 1 item ids.
     for (const [key] of Object.entries(this.save.items)) {
       const crystal = this.crystalItem(+key);
-      if (!crystal) continue;
+      // Only items that went into the battle come back from it.
+      if (!crystal || !this.battleItems.has(crystal)) continue;
       const left = [...result.bag.balls, ...result.bag.items].find(([id]) => id === crystal)?.[1] ?? 0;
       if (left) this.save.items[key] = left;
       else delete this.save.items[key];
