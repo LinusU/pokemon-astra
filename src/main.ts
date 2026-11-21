@@ -45,7 +45,7 @@ import { MenuInput } from "./ui/menu-input";
 import { MEDICINE, isMedicine, useMedicine } from "./game/medicine";
 import { GameAudio } from "./game/audio";
 import { battleTheme, fieldMusic, trainerIntroMusic, victoryTheme, type MusicScene } from "./game/music";
-import { BattlePresenter, escapeAnnounced } from "./ui/battle";
+import { BattleLaunch, type FinishedBattle } from "./ui/battle-launch";
 import { playEvolution } from "./ui/evolution";
 import { createJourney, deleteJourney, download, JourneyConflict, JourneyStore, listJourneys, peekJourney, type AdventureId, type JourneyEntry, type JourneySummary } from "./game/storage";
 import { mountJourneyList, type AdventureInfo } from "./ui/journeys";
@@ -85,7 +85,7 @@ const input = new Input(),
   menuInput = new MenuInput(),
   actors = new WorldActors();
 let glide: { x: number; y: number } | undefined;
-let battlePresenter: BattlePresenter | undefined;
+let battleLaunch: BattleLaunch | undefined;
 let engine: Engine,
   save = freshSave(),
   mode = "loading",
@@ -95,7 +95,6 @@ let engine: Engine,
   repelWoreOff = false,
   exitLock = true,
   bumpLatched = false,
-  battle: ReturnType<Engine["startBattle"]>,
   battleObject: WorldObject | undefined,
   approachingTrainer: WorldObject | undefined,
   battleMusic: MusicScene | undefined,
@@ -1472,7 +1471,8 @@ function startBattle(species: number, level: number, o?: WorldObject, fishing = 
             ),
           }
         : { species, level, stationary: o?.kind === "legendary" };
-    battle = engine.startBattle({
+    battleLaunch = new BattleLaunch({ engine, layer, sound, sprite, cry }, {
+      start: {
       party: save.party,
       opponent,
       balls: Object.entries(ballIds).map(
@@ -1487,162 +1487,138 @@ function startBattle(species: number, level: number, o?: WorldObject, fishing = 
       night: !!save.settings.night,
       seen: save.seen,
       caught: save.caught,
+      },
+      trainerName:
+        o?.trainer && !isWildEncounter(o)
+          ? o.trainer.name || o.name
+          : undefined,
+      gymBackdrop: gymBattleBackdrop(currentField()),
+      fieldBackdrop: renderer.battleBackdrop(currentField(), save.x, save.y, fishing),
+      arena: o?.id.endsWith("league_4")
+        ? "champion"
+        : o?.id.includes("league_")
+          ? "league"
+          : undefined,
+      wildEncounter: o?.kind === "legendary" ? "legendary" : undefined,
+      speed: save.settings.battleSpeed,
+      itemName: (id) => itemName(bagKeyForItem(id)),
+      party: () => save.party,
+      music: (cue) => {
+        battleMusic = cue === "Capture" ? "capture" : victoryTheme(battleObject);
+        sound.refreshMusic();
+      },
+      shown: () => {
+        mode = "battle";
+      },
     });
     mode = "encounter";
     sound.refreshMusic();
-    layer.innerHTML =
-      '<div class="encounter-transition" aria-hidden="true"></div>';
-    window.setTimeout(() => showBattle(fishing), 620);
+    battleLaunch.finished.then(battleFinished, (e) => {
+      battleLaunch = undefined;
+      message(`Battle error: ${e instanceof Error ? e.message : String(e)}`);
+    });
   } catch (e) {
     message(
       `Battle could not start: ${e instanceof Error ? e.message : String(e)}`,
     );
   }
 }
-function showBattle(fishing = false) {
-  mode = "battle";
-  const s = battle.snapshot();
-  if (s.outcome && s.result) {
-    const result = s.result;
-    const { mon: caughtMon, first: firstCatch, grant } = captureRegistration(save.caught, result);
-    const caughtSpecies = caughtMon?.species;
-    const catchDestination = (result.caught ?? -1) >= 6 ? "storage" : "party";
-    save.party = result.party.slice(0, 6);
-    for (const mon of result.party.slice(6)) storePokemon(save.storage, mon);
-    save.money = result.money + grant;
-    for (const [key, id] of Object.entries(ballIds))
-      save.items[key] =
-        result.bag.balls.find((v: [number, number]) => v[0] === id)?.[1] || 0;
-    for (const [key, m] of Object.entries(MEDICINE))
-      save.items[key] =
-        result.bag.items.find((v: [number, number]) => v[0] === m.id)?.[1] || 0;
-    save.seen = result.world.seen;
-    save.caught = result.world.caught;
-    if (caughtSpecies && !save.caught.includes(caughtSpecies))
-      save.caught.push(caughtSpecies);
-    const won = ["win", "won", "victory"].includes(s.outcome.toLowerCase());
-    const earnedBadge = won && !!battleObject?.reward?.badge && !(badgeMask(save) & (1 << (battleObject.reward.badge - 1)));
-    let receipt = "";
+function battleFinished(battle: FinishedBattle) {
+  battleLaunch = undefined;
+  const result = battle.result;
+  const { mon: caughtMon, first: firstCatch, grant } = captureRegistration(save.caught, result);
+  const caughtSpecies = caughtMon?.species;
+  const catchDestination = (result.caught ?? -1) >= 6 ? "storage" : "party";
+  save.party = battle.party;
+  for (const mon of battle.overflow) storePokemon(save.storage, mon);
+  save.money = result.money + grant;
+  for (const [key, id] of Object.entries(ballIds))
+    save.items[key] =
+      result.bag.balls.find((v: [number, number]) => v[0] === id)?.[1] || 0;
+  for (const [key, m] of Object.entries(MEDICINE))
+    save.items[key] =
+      result.bag.items.find((v: [number, number]) => v[0] === m.id)?.[1] || 0;
+  save.seen = result.world.seen;
+  save.caught = result.world.caught;
+  if (caughtSpecies && !save.caught.includes(caughtSpecies))
+    save.caught.push(caughtSpecies);
+  const won = battle.end === "win";
+  const earnedBadge = won && !!battleObject?.reward?.badge && !(badgeMask(save) & (1 << (battleObject.reward.badge - 1)));
+  let receipt = "";
+  if (
+    battleObject &&
+    ((isWildEncounter(battleObject) && caughtSpecies === battleSpecies) ||
+      (!isWildEncounter(battleObject) && won))
+  ) {
+    flag(battleObject.setsFlag || battleObject.id);
+    receipt = rewardReceipt(battleObject.reward);
+    applyReward(battleObject.reward);
+  }
+  const blackout = battle.end === "loss";
+  if (blackout) {
+    save.party = save.party.map((m) => engine.healPokemon(m));
     if (
-      battleObject &&
-      ((isWildEncounter(battleObject) && caughtSpecies === battleSpecies) ||
-        (!isWildEncounter(battleObject) && won))
-    ) {
-      flag(battleObject.setsFlag || battleObject.id);
-      receipt = rewardReceipt(battleObject.reward);
-      applyReward(battleObject.reward);
-    }
-    const blackout =
-      !won &&
-      (["lose", "loss", "lost", "defeat"].includes(s.outcome.toLowerCase()) ||
-        !save.party.some((m) => m.hp > 0));
-    if (blackout) {
-      save.party = save.party.map((m) => engine.healPokemon(m));
-      if (
-        battleObject?.id.startsWith("league_") &&
-        !save.flags.includes("champion")
-      )
-        save.flags = save.flags.filter((f) => !/^league_[0-3]_won$/.test(f));
-      save.map =
-        save.center && WORLD[save.center] ? save.center : "dewdrop_center";
-      recordVisit(save);
-      const door = WORLD[save.map].exits[0];
-      save.x = door.x + 0.5;
-      save.y = door.y - 0.5;
-      save.facing = "up";
-      save = normalizeSavePosition(save);
-      exitLock = true;
-    }
+      battleObject?.id.startsWith("league_") &&
+      !save.flags.includes("champion")
+    )
+      save.flags = save.flags.filter((f) => !/^league_[0-3]_won$/.test(f));
+    save.map =
+      save.center && WORLD[save.center] ? save.center : "dewdrop_center";
+    recordVisit(save);
+    const door = WORLD[save.map].exits[0];
+    save.x = door.x + 0.5;
+    save.y = door.y - 0.5;
+    save.facing = "up";
+    save = normalizeSavePosition(save);
+    exitLock = true;
+  }
+  if (won && battleObject?.id === "league_4")
+    save.hallOfFame = save.party.map(({ species, level, dvs }) => ({ species, level, dvs: [...dvs] }));
+  const candidates = result.may_evolve.filter(slot => save.party[slot] && levelEvolution(save.party[slot], !!save.settings.night, engine));
+  if (candidates.length) save.pendingEvolutions = [...new Set(candidates)];
+  persist();
+  const victory = won ? battleObject?.victoryDialogue : undefined;
+  const wrapUp = () => {
     if (won && battleObject?.id === "league_4")
-      save.hallOfFame = save.party.map(({ species, level, dvs }) => ({ species, level, dvs: [...dvs] }));
-    const candidates = result.may_evolve.filter(slot => save.party[slot] && levelEvolution(save.party[slot], !!save.settings.night, engine));
-    if (candidates.length) save.pendingEvolutions = [...new Set(candidates)];
-    persist();
-    const victory = won ? battleObject?.victoryDialogue : undefined;
-    const wrapUp = () => {
-      if (won && battleObject?.id === "league_4")
-        hallOfFame(() => finishTraining(close));
-      else finishTraining(close);
-    };
-    if (won) {
-      const afterVictory = receipt ? () => showReceipt(receipt, wrapUp, battleMusic) : wrapUp;
-      if (earnedBadge && battleObject?.reward?.badge && victory) {
-        mode = "dialogue";
-        interactionMusic = battleMusic;
-        dialogueCallback = afterVictory;
-        sound.refreshMusic();
-        sound.overworld("badge");
-        showBadgeAward(layer, battleObject.reward.badge, badgeMask(save), battleObject.name, victory, advance);
-      } else if (victory) message(victory, afterVictory, battleObject?.name, battleMusic);
-      else afterVictory();
-      return;
-    }
-    if (!blackout && s.outcome === "draw" && escapeAnnounced(s.events)) {
-      wrapUp();
-      return;
-    }
-    const afterCatch = receipt ? () => showReceipt(receipt, wrapUp, battleMusic) : wrapUp;
-    if (firstCatch && caughtMon) {
-      mode = "registration";
-      specimenCard(layer, "New Pokédex entry", specimen(caughtMon),
-        `${catchDestination === "storage" ? "Sent to PC" : "Joined party"} · ${save.caught.length}/251 caught`,
-        "Continue", afterCatch, { grant });
-      return;
-    }
-    if (blackout) sound.heal();
-    message(
-      caughtSpecies
-        ? `${engine.species(caughtSpecies).name} ${catchDestination === "storage" ? "was sent to the Center PC" : "joined your party"}!`
-        : blackout
-          ? `Your team was exhausted. You returned to ${WORLD[save.map].name}, where your Pokémon were healed.`
-          : s.outcome.toLowerCase() === "draw"
-            ? "The battle ended in a draw."
-            : s.outcome.toLowerCase().includes("enemy")
-              ? "The wild Pokémon fled."
-              : "Got away safely!",
-      afterCatch,
-      undefined,
-      battleMusic,
-    );
+      hallOfFame(() => finishTraining(close));
+    else finishTraining(close);
+  };
+  if (won) {
+    const afterVictory = receipt ? () => showReceipt(receipt, wrapUp, battleMusic) : wrapUp;
+    if (earnedBadge && battleObject?.reward?.badge && victory) {
+      mode = "dialogue";
+      interactionMusic = battleMusic;
+      dialogueCallback = afterVictory;
+      sound.refreshMusic();
+      sound.overworld("badge");
+      showBadgeAward(layer, battleObject.reward.badge, badgeMask(save), battleObject.name, victory, advance);
+    } else if (victory) message(victory, afterVictory, battleObject?.name, battleMusic);
+    else afterVictory();
     return;
   }
-  battlePresenter = new BattlePresenter({
-    layer,
-    trainerName:
-      battleObject?.trainer && !isWildEncounter(battleObject)
-        ? battleObject.trainer.name || battleObject.name
-        : undefined,
-    gymBackdrop: gymBattleBackdrop(currentField()),
-    fieldBackdrop: renderer.battleBackdrop(currentField(), save.x, save.y, fishing),
-    arena: battleObject?.id.endsWith("league_4")
-      ? "champion"
-      : battleObject?.id.includes("league_")
-        ? "league"
-        : undefined,
-    wildEncounter: battleObject?.kind === "legendary" ? "legendary" : undefined,
-    caught: save.caught,
-    snapshot: s,
-    act: (index) => battle.act(index),
-    sprite,
-    species: (id) => engine.species(id),
-    move: (id, dvs) => engine.move(id, dvs),
-    cry,
-    music: (cue) => {
-      battleMusic = cue === "Capture" ? "capture" : victoryTheme(battleObject);
-      sound.refreshMusic();
-    },
-    sound: (id) => sound.soundEffect(id),
-    animationSound: (...args) => sound.battleAnimation(...args),
-    itemName: (id) => itemName(bagKeyForItem(id)),
-    party: () => save.party,
-    speed: save.settings.battleSpeed,
-    finish: () => {
-      battlePresenter = undefined;
-      showBattle();
-    },
-    error: (e) =>
-      message(`Battle error: ${e instanceof Error ? e.message : String(e)}`),
-  });
+  if (battle.end === "escaped") {
+    wrapUp();
+    return;
+  }
+  const afterCatch = receipt ? () => showReceipt(receipt, wrapUp, battleMusic) : wrapUp;
+  if (firstCatch && caughtMon) {
+    mode = "registration";
+    specimenCard(layer, "New Pokédex entry", specimen(caughtMon),
+      `${catchDestination === "storage" ? "Sent to PC" : "Joined party"} · ${save.caught.length}/251 caught`,
+      "Continue", afterCatch, { grant });
+    return;
+  }
+  if (blackout) sound.heal();
+  message(
+    caughtSpecies
+      ? `${engine.species(caughtSpecies).name} ${catchDestination === "storage" ? "was sent to the Center PC" : "joined your party"}!`
+      : blackout
+        ? `Your team was exhausted. You returned to ${WORLD[save.map].name}, where your Pokémon were healed.`
+        : "The battle ended in a draw.",
+    afterCatch,
+    undefined,
+    battleMusic,
+  );
 }
 function hallOfFame(done: () => void) {
   mode = "ceremony";
@@ -1924,7 +1900,7 @@ function frame(now: number) {
   } else if ((mode === "title" || mode === "intro") && input.hit("b")) {
     layer.querySelector<HTMLButtonElement>("#cancel, #back")?.click();
   } else if (mode === "menu" && input.hit("menu")) close();
-  else if (mode === "battle" && input.hit("b")) battlePresenter?.back();
+  else if (mode === "battle" && input.hit("b")) battleLaunch?.back();
   else if (mode === "evolution-result") {
     if (input.hit("a") || input.hit("b"))
       layer.querySelector<HTMLButtonElement>(".evolution-continue")?.click();
