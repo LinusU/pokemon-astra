@@ -22,7 +22,7 @@ import { yellowSummary, type YellowSave } from "./save";
 import { MAP_SCRIPTS, SHARED_TEXTS, type Actor, type BattleOutcome, type Emote, type Game } from "./script";
 import { textPages } from "./textbox";
 import { asmPlan } from "./asm";
-import { gen1Moves, specialMoves, withMoves } from "./learnsets";
+import { specialMoves, withMoves } from "./learnsets";
 import { crystalItemMap } from "./items";
 import { SAFARI_MAPS, safariBattle } from "./safari";
 import { safariGameOver } from "./scripts/safari";
@@ -1460,7 +1460,8 @@ export class YellowGame implements Game {
   private async battleTrainer(klass: number, index: number, options: { canLose?: boolean; endText?: number } = {}) {
     const party = this.rom.trainerParty(klass, index);
     const pp = (move: number) => this.ctx.engine.move(move).pp;
-    const opponents = party.map(m => withMoves(this.ctx.engine.makePokemon(this.rom.dex(m.species), m.level), gen1Moves(this.rom, m.species, m.level), pp));
+    // Level-up moves from the game data, then the cartridge's hand-picked ones.
+    const opponents = party.map(m => this.ctx.engine.makePokemon(this.rom.dex(m.species), m.level));
     for (const { mon, slot, move } of specialMoves(this.rom, klass, index)) {
       if (!opponents[mon]) continue;
       const moves = [...opponents[mon].moves];
