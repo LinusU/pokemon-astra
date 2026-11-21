@@ -114,9 +114,9 @@ export class CrystalGraphics {
       set[6] = this.palette(CRYSTAL_SYM.MansionPalette1 + 8 * 8);
       return set;
     }
-    // Daytime rows of Crystal's environment tables.
-    const table = kind === "outdoor" ? "OutdoorColors" : kind === "dungeon" ? "DungeonColors" : "IndoorColors";
-    const row = CRYSTAL_SYM[`EnvironmentColorsPointers.${table}`] + 8;
+    // Daytime rows of Crystal's environment tables; caves use the night row, as Crystal's cave maps do.
+    const table = kind === "outdoor" ? "OutdoorColors" : kind === "dungeon" || kind === "cave" ? "DungeonColors" : "IndoorColors";
+    const row = CRYSTAL_SYM[`EnvironmentColorsPointers.${table}`] + (kind === "cave" ? 16 : 8);
     const set = Array.from({ length: 8 }, (_, i) => bg(this.crystal[row + i]));
     if (kind === "outdoor") {
       set[3] = bg(OUTDOOR_WATER);
