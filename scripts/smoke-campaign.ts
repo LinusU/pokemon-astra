@@ -497,10 +497,12 @@ function runCampaign(starter: number) {
         if ((save.items[key] ?? 0) < 4) buy(key, Math.min(5, Math.floor(save.money / price)), price);
         bestBall = save.items[key] ? ballId : pokeballId;
         save.party = save.party.map((mon) => engine.healPokemon(mon));
+        // Keep key recruits, among them the Bellsprout line for Marina's Water gym
+        // (Crystal Legacy's Wooper answers an Electric lead with Mud-Slap).
         const replace = save.party
           .map((mon, slot) => ({ mon, slot }))
           .filter(({ mon }) => !partnerFamily.has(mon.species))
-          .filter(({ mon }) => ![51, 55, 105, 131, 149, 181, 229].includes(mon.species) || mon.species === species)
+          .filter(({ mon }) => ![51, 55, 69, 70, 105, 131, 149, 181, 229].includes(mon.species) || mon.species === species)
           .sort((a, b) => a.mon.level - b.mon.level)[0]?.slot ?? save.party.length - 1;
         const previous = save.party.length === 6 && save.party.splice(replace, 1)[0];
         const outcome = fight({ species, level: encounter.maxLevel }, true);
