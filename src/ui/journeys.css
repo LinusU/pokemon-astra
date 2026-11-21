@@ -1,0 +1,64 @@
+.journeys-panel { max-height: 100%; overflow: auto; }
+.journey-list {
+  display: flex;
+  flex-direction: column;
+  gap: .25em;
+  max-height: 9.5em;
+  margin: .3em 0 .45em;
+  overflow-y: auto;
+}
+.panel button.journey-row {
+  display: flex;
+  align-items: center;
+  gap: .45em;
+  width: 100%;
+  padding: .2em .4em;
+  border-width: 2px;
+  background: #fffbe9;
+  color: #233f35;
+  font-weight: 400;
+  text-align: left;
+  line-height: 1;
+}
+.panel button.journey-row:is(:hover, :focus-visible) { background: #e4efcb; }
+.journey-row img, .journey-blank {
+  flex: none;
+  width: 2em;
+  height: 2em;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+.journey-blank { border: 2px dotted #9db59a; border-radius: 50%; }
+.journey-row span { display: flex; flex-direction: column; min-width: 0; }
+.journey-row strong, .journey-row small { overflow: hidden; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
+.journey-row small { color: #486653; }
+.adventure-tag {
+  align-self: flex-start;
+  padding: 0 .3em;
+  border-radius: 2px;
+  font-size: .72em;
+  font-style: normal;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.adventure-tag.tag-astra { background: #2f6f58; color: #fff9dc; }
+.adventure-tag.tag-yellow { background: #f2c94c; color: #3b2f0c; }
+.adventure-choices { display: grid; gap: .35em; margin: .3em 0 .45em; }
+.panel button.adventure-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: .1em;
+  padding: .35em .5em;
+  border-left-width: .5em;
+  font-weight: 400;
+  text-align: left;
+  line-height: 1.05;
+}
+.panel button.adventure-choice strong { font-weight: 700; }
+.panel button.adventure-choice small { opacity: .9; }
+.panel button.adventure-choice em { font-size: .8em; font-style: normal; opacity: .85; }
+.panel button.adventure-choice.tag-astra { border-left-color: #8fc9a4; }
+.panel button.adventure-choice.tag-yellow { border-left-color: #f2c94c; background: #7a6418; border-color: #5e4c12; }
+.panel button.adventure-choice.tag-yellow:is(:hover, :focus-visible) { background: #5e4c12; }
+.panel button.secondary.danger { color: #9b2f2f; border-color: #9b2f2f; }

@@ -46,7 +46,8 @@ import { GameAudio } from "./game/audio";
 import { battleTheme, fieldMusic, trainerIntroMusic, victoryTheme, type MusicScene } from "./game/music";
 import { BattlePresenter, escapeAnnounced } from "./ui/battle";
 import { playEvolution } from "./ui/evolution";
-import { download, JourneyConflict, JourneyStore } from "./game/storage";
+import { createJourney, deleteJourney, download, JourneyConflict, JourneyStore, listJourneys, peekJourney, type AdventureId, type JourneyEntry, type JourneySummary } from "./game/storage";
+import { mountJourneyList, type AdventureInfo } from "./ui/journeys";
 import {
   freshSave,
   isValidSave,
@@ -75,7 +76,7 @@ import "./styles.css";
 import "./ui/settings.css";
 import "./ui/region-map.css";
 
-const journeyStore = new JourneyStore();
+let journeyStore: JourneyStore;
 const input = new Input(),
   { canvas, layer, saveWarning } = createShell(input),
   renderer = new Renderer(canvas),
@@ -199,6 +200,72 @@ function scene(): MusicScene {
 const flag = (f?: string) => {
   if (f && !save.flags.includes(f)) save.flags.push(f);
 };
+function astraSummary(journey: Save): JourneySummary {
+  const lead = journey.party[0];
+  return {
+    place: WORLD[journey.map]?.name.split(" · ")[0] ?? "Astra",
+    badges: journey.badges,
+    caught: journey.caught.length,
+    ...(lead && { lead: { species: lead.species, dvs: [...lead.dvs] } }),
+  };
+}
+function summarize(adventure: AdventureId, data: unknown) {
+  if (adventure === "astra" && isValidSave(data)) return astraSummary(data);
+}
+const ADVENTURE_LIST: AdventureInfo[] = [
+  { id: "astra", name: "Astra", blurb: "Survey the eight beacons of the Astra region with Professor Alder." },
+];
+let journeyCursor = {};
+async function journeys(error?: string) {
+  mode = "title";
+  journeyStarted = false;
+  panel(layer, "Your journeys", "<p>Reading your browser saves…</p>", "opening-panel");
+  let entries: JourneyEntry[];
+  try {
+    entries = await listJourneys(summarize);
+  } catch {
+    mode = "recovery";
+    const p = panel(layer, "Save storage unavailable",
+      '<p>Astra could not read your journeys. Allow browser storage and try again.</p><button id="retry">Read saves again</button>', "opening-panel");
+    p.querySelector<HTMLButtonElement>("#retry")!.onclick = () => void journeys();
+    return;
+  }
+  sound.attach(engine, true);
+  mountJourneyList(layer, {
+    entries, adventures: ADVENTURE_LIST, sprite, cursor: journeyCursor, error,
+    onContinue: entry => {
+      journeyStore = new JourneyStore(entry.id, astraSummary);
+      void readJourney();
+    },
+    onNew: () => intro(() => void journeys()),
+    onExport: async entry => {
+      try {
+        download(`pokemon-${entry.adventure}-save.json`, await peekJourney(entry.id));
+      } catch {
+        void journeys("The browser could not read that journey for export.");
+      }
+    },
+    onDelete: async entry => {
+      await deleteJourney(entry.id);
+      journeyCursor = {};
+      void journeys();
+    },
+    onRestore: async file => {
+      let next: Save;
+      try {
+        next = await readBackup(file);
+      } catch (error) {
+        return error instanceof Error ? error.message : "Choose a readable Astra backup.";
+      }
+      try {
+        await createJourney("astra", next, astraSummary(next));
+      } catch {
+        return "The browser could not store this backup. Free some space and try again.";
+      }
+      void journeys();
+    },
+  });
+}
 let saveIssue: "storage" | "conflict" | undefined;
 function showSaveIssue(issue?: typeof saveIssue) {
   saveIssue = issue;
@@ -398,17 +465,14 @@ async function readJourney() {
     restoreSession(prepareSave(existing));
     title();
   } else if (existing !== undefined) recoverJourney(existing);
-  else {
-    sound.attach(engine, true);
-    intro();
-  }
+  else void journeys("That journey is no longer in this browser.");
 }
 function recoverJourney(existing: unknown) {
   mode = "recovery";
   const p = panel(layer, "Recover your journey",
-    '<p>Astra could not read this save. Export a copy, restore a backup or begin a new journey.</p><div class="buttons"><button id="export">Export current save</button><button data-backup-picker id="choose">Choose backup</button><button class="secondary" id="new">New adventure</button><input hidden type="file" accept=".json,application/json"></div>', "opening-panel");
+    '<p>Astra could not read this save. Export a copy, restore a backup or begin a new journey.</p><div class="buttons"><button id="export">Export current save</button><button data-backup-picker id="choose">Choose backup</button><button class="secondary" id="new">All journeys</button><input hidden type="file" accept=".json,application/json"></div>', "opening-panel");
   p.querySelector<HTMLButtonElement>("#export")!.onclick = () => download("pokemon-astra-recovery.json", existing);
-  p.querySelector<HTMLButtonElement>("#new")!.onclick = () => confirmNewJourney(existing, () => recoverJourney(existing));
+  p.querySelector<HTMLButtonElement>("#new")!.onclick = () => void journeys();
   bindBackupPicker(p, title, error => { p.querySelector("p")!.textContent = error; });
 }
 function title() {
@@ -417,7 +481,7 @@ function title() {
   const p = panel(
     layer,
     "Welcome back",
-    `<div class="journey-record">${save.party[0] ? `<img src="${sprite(save.party[0])}" alt="${escapeHtml(engine.species(save.party[0].species).name)}">` : ""}<div><strong>${escapeHtml(WORLD[save.map].name)}</strong><small>${save.badges}/8 badges · ${save.caught.length} caught</small></div></div><div class="objective"><strong>${escapeHtml(goal.title)}</strong><br>${escapeHtml(goal.hint)}</div><div class="buttons"><button id="continue">Continue journey</button><button class="secondary" id="new">New adventure</button></div>`,
+    `<div class="journey-record">${save.party[0] ? `<img src="${sprite(save.party[0])}" alt="${escapeHtml(engine.species(save.party[0].species).name)}">` : ""}<div><strong>${escapeHtml(WORLD[save.map].name)}</strong><small>${save.badges}/8 badges · ${save.caught.length} caught</small></div></div><div class="objective"><strong>${escapeHtml(goal.title)}</strong><br>${escapeHtml(goal.hint)}</div><div class="buttons"><button id="continue">Continue journey</button><button class="secondary" id="new">All journeys</button></div>`,
     "opening-panel arrival-card", fieldCursors.title ??= {},
   );
   p.querySelector("#continue")!.addEventListener("click", () => {
@@ -426,26 +490,17 @@ function title() {
     layer.innerHTML = "";
     void sound.unlock();
   });
-  p.querySelector<HTMLButtonElement>("#new")!.onclick = () => confirmNewJourney(save, title);
+  p.querySelector<HTMLButtonElement>("#new")!.onclick = () => void journeys();
 }
-function confirmNewJourney(existing: unknown, back: () => void) {
-  mode = "title";
-  const p = panel(layer, "Start a new adventure?",
-    '<p>Begin journey will replace your browser save. You can export a copy first.</p><div class="buttons"><button id="cancel">Keep my save</button><button class="secondary" id="export">Export save</button><button class="secondary" id="confirm">Start over</button></div>', "opening-panel");
-  p.querySelector<HTMLButtonElement>("#cancel")!.onclick = back;
-  p.querySelector<HTMLButtonElement>("#export")!.onclick = () => download("pokemon-astra-save.json", existing);
-  p.querySelector<HTMLButtonElement>("#confirm")!.onclick = () => intro(back);
-}
-function intro(back?: () => void, error = "") {
+function intro(back: () => void, error = "") {
   mode = "intro";
   const p = panel(
     layer,
     "Dewdrop Village",
-    `<p>The flock circles Dewdrop again. Robin thinks a beacon has gone dark.</p><div class="objective">Find Alder in the north garden lab. Press ${input.confirmLabel} to choose your partner.</div>${error ? `<p class="error" role="alert">${escapeHtml(error)}</p>` : ""}<div class="buttons"><button id="begin">Begin journey</button><button id="how" class="secondary">How to play</button>${back ? '<button id="cancel" class="secondary">Keep my save</button>' : '<button data-backup-picker id="choose-save" class="secondary">Restore backup</button><input hidden id="import" type="file" accept=".json,application/json">'}</div>`,
+    `<p>The flock circles Dewdrop again. Robin thinks a beacon has gone dark.</p><div class="objective">Find Alder in the north garden lab. Press ${input.confirmLabel} to choose your partner.</div>${error ? `<p class="error" role="alert">${escapeHtml(error)}</p>` : ""}<div class="buttons"><button id="begin">Begin journey</button><button id="how" class="secondary">How to play</button><button id="cancel" class="secondary">Back</button></div>`,
     "opening-panel arrival-card", fieldCursors.intro ??= {},
   );
-  if (back) p.querySelector<HTMLButtonElement>("#cancel")!.onclick = back;
-  else bindBackupPicker(p, title, reason => intro(back, reason));
+  p.querySelector<HTMLButtonElement>("#cancel")!.onclick = back;
   p.querySelector<HTMLButtonElement>("#how")!.onclick = () => fieldBasics(() => intro(back, error));
   p.querySelector<HTMLButtonElement>("#begin")!.onclick = async () => {
     const next = prepareSave(freshSave());
@@ -453,9 +508,10 @@ function intro(back?: () => void, error = "") {
     mode = "loading";
     panel(layer, "Beginning your adventure", "<p>Saving in Dewdrop Village…</p>", "opening-panel");
     try {
-      await writeJourney(next);
-    } catch (error) {
-      if (error instanceof JourneyConflict) return startupConflict();
+      const id = await createJourney("astra", next, astraSummary(next));
+      journeyStore = new JourneyStore(id, astraSummary);
+      await journeyStore.read();
+    } catch {
       return intro(back, "Your adventure could not be saved. Allow browser storage or free some space, then choose Begin journey again.");
     }
     restoreSession(next);
@@ -1845,7 +1901,7 @@ function frame(now: number) {
     if (back) back.click();
     else close();
   } else if ((mode === "title" || mode === "intro") && input.hit("b")) {
-    layer.querySelector<HTMLButtonElement>("#cancel")?.click();
+    layer.querySelector<HTMLButtonElement>("#cancel, #back")?.click();
   } else if (mode === "menu" && input.hit("menu")) close();
   else if (mode === "battle" && input.hit("b")) battlePresenter?.back();
   else if (mode === "evolution-result") {
@@ -1896,5 +1952,5 @@ mode = "welcome";
 openCartridge(layer, ready => {
   engine = ready;
   renderer.setEngine(engine);
-  void readJourney();
+  void journeys();
 });

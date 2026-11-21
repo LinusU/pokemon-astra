@@ -1,7 +1,7 @@
 import { IDBFactory, IDBObjectStore } from "fake-indexeddb";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { freshSave } from "../src/game/save";
-import { get, set, JourneyConflict, JourneyStore } from "../src/game/storage";
+import { createJourney, deleteJourney, get, listJourneys, peekJourney, set, JourneyConflict, JourneyStore } from "../src/game/storage";
 
 beforeEach(() => { vi.stubGlobal("indexedDB", new IDBFactory()); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
@@ -67,4 +67,41 @@ it("rolls the revision back with an aborted write and allows a retry", async () 
   await window.write(next);
   expect(await get("save")).toEqual(next);
   expect(await get("save-revision")).not.toEqual(revision);
+});
+
+it("moves the single save of earlier versions into the journey list once", async () => {
+  const original = { ...freshSave(), steps: 77 };
+  await set("save", original);
+  await set("save-revision", "legacy-revision");
+  const summary = { place: "Dewdrop Village", badges: 0, caught: 0 };
+  const [entry] = await listJourneys(() => summary);
+  expect(entry).toMatchObject({ adventure: "astra", summary });
+  expect(await get(`journey:${entry.id}`)).toEqual(original);
+  expect(await get(`journey-revision:${entry.id}`)).toBe("legacy-revision");
+  expect(await listJourneys()).toEqual([entry]);
+  expect(await get("save")).toEqual(original);
+});
+
+it("keeps separate journeys and their summaries apart", async () => {
+  expect(await listJourneys()).toEqual([]);
+  const first = await createJourney("astra", freshSave(), { place: "Dewdrop Village", badges: 0, caught: 0 });
+  const second = await createJourney("yellow", { adventure: "yellow" }, { place: "Pallet Town", badges: 0, caught: 0 });
+  const store = new JourneyStore(first, save => ({ place: "Mossford", badges: 1, caught: save.caught.length }));
+  await store.read();
+  await store.write({ ...freshSave(), caught: [58, 16] });
+  const list = await listJourneys();
+  expect(list.map(e => e.id).sort()).toEqual([first, second].sort());
+  expect(list.find(e => e.id === first)!.summary).toEqual({ place: "Mossford", badges: 1, caught: 2 });
+  expect(await peekJourney(second)).toEqual({ adventure: "yellow" });
+  await deleteJourney(second);
+  expect((await listJourneys()).map(e => e.id)).toEqual([first]);
+  expect(await peekJourney(second)).toBeUndefined();
+});
+
+it("detects a newer write to the same journey from another window", async () => {
+  const id = await createJourney("astra", freshSave());
+  const windows = [new JourneyStore(id), new JourneyStore(id)];
+  await Promise.all(windows.map(w => w.read()));
+  await windows[0].write({ ...freshSave(), steps: 5 });
+  await expect(windows[1].write({ ...freshSave(), steps: 9 })).rejects.toBeInstanceOf(JourneyConflict);
 });
