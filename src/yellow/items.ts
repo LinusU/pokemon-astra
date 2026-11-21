@@ -121,6 +121,14 @@ export async function useYellowItem(game: YellowGame, id: number): Promise<strin
     if (slot === undefined) return;
     const evo = target(save.party[slot]);
     if (!evo) return "It won't have any effect.";
+    // Yellow's starter Pikachu won't evolve.
+    const mon = save.party[slot];
+    if (mon.species === 25 && mon.ot_id === save.vars.otId && save.vars.pikachuStarter) {
+      game.textVar("wNameBuffer", mon.nickname || "PIKACHU");
+      game.ctx.cry(25);
+      await game.text("RefusingText");
+      return;
+    }
     consume();
     const { evolveTo } = await import("./evolution");
     await evolveTo(game, slot, evo.species);

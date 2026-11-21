@@ -1353,6 +1353,13 @@ export class YellowGame implements Game {
   private async battleResult(s: ReturnType<ReturnType<Engine["startBattle"]>["snapshot"]>, options: { trainer?: string; canLose?: boolean }, finish: (o: BattleOutcome) => void) {
     const result = s.result!;
     this.battleCue = undefined;
+    // Pikachu grows fonder as it levels up and sulks when it faints.
+    const before = this.save.party.find(m => m.species === 25 && m.ot_id === this.save.vars.otId);
+    const after = result.party.find(m => m.species === 25 && m.ot_id === this.save.vars.otId && m.exp >= (before?.exp ?? Infinity));
+    if (before && after) {
+      const change = (after.level - before.level) * 5 - (before.hp > 0 && after.hp === 0 ? 3 : 0);
+      after.happiness = Math.max(0, Math.min(255, after.happiness + change));
+    }
     this.save.party = result.party.slice(0, 6);
     for (const mon of result.party.slice(6)) this.save.storage.push({ ...mon, ot_name: mon.ot_name || this.save.name });
     this.save.money = result.money;
