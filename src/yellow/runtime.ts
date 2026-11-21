@@ -5,6 +5,7 @@
 import type { Engine, Pokemon } from "../engine";
 import type { PokemonPortrait } from "../engine/appearance";
 import type { Input } from "../game/input";
+import { BODY_RADIUS, WALK_SPEED, bodyTouches, heldHeading, walkFreely, walkSpeed } from "../game/free-movement";
 import type { GameAudio } from "../game/audio";
 import type { MenuInput } from "../ui/menu-input";
 import type { MusicScene } from "../game/music";
@@ -75,9 +76,6 @@ interface Npc extends Mover {
 }
 
 const WALK_SECONDS = 1 / 4.2;
-/** Free movement: walking speed in squares per second and the player's half width. */
-const FREE_SPEED = 4.6;
-const FREE_RADIUS = 0.28;
 const TEXT_RESET = new Set(["wait", "done"]);
 
 export class YellowGame implements Game {
@@ -830,17 +828,15 @@ export class YellowGame implements Game {
       });
       return;
     }
-    const held = (d: Facing) => input.held(d) || input.hit(d);
-    const h = (held("right") ? 1 : 0) - (held("left") ? 1 : 0), v = (held("down") ? 1 : 0) - (held("up") ? 1 : 0);
-    if (!h && !v) {
+    const heading = heldHeading(input, me.facing);
+    if (!heading) {
       this.pushing = 0;
       this.bumped = false;
       me.moving = false;
       return;
     }
-    const across: Facing | undefined = h ? (h > 0 ? "right" : "left") : undefined;
-    const along: Facing | undefined = v ? (v > 0 ? "down" : "up") : undefined;
-    me.facing = across && along ? (me.facing === across || me.facing === along ? me.facing : along) : (across ?? along)!;
+    const { across, along } = heading;
+    me.facing = heading.facing;
     const map = this.header;
     // Mats and carpets lead out when the player keeps walking into the edge beyond them.
     const warp = this.world.warpAt(map, me.x, me.y);
@@ -850,37 +846,23 @@ export class YellowGame implements Game {
       void this.runScript(() => this.useWarp(warp));
       return;
     }
-    const speed = FREE_SPEED * (this.save.bike ? 2 : input.held("speed") || input.held("b") ? 1.5 : 1);
-    const len = Math.hypot(h, v), dx = h / len, dy = v / len;
-    const pos = { ...(me.free ?? { x: me.x, y: me.y }) }, start = { ...pos };
-    // Short collision steps keep corners exact; a new square stops the frame so no square is skipped.
-    let remaining = speed * Math.min(dt, 0.05);
-    while (remaining > 1e-6) {
-      const step = Math.min(remaining, 0.1);
-      remaining -= step;
-      const before = { ...pos };
-      if (dx) {
-        if (!this.freeBlocked(pos.x + dx * step, pos.y)) pos.x += dx * step;
-        else if (!dy) this.slide(pos, "y", dx * step);
-      }
-      if (dy) {
-        if (!this.freeBlocked(pos.x, pos.y + dy * step)) pos.y += dy * step;
-        else if (!dx) this.slide(pos, "x", dy * step);
-      }
-      if (Math.round(pos.x) !== me.x || Math.round(pos.y) !== me.y) break;
-      if (pos.x === before.x && pos.y === before.y) break;
-    }
-    const moved = Math.hypot(pos.x - start.x, pos.y - start.y);
+    // The shared walk works on body centres; Yellow keeps the sprite's top-left square.
+    const from = me.free ?? { x: me.x, y: me.y };
+    const centre = { x: from.x + 0.5, y: from.y + 0.5 };
+    // A new square ends the frame, so its events run before the player walks on.
+    const moved = walkFreely(centre, heading, walkSpeed(input, { bike: !!this.save.bike }) * Math.min(dt, 0.05),
+      (x, y) => this.freeBlocked(x, y), p => Math.floor(p.x) !== me.x || Math.floor(p.y) !== me.y);
+    const pos = { x: centre.x - 0.5, y: centre.y - 0.5 };
     me.free = pos;
     me.moving = moved > 0;
     me.stride = (me.stride ?? 0) + moved;
     const [fx, fy] = STEP[me.facing];
-    const forward = (pos.x - start.x) * fx + (pos.y - start.y) * fy;
+    const forward = (pos.x - from.x) * fx + (pos.y - from.y) * fy;
     if (forward > 1e-4 || (across && along && moved > 0)) {
       this.pushing = 0;
       this.bumped = false;
     } else if (this.pushAgainst(me.facing, pos, dt)) return;
-    const tx = Math.round(pos.x), ty = Math.round(pos.y);
+    const tx = Math.floor(centre.x), ty = Math.floor(centre.y);
     if (tx === me.x && ty === me.y) return;
     me.x = tx;
     me.y = ty;
@@ -914,30 +896,17 @@ export class YellowGame implements Game {
     return false;
   }
 
-  /** Whether the player's body would overlap a wall, a person or a raised edge at this position. */
+  /** Whether the player's body, centred at (x, y), would overlap a wall, a person or a raised edge. */
   private freeBlocked(x: number, y: number) {
-    const map = this.header, me = this.me, r = FREE_RADIUS;
+    const map = this.header, me = this.me;
     const surfing = !!this.save.surfing, here = this.world.tile(map, me.x, me.y);
-    const cx = x + 0.5, cy = y + 0.5;
-    for (let ty = Math.floor(cy - r); ty <= Math.floor(cy + r - 1e-6); ty++)
-      for (let tx = Math.floor(cx - r); tx <= Math.floor(cx + r - 1e-6); tx++) {
-        if (tx === me.x && ty === me.y) continue;
-        if (this.blocked(tx, ty)) return true;
-        const open = surfing ? this.world.isWater(map, tx, ty) || this.world.passable(map, tx, ty) : this.world.passable(map, tx, ty);
-        if (!open || this.world.pairBlocked(map, here, this.world.tile(map, tx, ty), surfing)) return true;
-      }
-    return false;
-  }
-
-  /** Eases the player into the lane of a door or gap they are walking at, so a near miss still fits. */
-  private slide(pos: { x: number; y: number }, axis: "x" | "y", step: number) {
-    const lane = Math.round(pos[axis]), offset = lane - pos[axis];
-    if (Math.abs(offset) < 1e-4) return;
-    const ahead = axis === "x" ? this.freeBlocked(lane, pos.y + step) : this.freeBlocked(pos.x + step, lane);
-    if (ahead) return;
-    const nudge = Math.sign(offset) * Math.min(Math.abs(offset), Math.abs(step));
-    const next = axis === "x" ? this.freeBlocked(pos.x + nudge, pos.y) : this.freeBlocked(pos.x, pos.y + nudge);
-    if (!next) pos[axis] += nudge;
+    return bodyTouches(x, y, (px, py) => {
+      const tx = Math.floor(px), ty = Math.floor(py);
+      if (tx === me.x && ty === me.y) return false;
+      if (this.blocked(tx, ty)) return true;
+      const open = surfing ? this.world.isWater(map, tx, ty) || this.world.passable(map, tx, ty) : this.world.passable(map, tx, ty);
+      return !open || this.world.pairBlocked(map, here, this.world.tile(map, tx, ty), surfing);
+    });
   }
 
   /** Finishes the square the player is crossing, so a scene starts from its centre. */
@@ -960,7 +929,7 @@ export class YellowGame implements Game {
     const me = this.me;
     if (me.from && Math.round(me.from.x) === x && Math.round(me.from.y) === y) return true;
     const p = me.free ?? me;
-    return Math.abs(p.x - x) < 0.5 + FREE_RADIUS && Math.abs(p.y - y) < 0.5 + FREE_RADIUS;
+    return Math.abs(p.x - x) < 0.5 + BODY_RADIUS && Math.abs(p.y - y) < 0.5 + BODY_RADIUS;
   }
 
   /** Pikachu walks the player's own path, a square behind. */
@@ -998,7 +967,7 @@ export class YellowGame implements Game {
     const at = p.free ?? { x: p.x, y: p.y };
     const dx = target.x - at.x, dy = target.y - at.y, distance = Math.hypot(dx, dy);
     if (distance < 1e-3) return;
-    const k = distance > 3 ? 1 : Math.min(1, (FREE_SPEED * 2.5 * dt) / distance);
+    const k = distance > 3 ? 1 : Math.min(1, (WALK_SPEED * 2.5 * dt) / distance);
     const next = { x: at.x + dx * k, y: at.y + dy * k };
     if (distance > 0.02) p.facing = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up";
     p.free = next;
