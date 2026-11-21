@@ -1284,9 +1284,15 @@ export class YellowGame implements Game {
         if (this.autoBattle) {
           // Development: play the battle on the native engine without the presenter.
           for (let turns = 0; !s.outcome && turns < 500; turns++) {
-            const legal = s.legal as Record<string, unknown>[];
-            const move = legal.findIndex(a => a && typeof a === "object" && "Move" in a);
-            s = battle.act(move >= 0 ? move : 0);
+            const legal = s.legal as Record<string, { slot?: number } | undefined>[];
+            const moves = s.state.player.active.moves;
+            const power = (i: number) => {
+              const slot = legal[i]?.Move?.slot;
+              return slot === undefined || !moves[slot] ? -1 : engine.move(moves[slot]).power;
+            };
+            let best = -1;
+            legal.forEach((_, i) => { if (power(i) > (best < 0 ? -1 : power(best))) best = i; });
+            s = battle.act(best >= 0 ? best : 0);
           }
         }
         if (s.outcome && s.result) return void this.battleResult(s, options, finish);

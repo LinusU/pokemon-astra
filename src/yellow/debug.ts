@@ -47,8 +47,14 @@ export function attachDebug(game: YellowGame) {
     async step(dir: Facing, count = 1) {
       for (let i = 0; i < count; i++) {
         if (g.me.facing !== dir) g.me.facing = dir;
+        const map = g.header;
         g.tryStep(dir);
         await api.settle();
+        // Holding the direction carries the player through mats at the edge of a room.
+        if (g.header === map && g.standingOnWarp && g.world.edgeWarp(map, g.me.x, g.me.y, dir)) {
+          g.tryStep(dir);
+          await api.settle();
+        }
       }
       return api.where();
     },
