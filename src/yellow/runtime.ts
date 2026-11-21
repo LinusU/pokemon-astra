@@ -1045,7 +1045,7 @@ export class YellowGame implements Game {
   private async trainerSpotted(header: TrainerHeader, index: number) {
     const npc = this.npcs.find(n => n.object.index === index);
     if (!npc) return;
-    this.music(trainerIntro(npc.object.trainer!.klass));
+    if (npc.object.trainer) this.music(trainerIntro(npc.object.trainer.klass));
     await this.emote(index, "exclamation");
     await this.approach(index);
     this.me.facing = opposite(npc.facing);
@@ -1053,11 +1053,27 @@ export class YellowGame implements Game {
   }
   private async fightTrainer(header: TrainerHeader, npc?: Npc) {
     const trainer = npc?.object.trainer;
-    if (!trainer) return;
+    const pokemon = npc?.object.pokemon;
+    if (!trainer && !pokemon) return;
     const intro = this.textHandler(this.rom.label(header.before) ?? "");
     if (intro) await intro(this);
     else await this.showText(this.rom.text(header.before));
     this.music();
+    if (pokemon) {
+      // Legendaries and other static Pokémon use the trainer engine with a species in place of a class.
+      this.ctx.cry(this.rom.dex(pokemon.species));
+      const outcome = await this.wildBattle(pokemon.species, pokemon.level, { stationary: true });
+      if (outcome === "win" || outcome === "caught") {
+        this.setEvent(header.event, true);
+        const hs = this.rom.missables().findIndex(m => m.map === this.header.id && m.object === npc!.object.index);
+        if (hs >= 0) this.toggle(hs, false);
+        else npc!.hidden = true;
+        const after = MAP_SCRIPTS[this.header.label]?.texts?.["after:" + header.object];
+        if (after) await after(this);
+      }
+      return;
+    }
+    if (!trainer) return;
     const won = await this.battleTrainer(trainer.klass, trainer.index, { endText: header.end });
     if (won) {
       this.setEvent(header.event, true);

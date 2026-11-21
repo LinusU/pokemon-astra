@@ -36,7 +36,7 @@ function parseHeaders(rom: YellowRom, map: MapHeader, at: number) {
  * `ld de, ScriptPointers`. Talk handlers point into the same list.
  */
 export function trainerHeaders(rom: YellowRom, map: MapHeader): TrainerHeader[] {
-  if (!map.objects.some(o => o.trainer)) return [];
+  if (!map.objects.some(o => o.trainer || o.pokemon)) return [];
   for (let o = map.script; o < map.script + 48; o++) {
     if (rom.u8(o) === 0x21 && rom.u8(o + 3) === 0x11) {
       const headers = parseHeaders(rom, map, rom.far(map.bank, rom.u16(o + 1)));
