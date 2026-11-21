@@ -27,12 +27,12 @@ async function viridianCheckGymOpen(g: Game) {
   await g.move("player", "D");
 }
 
-/** The old man's demonstration catch of a Rattata. */
+/** The old man's demonstration: in Yellow his throw fails, because he didn't weaken the Rattata first. */
 async function catchDemo(g: Game) {
   await g.showcase("RATTATA", [
     "Wild RATTATA appeared!",
     "OLD MAN used POKé BALL!",
-    "All right! RATTATA was caught!",
+    "Darn! The POKéMON broke free!",
   ]);
 }
 
@@ -97,7 +97,7 @@ defineMap("ViridianCity", {
       g.set("EVENT_INITIAL_CATCH_TRAINING");
       await catchDemo(g);
       g.set("EVENT_COMPLETED_CATCH_TRAINING");
-      await g.text("ViridianCityOldMan2Text.LosingMyTouchText");
+      await g.text("TEXT_VIRIDIANCITY_OLD_MAN_YOU_NEED_TO_WEAKEN_THE_TARGET");
       // He walks off down the street, going around the player if need be.
       await g.move(VC_OLD_MAN2, g.player.x === 19 ? "D6" : "R1D6");
       g.hide("HS_OLD_MAN_2");

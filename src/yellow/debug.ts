@@ -59,7 +59,10 @@ export function attachDebug(game: YellowGame) {
     },
     async talk(dir?: Facing) {
       if (dir) g.me.facing = dir;
-      void game.runScript(() => g.interact());
+      void game.runScript(async () => {
+        await g.interact();
+        await g.afterControl();
+      });
       await api.settle();
       return log.slice(-6);
     },

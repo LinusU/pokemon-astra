@@ -267,6 +267,9 @@ export class YellowGame implements Game {
   }
   give(item: string, count = 1) {
     const id = this.itemId(item), key = String(id);
+    // GiveItem leaves the item's name where "received" texts print it.
+    this.textVar("wStringBuffer", this.rom.itemName(id));
+    this.textVar("wNameBuffer", this.rom.itemName(id));
     const kinds = Object.keys(this.save.items).filter(k => this.save.items[k] > 0);
     if (!this.save.items[key] && kinds.length >= 20) return false;
     if ((this.save.items[key] ?? 0) + count > 99) return false;
@@ -287,6 +290,8 @@ export class YellowGame implements Game {
   async giveMon(species: string, level: number, options: { nickname?: string; message?: boolean } = {}) {
     const dex = this.rom.dex(MON[species]);
     const mon = this.makeMon(dex, level, options.nickname);
+    this.textVar("wStringBuffer", this.rom.monName(MON[species]));
+    this.textVar("wNameBuffer", this.rom.monName(MON[species]));
     if (this.save.party.length < 6) this.save.party.push(mon);
     else this.save.storage.push(mon);
     this.register(dex, true);
@@ -668,7 +673,11 @@ export class YellowGame implements Game {
       return;
     }
     if (input.hit("a")) {
-      void this.runScript(() => this.interact());
+      // Yellow runs map scripts every frame; running them after an interaction lets follow-up scenes start.
+      void this.runScript(async () => {
+        await this.interact();
+        await this.afterControl();
+      });
       return;
     }
     const queued = this.queued;
@@ -1365,6 +1374,11 @@ export class YellowGame implements Game {
     finish(won ? "win" : caught ? "caught" : escaped ? "run" : outcome === "draw" ? "run" : "draw");
   }
 
+  /** The map script, as it runs once the player has control again. */
+  private async afterControl() {
+    if (this.mode !== "script") return;
+    await MAP_SCRIPTS[this.header.label]?.onStep?.(this);
+  }
   private async safariEncounter(species: number, level: number) {
     const previous = this.mode;
     this.mode = "menu";
@@ -1444,7 +1458,10 @@ export class YellowGame implements Game {
     const after = await openYellowMenu(this);
     this.ctx.layer.replaceChildren();
     this.mode = "world";
-    if (after) await this.runScript(after);
+    await this.runScript(async () => {
+      if (after) await after();
+      await this.afterControl();
+    });
   }
   get layer() { return this.ctx.layer; }
   get engine() { return this.ctx.engine; }
