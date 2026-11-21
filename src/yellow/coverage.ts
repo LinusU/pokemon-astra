@@ -4,7 +4,7 @@ import { asmPlan } from "./asm";
 import type { YellowRom } from "./rom";
 import { MAP_SCRIPTS, SHARED_TEXTS } from "./script";
 
-export const BUILTIN_HIDDEN = new Set(["HiddenItems", "HiddenCoins", "OpenPokemonCenterPC", "OpenRedsPC", "BillsHousePC"]);
+export const BUILTIN_HIDDEN = new Set(["HiddenItems", "HiddenCoins", "OpenPokemonCenterPC", "OpenRedsPC", "BillsHousePC", "StartSlotMachine"]);
 const GENERIC_SCRIPT_TABLE = () => new Set([SYM.CheckFightingMapTrainers, SYM.DisplayEnemyTrainerTextAndStartBattle, SYM.EndTrainerBattle]);
 
 /** Map scripts that only enable text boxes or run the standard trainer loop. */

@@ -19,6 +19,8 @@ import { yellowSummary, type YellowSave } from "./save";
 import { MAP_SCRIPTS, SHARED_TEXTS, type Actor, type BattleOutcome, type Emote, type Game } from "./script";
 import { textPages } from "./textbox";
 import { asmPlan } from "./asm";
+import { SAFARI_MAPS, safariBattle } from "./safari";
+import { safariGameOver } from "./scripts/safari";
 import { crystalMusic } from "./music";
 import { openYellowMenu } from "./menu";
 import { trainerTrigger, trainerHeaders, type TrainerHeader } from "./trainers";
@@ -820,6 +822,10 @@ export class YellowGame implements Game {
     this.save.facing = this.me.facing;
     this.crossEdge();
     this.save.steps++;
+    if (this.save.safari && SAFARI_MAPS.has(this.header.id) && this.ev("EVENT_IN_SAFARI_ZONE")) {
+      this.save.safari.steps = Math.max(0, this.save.safari.steps - 1);
+      if (!this.save.safari.steps) return safariGameOver(this);
+    }
     if (this.save.repel) this.save.repel = Math.max(0, this.save.repel - 1);
     if (this.save.steps % 256 === 0) this.save.party = this.save.party.map(m => ({ ...m, happiness: Math.min(255, m.happiness + 1) }));
     const map = this.header;
@@ -864,6 +870,9 @@ export class YellowGame implements Game {
     for (; slot < 9; slot++) if (roll < (acc += slots[slot])) break;
     const pick = table[slot];
     if (this.save.repel && pick.level < (this.save.party.find(m => m.hp > 0)?.level ?? 0)) return;
+    if (this.save.safari && SAFARI_MAPS.has(this.header.id)) return this.safariEncounter(pick.species, pick.level);
+    if (!this.hasItem("SILPH_SCOPE") && this.header.label.startsWith("PokemonTower") && /GASTLY|HAUNTER|GENGAR/.test(this.rom.monName(pick.species)))
+      return void await this.wildBattle(pick.species, pick.level, { ghost: true });
     await this.wildBattle(pick.species, pick.level);
   }
 
@@ -921,6 +930,11 @@ export class YellowGame implements Game {
   }
 
   private async hiddenObject(h: { x: number; y: number; arg: number; routine: string }) {
+    if (h.routine === "StartSlotMachine") {
+      const { slotMachine } = await import("./game-corner");
+      const index = this.rom.hiddenObjects(this.header.id).indexOf(h);
+      return slotMachine(this, h.arg, index);
+    }
     const handler = SHARED_TEXTS["hidden:" + h.routine];
     if (handler) {
       this.hidden = h;
@@ -1101,6 +1115,19 @@ export class YellowGame implements Game {
     const id = MAP[map];
     if (id === undefined || !this.header.warps[index]) return;
     this.header.warps = this.header.warps.map((w, i) => i === index ? { ...w, map: id, warp } : w);
+  }
+  async modal<T>(run: () => Promise<T>): Promise<T> {
+    const previous = this.mode;
+    this.mode = "menu";
+    try {
+      return await run();
+    } finally {
+      this.mode = previous === "menu" ? "script" : previous;
+    }
+  }
+  async takeWarp() {
+    const index = this.world.warpAt(this.header, this.me.x, this.me.y);
+    if (index >= 0) await this.useWarp(index);
   }
   async hallOfFame() {
     const { hallOfFame } = await import("./ceremony");
@@ -1308,6 +1335,16 @@ export class YellowGame implements Game {
     finish(won ? "win" : caught ? "caught" : escaped ? "run" : outcome === "draw" ? "run" : "draw");
   }
 
+  private async safariEncounter(species: number, level: number) {
+    const previous = this.mode;
+    this.mode = "menu";
+    try {
+      await safariBattle(this, species, level);
+    } finally {
+      this.mode = previous === "menu" ? "script" : previous;
+    }
+    if (!this.save.safari?.balls) await safariGameOver(this);
+  }
   private async evolveAfterBattle(slots: number[]) {
     const { evolveAfterBattle } = await import("./evolution");
     await evolveAfterBattle(this, slots);

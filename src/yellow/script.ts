@@ -110,6 +110,10 @@ export interface Game {
    * The change lasts until the map is set up again; elevators set it on entry.
    */
   setWarp(index: number, map: string, warp: number): void;
+  /** Runs a full-screen panel or minigame that takes menu input. */
+  modal<T>(run: () => Promise<T>): Promise<T>;
+  /** Uses the warp the player is standing on (after a scripted walk onto stairs or a mat). */
+  takeWarp(): Promise<void>;
   /** The Hall of Fame ceremony and credits. */
   hallOfFame(): Promise<void>;
   /** For script-specific feedback while porting. */
