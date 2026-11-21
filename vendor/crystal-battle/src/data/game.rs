@@ -107,6 +107,10 @@ pub struct Rules {
     /// experience from the party (Crystal: the trainer class's DVs, base
     /// happiness, no stat experience).
     pub trainer_party_stats: bool,
+    /// A trainer's Pokémon goes by its party's nickname (Crystal Legacy's
+    /// `TRAINERTYPE_NICKNAME`), and `LoadEnemyMon` looks a Pokémon's name up
+    /// only once it isn't caught.
+    pub trainer_nicknames: bool,
     /// Level-100 Pokémon take no experience (Crystal Legacy's level cap
     /// outside hard mode): no award or message, though they still gain stat
     /// experience, and they don't count when experience is divided.
@@ -115,27 +119,49 @@ pub struct Rules {
 
 impl Rules {
     /// Pokémon Crystal's own code.
-    pub const CRYSTAL: Rules = Rules { ghost_special_dark_physical: false, bug_fixes: false, zephyr_badge_obedience: false, trainer_party_stats: false, max_level_takes_no_exp: false };
+    pub const CRYSTAL: Rules = Rules { ghost_special_dark_physical: false, bug_fixes: false, zephyr_badge_obedience: false, trainer_party_stats: false, trainer_nicknames: false, max_level_takes_no_exp: false };
     /// Crystal Legacy's code.
-    pub const CRYSTAL_LEGACY: Rules = Rules { ghost_special_dark_physical: true, bug_fixes: true, zephyr_badge_obedience: true, trainer_party_stats: true, max_level_takes_no_exp: true };
+    pub const CRYSTAL_LEGACY: Rules = Rules { ghost_special_dark_physical: true, bug_fixes: true, zephyr_badge_obedience: true, trainer_party_stats: true, trainer_nicknames: true, max_level_takes_no_exp: true };
 }
 
 /// A trainer's party (`data/trainers/parties.asm`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TrainerParty {
     pub name: &'static str,
-    /// `TRAINERTYPE_*`: whether the mons have items and moves.
+    /// `TRAINERTYPE_*`: whether the mons have items and moves (Crystal
+    /// Legacy's are flags, which add nicknames, DVs, stat experience,
+    /// happiness and stages).
+    pub kind: u8,
+    pub mons: &'static [TrainerMon],
+    /// Crystal Legacy's `TRAINERTYPE_VARIABLE` parties: one stage per number
+    /// of badges, each with its own type and mons (`mons` is then empty).
+    pub stages: &'static [TrainerStage],
+}
+
+/// A stage of a Crystal Legacy party that changes with the player's badges.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TrainerStage {
+    /// The stage's `TRAINERTYPE_*` flags.
     pub kind: u8,
     pub mons: &'static [TrainerMon],
 }
 
-/// One mon of a trainer's party.
+/// One mon of a trainer's party. The fields past `moves` are Crystal
+/// Legacy's, as its `ReadTrainerParty` stores them in the party struct.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TrainerMon {
     pub level: u8,
     pub species: u8,
     pub item: Option<u8>,
     pub moves: Option<[u8; 4]>,
+    /// `TRAINERTYPE_NICKNAME` (none for an empty one).
+    pub nickname: Option<&'static str>,
+    /// `TRAINERTYPE_DVS`: the attack/defense and speed/special bytes.
+    pub dvs: Option<[u8; 2]>,
+    /// `TRAINERTYPE_STAT_EXP`: HP, Attack, Defense, Speed, Special.
+    pub stat_exp: Option<[u16; 5]>,
+    /// `TRAINERTYPE_HAPPINESS`.
+    pub happiness: Option<u8>,
 }
 
 /// Names (species, moves, …), as the game spells them. Indexed like the
@@ -405,8 +431,7 @@ impl GameData {
     }
 
     /// Pokémon Crystal Legacy's data (V1.3.1), with its rules
-    /// ([`Rules::CRYSTAL_LEGACY`]). It has no trainer parties: a trainer
-    /// battle brings its own.
+    /// ([`Rules::CRYSTAL_LEGACY`]).
     #[cfg(feature = "crystal-legacy")]
     pub fn crystal_legacy() -> &'static GameData {
         &super::crystal_legacy::CRYSTAL_LEGACY
