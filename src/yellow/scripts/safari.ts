@@ -19,18 +19,7 @@ defineMap("SafariZoneGate", {
         return;
       }
       await g.text("_SafariZoneGateSafariZoneWorker1LeavingEarlyText", { wait: false });
-      if (await g.yesNo()) {
-        await g.text("SafariZoneGateSafariZoneWorker1LeavingEarlyText.ReturnSafariBallsText");
-        g.reset("EVENT_SAFARI_GAME_OVER");
-        g.reset("EVENT_IN_SAFARI_ZONE");
-        g.save.safari = undefined;
-        await g.move("player", "D3");
-      } else {
-        await g.text("SafariZoneGateSafariZoneWorker1LeavingEarlyText.GoodLuckText");
-        await g.move("player", "U");
-        await g.takeWarp();
-      }
-      return;
+      return leaveEarly(g);
     }
     if (inSafari || g.player.y !== 2 || (g.player.x !== 3 && g.player.x !== 4)) return;
     await g.text("TEXT_SAFARIZONEGATE_SAFARI_ZONE_WORKER1_1");
@@ -41,6 +30,10 @@ defineMap("SafariZoneGate", {
     async SafariZoneGatePrintSafariZoneWorker1WouldYouLikeToJoinText(g) {
       await join(g);
     },
+    // Shown after "_SafariZoneGateSafariZoneWorker1LeavingEarlyText" when the text id is used directly.
+    async SafariZoneGateSafariZoneWorker1LeavingEarlyText(g) {
+      await leaveEarly(g);
+    },
     async SafariZoneGatePrintSafariZoneWorker2Text(g) {
       await g.text("SafariZoneGatePrintSafariZoneWorker2Text.FirstTimeHereText", { wait: false });
       if (await g.yesNo()) await g.text("SafariZoneGatePrintSafariZoneWorker2Text.SafariZoneExplanationText");
@@ -48,6 +41,20 @@ defineMap("SafariZoneGate", {
     },
   },
 });
+
+async function leaveEarly(g: Game) {
+  if (await g.yesNo()) {
+    await g.text("SafariZoneGateSafariZoneWorker1LeavingEarlyText.ReturnSafariBallsText");
+    g.reset("EVENT_SAFARI_GAME_OVER");
+    g.reset("EVENT_IN_SAFARI_ZONE");
+    g.save.safari = undefined;
+    await g.move("player", "D3");
+  } else {
+    await g.text("SafariZoneGateSafariZoneWorker1LeavingEarlyText.GoodLuckText");
+    await g.move("player", "U");
+    await g.takeWarp();
+  }
+}
 
 async function join(g: Game) {
   await g.text(`${ENTRY}.WelcomeText`, { wait: false });

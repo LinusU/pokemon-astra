@@ -1,5 +1,5 @@
 /** Which parts of the cartridge's map logic still need a hand-written port. */
-import { SYM } from "./generated/symbols";
+import { MAP_TEXT, SYM } from "./generated/symbols";
 import { asmPlan } from "./asm";
 import type { YellowRom } from "./rom";
 import { MAP_SCRIPTS, SHARED_TEXTS } from "./script";
@@ -35,12 +35,7 @@ export function coverageGaps(rom: YellowRom): Gap[] {
       gaps.push({ map: map.label, kind: "script", label: rom.label(map.script) ?? map.label + "_Script" });
     const ids = new Set<number>([...map.objects.map(o => o.text), ...map.signs.map(s => s.text)]);
     // Script-only texts follow the object and sign ids in the pointer table.
-    const known = Math.max(0, ...ids);
-    for (let t = known + 1; t <= known + 40; t++) {
-      const ptr = rom.u16(map.textPointers + (t - 1) * 2);
-      if (ptr < 0x4000 || ptr >= 0x8000) break;
-      ids.add(t);
-    }
+    for (const t of Object.values(MAP_TEXT[map.label] ?? {})) ids.add(t);
     for (const t of ids) {
       if (!t) continue;
       const at = rom.mapText(map, t);

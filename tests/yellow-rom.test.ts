@@ -59,3 +59,12 @@ describe.skipIf(!available)("Yellow movesets", () => {
     expect(specialMoves(rom, TRAINER.BROCK, 1)).toEqual([{ mon: 1, slot: 2, move: MOVE.BIND }, { mon: 1, slot: 3, move: MOVE.BIDE }]);
   });
 });
+
+describe.skipIf(!available)("Yellow script coverage", () => {
+  it("has a port for every map script, text routine and hidden object", async () => {
+    await import("../src/yellow/scripts");
+    const { coverageGaps } = await import("../src/yellow/coverage");
+    const rom = new YellowRom(new Uint8Array(readFileSync("pokeyellow.gbc")));
+    expect(coverageGaps(rom)).toEqual([]);
+  });
+});

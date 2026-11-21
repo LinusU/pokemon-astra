@@ -71,6 +71,9 @@ async function oakStopsPlayer(g: Game) {
   await g.warp("OAKS_LAB", 5, 11, "up");
 }
 
+// The bedroom's script table only holds no-op scripts; the PC and SNES are hidden objects.
+defineMap("RedsHouse2F", { generic: true });
+
 defineMap("RedsHouse1F", {
   texts: {
     async RedsHouse1FPrintMomText(g) {
@@ -196,6 +199,7 @@ defineMap("OaksLab", {
       g.face("player", "up");
       await givePikachu(g);
     },
+    OaksLabPlayerReceivedMonText: givePikachu,
     async OaksLabOak1Text(g) {
       const owned = g.save.caught.length;
       if (g.ev("EVENT_PALLET_AFTER_GETTING_POKEBALLS") || owned >= 2) {
