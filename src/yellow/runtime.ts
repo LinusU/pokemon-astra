@@ -1776,7 +1776,8 @@ export class YellowGame implements Game {
     const bx0 = Math.floor(camX / 32), by0 = Math.floor(camY / 32);
     for (let by = by0; by <= by0 + 8; by++)
       for (let bx = bx0; bx <= bx0 + 10; bx++) c.drawImage(border, bx * 32 - camX, by * 32 - camY);
-    c.drawImage(crystal ? this.crystal.map(map, this.blocksVersion) : this.gfx.map(map, this.palette, this.blocksVersion), -camX, -camY);
+    const ground = crystal ? this.crystal.map(map, this.blocksVersion) : this.gfx.map(map, this.palette, this.blocksVersion);
+    c.drawImage(ground, -camX, -camY);
     for (const conn of map.connections) {
       const target = this.world.map(conn.map);
       const img = this.crystalLook(target) ? this.crystal.map(target) : this.gfx.map(target, mapPalette(this.rom, target, this.save.lastMap));
@@ -1801,6 +1802,7 @@ export class YellowGame implements Game {
           if (!img) return;
           const x = Math.round(at.x - camX), y = Math.round(at.y - camY - 4 - at.lift);
           c.drawImage(img, x, y);
+          if (!at.lift) this.coverWithGrass(c, ground, Math.round(at.x), Math.round(at.y - 4), camX, camY);
           if (emote && emote.until > this.clock) this.drawEmote(c, emote.kind, x, y - 16);
         },
       });
@@ -1856,6 +1858,17 @@ export class YellowGame implements Game {
       if (x < -8 || y < -8 || x > 320 || y > 240) continue;
       c.drawImage(this.gfx.animatedTile(map, t.tile, this.palette, frame), x, y);
     }
+  }
+  /** Tall grass hides the lower half of anyone standing in it, as on the Game Boy. */
+  private coverWithGrass(c: CanvasRenderingContext2D, ground: HTMLCanvasElement, sx: number, sy: number, camX: number, camY: number) {
+    const map = this.header, top = sy + 8, bottom = sy + 16;
+    for (let tx = Math.floor(sx / 16); tx <= Math.floor((sx + 15) / 16); tx++)
+      for (let ty = Math.floor(top / 16); ty <= Math.floor((bottom - 1) / 16); ty++) {
+        if (tx < 0 || ty < 0 || tx >= map.width * 2 || ty >= map.height * 2 || !this.world.isGrass(map, tx, ty)) continue;
+        const x0 = Math.max(sx, tx * 16), x1 = Math.min(sx + 16, tx * 16 + 16);
+        const y0 = Math.max(top, ty * 16), y1 = Math.min(bottom, ty * 16 + 16);
+        if (x1 > x0 && y1 > y0) c.drawImage(ground, x0, y0, x1 - x0, y1 - y0, x0 - camX, y0 - camY, x1 - x0, y1 - y0);
+      }
   }
   /** Whether a map is drawn with Crystal's graphics. */
   private crystalLook(map: MapHeader) {
