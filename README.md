@@ -38,6 +38,20 @@ Production builds generate a versioned offline service worker covering the appli
 
 The region plan is in [docs/DESIGN.md](docs/DESIGN.md); implemented content and contracts are in [docs/WORLD.md](docs/WORLD.md).
 
+## The Yellow adventure
+
+Choose **New journey → Yellow** to play Pokémon Yellow's Kanto on Astra's engine. The first time, the game asks for your own **English Pokémon Yellow** cartridge (.gbc, SHA-1 `cc7d03262ebfaf2f06772c1a480c7d9d5f4a38e1`). Like the Crystal cartridge, it is read in the browser and kept in IndexedDB. Nothing from it is bundled with the app.
+
+- **From the Yellow cartridge:** every map, tile, overworld sprite, warp, connection, sign, person, item ball, hidden item, trainer party, encounter table, mart stock, in-game trade and all dialogue. Maps use the cartridge's own Game Boy Color palettes; Pikachu and the other characters get their own colors.
+- **From Astra:** the Crystal battle engine and battle screen, Crystal Pokémon pictures and cries, menus, the Bag, party and storage screens, autosave, and Crystal's arrangements of the Kanto music. Trainers fight with Yellow's own movesets, including the gym leaders' special moves.
+- **The story:** the map scripts are hand ports of the pret/pokeyellow disassembly's logic in `src/yellow/scripts/`. They reference the cartridge's text by label, so the dialogue on screen is always the cartridge's. A test checks that every map script, text routine and hidden object in the cartridge has a port.
+- Pikachu follows you and won't go in its ball. Talk to it to see how it feels.
+- Field moves need their badge and a Pokémon that knows the move. Inspect a tree, the water or a boulder to use Cut, Surf or Strength, or choose the move from the party menu. Fly, Flash, Dig, Teleport and Softboiled work as in Yellow. A fainted Pokémon can still use field moves.
+- The Safari Zone, the Game Corner's slot machines and prize corner, the Day-Care, fossils, gift Pokémon, in-game trades, the Name Rater, Silph Co.'s Card Key doors and elevators, the Pokémon Tower ghosts, Snorlax and the legendary birds are all playable.
+- Movement is square by square, as on the Game Boy, with smooth steps. Hold B or Shift to walk faster.
+
+Not included: link-cable features, the Game Boy Printer, the Surfing Pikachu minigame and Pikachu's animated emotion pictures. Talking to Pikachu shows a short line instead.
+
 ## Controls and saves
 
 | Input | Move | Confirm | Back / menu |
@@ -86,7 +100,10 @@ npm run typecheck
 npm run build
 npm run test:native      # Rust tests + local-ROM WASM integration smoke test
 npm run test:campaign    # repeatable local-ROM battle run for all three starters
+npx vite-node scripts/yellow-coverage.ts   # Yellow map logic that still lacks a port (expects ./pokeyellow.gbc)
 ```
+
+Yellow's cartridge offsets and constant names are generated from a local pret/pokeyellow checkout with `node scripts/yellow-symbols.mjs ../pokeyellow`. The generated table holds addresses and identifiers only. Yellow tests run when `pokeyellow.gbc` is present in the project root.
 
 The native smoke check verifies wild/trainer battle results, PP and healing, forced switching, full-party capture into storage, 502 front/back pictures, music continuity, and cries. ROM-dependent tests are skipped when the local cartridge or built WASM is absent; the smoke command requires both. Browser QA covers ROM import/cache, starter selection, movement and map transitions, and actual trainer battles. See [docs/VERIFICATION.md](docs/VERIFICATION.md) for the final recorded checks.
 
