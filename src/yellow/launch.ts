@@ -147,6 +147,10 @@ async function start(host: YellowHost, entry: JourneyEntry, rom: import("./rom")
     },
   });
   host.activate(game);
-  if (import.meta.env.DEV) (window as unknown as { __yellow: unknown }).__yellow = game;
+  if (import.meta.env.DEV) {
+    (window as unknown as { __yellow: unknown }).__yellow = game;
+    const started = game;
+    (window as unknown as { yellowDebug: () => Promise<unknown> }).yellowDebug = () => import("./debug").then(m => m.attachDebug(started));
+  }
   void host.sound.unlock();
 }

@@ -1275,7 +1275,15 @@ export class YellowGame implements Game {
         resolve(outcome);
       };
       const present = () => {
-        const s = battle.snapshot();
+        let s = battle.snapshot();
+        if (this.autoBattle) {
+          // Development: play the battle on the native engine without the presenter.
+          for (let turns = 0; !s.outcome && turns < 500; turns++) {
+            const legal = s.legal as Record<string, unknown>[];
+            const move = legal.findIndex(a => a && typeof a === "object" && "Move" in a);
+            s = battle.act(move >= 0 ? move : 0);
+          }
+        }
         if (s.outcome && s.result) return void this.battleResult(s, options, finish);
         this.battlePresenter = new BattlePresenter({
           layer: this.ctx.layer,
@@ -1306,10 +1314,12 @@ export class YellowGame implements Game {
           },
         });
       };
-      window.setTimeout(present, 620);
+      window.setTimeout(present, this.autoBattle ? 0 : 620);
     });
   }
   inBattle?: { trainer: boolean; klass?: number };
+  /** Development: resolve battles instantly on the native engine. */
+  autoBattle = false;
   battleCue?: string;
 
   private async battleResult(s: ReturnType<ReturnType<Engine["startBattle"]>["snapshot"]>, options: { trainer?: string; canLose?: boolean }, finish: (o: BattleOutcome) => void) {
