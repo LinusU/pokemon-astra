@@ -112,6 +112,12 @@ export class YellowGame implements Game {
   get map() { return this.header.id; }
   get mapLabel() { return this.header.label; }
   get playerState() { return this.me; }
+  get currentMap() { return this.header; }
+  /** Strength stays active until the player leaves the map. */
+  strength = false;
+  objectAt(x: number, y: number) {
+    return this.npcs.find(n => !n.hidden && n.x === x && n.y === y);
+  }
   get player() { return this.me; }
   get money() { return this.save.money; }
   set money(v: number) { this.save.money = Math.max(0, Math.min(999999, Math.floor(v))); }
@@ -463,7 +469,11 @@ export class YellowGame implements Game {
   private enterMap(id: number, fromWarp: boolean) {
     // A private copy of the blocks lets scripts open doors and move gates.
     const base = this.world.map(id);
+    const fromOutside = !this.header || this.header.id < 0x25;
     this.header = { ...base, blocks: base.blocks.slice() };
+    this.strength = false;
+    if (id < 0x25) this.save.vars.dark = 0;
+    else if (id === MAP.ROCK_TUNNEL_1F && fromOutside && fromWarp) this.save.vars.dark = 1;
     this.blocksVersion++;
     this.save.map = id;
     if (id < 0x25) {
@@ -700,6 +710,10 @@ export class YellowGame implements Game {
       this.ctx.sound.overworld("exit");
       return;
     }
+    const boulder = this.objectAt(nx, ny);
+    if (boulder?.object.sprite === SPRITE.SPRITE_BOULDER && this.strength && !boulder.from) {
+      if (this.pushBoulder(boulder, dir)) return;
+    }
     const surfing = !!this.save.surfing;
     const from = this.world.tile(map, p.x, p.y), to = this.world.tile(map, nx, ny);
     let ok = !this.blocked(nx, ny) && !this.world.pairBlocked(map, from, to, surfing);
@@ -725,6 +739,24 @@ export class YellowGame implements Game {
   }
   private bumped = false;
   private queued?: Facing;
+  private pushTries = 0;
+  /** Strength: the boulder moves after the player pushes against it a second time. */
+  private pushBoulder(boulder: Npc, dir: Facing) {
+    if (++this.pushTries < 2) return false;
+    this.pushTries = 0;
+    const [dx, dy] = STEP[dir], x = boulder.x + dx, y = boulder.y + dy;
+    const map = this.header;
+    if (!this.world.passable(map, x, y) || this.blocked(x, y, boulder) ||
+      this.world.pairBlocked(map, this.world.tile(map, boulder.x, boulder.y), this.world.tile(map, x, y)) ||
+      this.world.tile(map, x, y) === 0x15) return false;
+    boulder.from = { x: boulder.x, y: boulder.y, t: 0, duration: WALK_SECONDS * 1.5 };
+    boulder.x = x;
+    boulder.y = y;
+    boulder.home = { x, y };
+    this.ctx.sound.overworld("strength");
+    boulder.onPath = () => void this.runScript(() => MAP_SCRIPTS[this.header.label]?.onStep?.(this));
+    return true;
+  }
   /** Development helper: jump to a map square. */
   debugWarp(map: string, x: number, y: number) {
     void this.runScript(() => this.warp(map, x, y));
@@ -859,6 +891,8 @@ export class YellowGame implements Game {
     }
     const hidden = this.rom.hiddenObjects(this.header.id).find(h => h.x === this.me.x + dx && h.y === this.me.y + dy);
     if (hidden) return this.hiddenObject(hidden);
+    const { fieldPrompt } = await import("./field");
+    if (await fieldPrompt(this)) return;
     // Bookshelves, statues and displays in buildings without their own sign.
     if (this.me.facing === "up") {
       const tile = this.world.tile(this.header, this.me.x, this.me.y - 1);
@@ -1340,9 +1374,10 @@ export class YellowGame implements Game {
   private async openMenu() {
     this.mode = "menu";
     this.ctx.sound.overworld("interact");
-    await openYellowMenu(this);
+    const after = await openYellowMenu(this);
     this.ctx.layer.replaceChildren();
     this.mode = "world";
+    if (after) await this.runScript(after);
   }
   get layer() { return this.ctx.layer; }
   get engine() { return this.ctx.engine; }
@@ -1413,6 +1448,15 @@ export class YellowGame implements Game {
     if (this.pikachu?.visible) add(this.pikachu, SPRITE.SPRITE_PIKACHU);
     add(this.me, this.save.surfing ? SPRITE.SPRITE_SEEL : this.save.bike ? SPRITE.SPRITE_RED_BIKE ?? SPRITE.SPRITE_RED : SPRITE.SPRITE_RED, (this.me as Npc).emote);
     drawn.sort((a, b) => a.y - b.y).forEach(d => d.draw());
+    if (this.save.vars.dark) {
+      // Without Flash only the squares right around the player are visible.
+      const px = Math.round(p.x - camX + 8), py = Math.round(p.y - camY + 4);
+      const g = c.createRadialGradient(px, py, 12, px, py, 34);
+      g.addColorStop(0, "rgba(8,8,14,0)");
+      g.addColorStop(1, "rgba(8,8,14,0.96)");
+      c.fillStyle = g;
+      c.fillRect(0, 0, 320, 240);
+    }
     if (this.fadeLevel > 0) {
       c.fillStyle = `rgba(16,16,24,${this.fadeLevel})`;
       c.fillRect(0, 0, 320, 240);

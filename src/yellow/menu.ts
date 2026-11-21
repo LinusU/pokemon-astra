@@ -7,13 +7,15 @@ import { ITEM } from "./generated/symbols";
 import type { YellowGame } from "./runtime";
 import { titleCase } from "./runtime";
 import { useYellowItem, itemPocket, itemDescription } from "./items";
+import { FIELD_MOVES, knownFieldMoves, useFieldMove } from "./field";
+import { choose } from "./services";
 
 const BADGES = ["Boulder", "Cascade", "Thunder", "Rainbow", "Soul", "Marsh", "Volcano", "Earth"];
 let selection = "party";
 const bagState: BagState = {};
 
 /** Yellow's start menu. Resolves when the player closes it. */
-export function openYellowMenu(game: YellowGame): Promise<void> {
+export function openYellowMenu(game: YellowGame): Promise<(() => Promise<void>) | void> {
   return new Promise(resolve => {
     const close = () => {
       game.layer.replaceChildren();
@@ -53,8 +55,18 @@ export function openYellowMenu(game: YellowGame): Promise<void> {
             name: mon.nickname || engine.species(mon.species).name, sprite: game.ctx.sprite(mon), level: mon.level,
             status: mon.status, hp: mon.hp, maxHp: mon.stats[0], note: slot === 0 ? "Lead" : undefined,
           })),
-          onSelect: slot => {
+          onSelect: async slot => {
             const mon = save.party[slot];
+            const moves = knownFieldMoves(mon);
+            if (moves.length) {
+              const pick = await choose(game, mon.nickname || engine.species(mon.species).name, ["Summary", ...moves.map(m => FIELD_MOVES[m].name)]);
+              if (pick === undefined) return view("party", slot);
+              if (pick > 0) {
+                game.layer.replaceChildren();
+                resolve(() => useFieldMove(game, slot, moves[pick - 1]));
+                return;
+              }
+            }
             mountPartnerSummary(game.layer, mon, {
               engine, image: game.ctx.sprite(mon), itemName: () => "",
               onBack: () => view("party", slot),
@@ -80,6 +92,10 @@ export function openYellowMenu(game: YellowGame): Promise<void> {
         mountBag(game.layer, {
           items, state: bagState, pockets: ["items", "balls", "key"],
           onUse: item => void useYellowItem(game, +item.key).then(result => {
+            if (typeof result === "function") {
+              game.layer.replaceChildren();
+              return resolve(result);
+            }
             if (result === "close") return close();
             if (result) message(result, () => view("bag"));
             else view("bag");

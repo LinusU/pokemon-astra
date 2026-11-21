@@ -219,9 +219,12 @@ export function blackoutSpot(game: YellowGame, town: number) {
   return { map: MAP.PALLET_TOWN, x: 5, y: 6 };
 }
 
+/** Escape Rope and Dig work in caves and dungeons. */
+export function canEscape(game: YellowGame) {
+  return game.map >= 0x25 && isDungeon(game);
+}
 export async function escapeRope(game: YellowGame) {
-  const outdoors = game.map < 0x25;
-  if (outdoors || !game.rom.tileset(game.world.map(game.map).tileset).grass && !isDungeon(game)) return false;
+  if (!canEscape(game)) return false;
   const spot = blackoutSpot(game, game.save.blackout);
   await game.warp(mapName(spot.map), spot.x, spot.y, "down");
   return true;
@@ -234,7 +237,7 @@ function mapName(id: number) {
 }
 
 export async function fish(game: YellowGame, rod: "OLD_ROD" | "GOOD_ROD" | "SUPER_ROD") {
-  await game.runScript(async () => {
+  await (async () => {
     const [dx, dy] = STEP[game.playerState.facing];
     const map = game.world.map(game.map);
     if (game.save.surfing || !game.world.isWater(map, game.playerState.x + dx, game.playerState.y + dy)) {
@@ -253,7 +256,7 @@ export async function fish(game: YellowGame, rod: "OLD_ROD" | "GOOD_ROD" | "SUPE
     }
     await game.say("Oh! It's a bite!");
     await game.wildBattle(pick.species, pick.level);
-  });
+  })();
 }
 function superRod(game: YellowGame) {
   // Yellow's Super Rod table: map id, then four (species, level) pairs.

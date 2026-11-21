@@ -55,7 +55,7 @@ function pickPartyMember(game: YellowGame, title: string, usable: (mon: Pokemon)
 }
 
 /** Uses an item from the Bag outside battle. Returns a message, "close" to leave the menu, or nothing. */
-export async function useYellowItem(game: YellowGame, id: number): Promise<string | "close" | undefined> {
+export async function useYellowItem(game: YellowGame, id: number): Promise<string | "close" | (() => Promise<void>) | undefined> {
   const n = name(id), save = game.save, engine = game.engine;
   const consume = () => {
     save.items[id]--;
@@ -94,10 +94,10 @@ export async function useYellowItem(game: YellowGame, id: number): Promise<strin
     return "close";
   }
   if (n === "ESCAPE_ROPE") {
-    const { escapeRope } = await import("./services");
-    if (!(await escapeRope(game))) return "This isn't the time to use that!";
+    const { escapeRope, canEscape } = await import("./services");
+    if (!canEscape(game)) return "This isn't the time to use that!";
     consume();
-    return "close";
+    return async () => { await escapeRope(game); };
   }
   if (/_STONE$/.test(n)) {
     const crystal = game.crystalItem(id);
@@ -113,8 +113,7 @@ export async function useYellowItem(game: YellowGame, id: number): Promise<strin
   }
   if (n === "OLD_ROD" || n === "GOOD_ROD" || n === "SUPER_ROD") {
     const { fish } = await import("./services");
-    void fish(game, n);
-    return "close";
+    return () => fish(game, n);
   }
   if (n === "TOWN_MAP") return `You are in ${game.summary().place}.`;
   if (n === "COIN_CASE") return `Coins: ${save.coins}`;
@@ -124,7 +123,10 @@ export async function useYellowItem(game: YellowGame, id: number): Promise<strin
   }
   if (n === "POKE_FLUTE") {
     const { pokeFlute } = await import("./services");
-    return pokeFlute(game);
+    return async () => {
+      const message = await pokeFlute(game);
+      if (message !== "close") await game.say(message);
+    };
   }
   if (id >= 0xc4) {
     const { teachMachine } = await import("./services");
