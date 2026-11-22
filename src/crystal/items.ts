@@ -28,6 +28,12 @@ async function pickMon(game: CrystalGame, title: string) {
   return choosePartyMon(game, title);
 }
 
+export function useRepel(game: CrystalGame, item: number) {
+  game.save.repel = is(item, "REPEL") ? 100 : is(item, "SUPER_REPEL") ? 200 : 250;
+  game.save.vars.repelType = item;
+  game.takeItem(item);
+}
+
 export async function useItem(game: CrystalGame, item: number): Promise<ItemResult> {
   const name = itemConst(item) ?? "";
   const heal = healAmount(game, item), cure = statusCure(game, item);
@@ -39,8 +45,7 @@ export async function useItem(game: CrystalGame, item: number): Promise<ItemResu
   if (is(item, "FIRE_STONE", "THUNDERSTONE", "WATER_STONE", "LEAF_STONE", "MOON_STONE", "SUN_STONE") || evolvesWith(game, item)) return stone(game, item);
   if (is(item, "REPEL", "SUPER_REPEL", "MAX_REPEL")) {
     if (game.save.repel) return "The REPEL's effect is still on.";
-    game.save.repel = is(item, "REPEL") ? 100 : is(item, "SUPER_REPEL") ? 200 : 250;
-    game.takeItem(item);
+    useRepel(game, item);
     return "REPEL's effect began.";
   }
   if (is(item, "BICYCLE")) return () => toggleBike(game);
@@ -166,8 +171,8 @@ async function teachMachine(game: CrystalGame, item: number, moveName: string): 
   if (slot === undefined) return;
   const { teachMove } = await import("./moves");
   if (!(await teachMove(game, slot, move))) return;
-  // TMs break after one use in Crystal; Crystal Legacy's TMs, like HMs, last.
-  if (!game.legacy && itemConst(item)?.startsWith("TM_")) game.takeItem(item);
+  // TMs are used up; HMs last.
+  if (itemConst(item)?.startsWith("TM_")) game.takeItem(item);
 }
 
 async function toggleBike(game: CrystalGame) {

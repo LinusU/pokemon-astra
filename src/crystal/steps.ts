@@ -1,5 +1,5 @@
 /** What each step counts (engine/overworld/events.asm, CountStep): Repel, poison, Eggs, the Day-Care, friendship and phone calls. */
-import { C, SYM, TEXT } from "./symbols";
+import { C, RAM, SYM, TEXT } from "./symbols";
 import type { CrystalGame } from "./runtime";
 import { runScript } from "./script";
 
@@ -12,12 +12,19 @@ export async function countStep(game: CrystalGame): Promise<boolean> {
   // Friendship grows for every Pokémon a step… every 256 of them.
   if (save.steps % 256 === 0) for (const m of save.party) if (!m.egg) m.happiness = Math.min(255, m.happiness + 1);
   if (save.repel && !--save.repel) {
-    const at = TEXT.RepelWoreOffText ?? TEXT._RepelWoreOffText;
-    if (at !== undefined) {
-      await game.writeText(at);
-      await game.waitButton();
-      game.closeText();
-    } else await game.say("REPEL's effect wore off.");
+    // Crystal Legacy offers another Repel of the same kind (UseAnotherRepelScript).
+    const kind = save.vars.repelType ?? 0;
+    if (RAM.wRepelType !== undefined) game.poke(RAM.wRepelType, kind);
+    if (SYM.UseAnotherRepelScript !== undefined && kind && game.itemCount(kind)) await runScript(game, SYM.UseAnotherRepelScript);
+    else if (SYM.RepelWoreOffScript !== undefined) await runScript(game, SYM.RepelWoreOffScript);
+    else {
+      const at = TEXT._RepelWoreOffText;
+      if (at !== undefined) {
+        await game.writeText(at);
+        await game.waitButton();
+        game.closeText();
+      } else await game.say("REPEL's effect wore off.");
+    }
     return true;
   }
   // Poison: every fourth step costs 1 HP, never below 1 outside battle (Crystal).

@@ -501,6 +501,12 @@ const ASM_ROUTINES: Record<string, Routine> = {
   },
   SetMemEvent: g => { g.setEvent(g.peek(RAM.wHiddenItemEvent) | (g.peek(RAM.wHiddenItemEvent + 1) << 8), true); },
   GiveItemScript_DummyFunction: noop,
+  // Crystal Legacy's UseAnotherRepelScript uses the Repel in wRepelType.
+  DoItemEffect: async g => {
+    const { useRepel } = await import("./items");
+    const item = g.peek(RAM.wRepelType);
+    if (g.itemCount(item)) useRepel(g, item);
+  },
   GetCurTreeFruit: g => {
     const tree = g.peek(RAM.wCurFruitTree);
     g.poke(RAM.wCurFruit, g.rom.u8(SYM.FruitTreeItems + tree - 1));
