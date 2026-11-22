@@ -225,17 +225,22 @@ export function makeEgg(game: CrystalGame, a: Pokemon, b: Pokemon): CrystalMon |
 }
 
 /** Eggs in the party hatch after their cycles of 256 steps. */
+/** DoEggStep and HatchEggs: every 256 steps the Eggs count down, in party order, until one is ready; then every ready Egg hatches. */
 export async function eggStep(game: CrystalGame) {
   if (game.save.steps % 256) return false;
-  const fast = game.save.party.some(m => !m.egg && false);
-  for (const [i, m] of game.save.party.entries()) {
-    if (!m.egg) continue;
-    m.eggCycles = Math.max(0, (m.eggCycles ?? 1) - (fast ? 2 : 1));
-    if (m.eggCycles > 0) continue;
-    await hatch(game, i);
-    return true;
+  const party = game.save.party;
+  for (const m of party) {
+    if (!m.egg || !m.eggCycles) continue;
+    m.eggCycles--;
+    if (!m.eggCycles) break;
   }
-  return false;
+  let hatched = false;
+  for (let i = 0; i < party.length; i++) {
+    if (!party[i].egg || party[i].eggCycles) continue;
+    await hatch(game, i);
+    hatched = true;
+  }
+  return hatched;
 }
 async function hatch(game: CrystalGame, slot: number) {
   const mon = game.save.party[slot];
