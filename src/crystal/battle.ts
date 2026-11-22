@@ -199,7 +199,7 @@ export async function startBattle(game: CrystalGame): Promise<number> {
     unownDex: game.save.unownDex, location: game.landmark(),
   };
   const canLose = battleType === C("BATTLETYPE_CANLOSE");
-  const finished = await runBattle(game, start, trainerName, setup.kind === "trainer" ? setup.klass : undefined);
+  const finished = await runBattle(game, start, trainerName, setup.kind === "trainer" ? setup.klass : undefined, battleType);
   if (!finished) return C("DRAW");
   const result = await applyResult(game, finished, bag, canLose);
   // A trainer's parting words.
@@ -216,7 +216,7 @@ export async function startBattle(game: CrystalGame): Promise<number> {
   return result;
 }
 
-async function runBattle(game: CrystalGame, start: BattleOptions, trainerName: string | undefined, klass?: number): Promise<FinishedBattle | undefined> {
+async function runBattle(game: CrystalGame, start: BattleOptions, trainerName: string | undefined, klass: number | undefined, battleType: number): Promise<FinishedBattle | undefined> {
   const { engine } = game;
   // Without a page (tests), the battle is played on the engine with the strongest moves.
   if (!game.ctx.layer || !game.ctx.sound || !game.ctx.sprite) {
@@ -226,7 +226,7 @@ async function runBattle(game: CrystalGame, start: BattleOptions, trainerName: s
   const previous = game.mode;
   game.mode = "battle";
   game.inBattle = { trainer: !!trainerName, klass };
-  game.battleCue = String(battleMusic(game, klass));
+  game.battleCue = String(battleMusic(game, klass, battleType));
   game.ctx.sound.refreshMusic();
   try {
     const launch = new BattleLaunch({ engine, layer: game.ctx.layer, sound: game.ctx.sound, sprite: game.ctx.sprite, cry: game.ctx.cry ?? (() => {}) }, {
@@ -261,8 +261,7 @@ function isLeader(klass: number) {
   return classIs(klass, JOHTO_LEADERS) || classIs(klass, KANTO_LEADERS);
 }
 /** PlayBattleMusic: the song for a battle, by battle type, trainer class and region. */
-function battleMusic(game: CrystalGame, klass?: number) {
-  const type = game.save.vars.battleType;
+function battleMusic(game: CrystalGame, klass: number | undefined, type: number) {
   if (type === CONST.BATTLETYPE_SUICUNE || type === CONST.BATTLETYPE_ROAMING) return C("MUSIC_SUICUNE_BATTLE");
   const kanto = game.landmark() >= C("KANTO_LANDMARK");
   if (klass === undefined) return kanto ? C("MUSIC_KANTO_WILD_BATTLE") : game.timeOfDay() === 2 ? C("MUSIC_JOHTO_WILD_BATTLE_NIGHT") : C("MUSIC_JOHTO_WILD_BATTLE");
