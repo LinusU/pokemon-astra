@@ -137,20 +137,31 @@ async function moveTutor(g: CrystalGame) {
   g.scriptVar = (await teachMove(g, slot, move)) ? 0 : 1;
 }
 
+/**
+ * NameRater (engine/events/name_rater.asm). Its closing texts don't wait:
+ * the map script's own waitbutton follows.
+ */
 async function nameRater(g: CrystalGame) {
-  await engineText(g, "NameRater.NameRaterHelloText", "Hello, hello! I'm the NAME RATER.", false);
-  if (!(await g.yesNo())) return engineText(g, "NameRater.NameRaterComeAgainText", "OK, then. Come again sometime.");
-  await engineText(g, "NameRater.NameRaterWhichMonText", "Which POKéMON's nickname should I rate for you?", false);
+  const say = (label: string, fallback: string) => engineText(g, label, fallback, false);
+  await say("NameRaterHelloText", "Hello, hello! I'm the NAME RATER.");
+  if (!(await g.yesNo())) return say("NameRaterComeAgainText", "OK, then. Come again sometime.");
+  await say("NameRaterWhichMonText", "Which POKéMON's nickname should I rate for you?");
   const slot = await selectMon(g);
-  if (slot === undefined) return engineText(g, "NameRater.NameRaterComeAgainText", "OK, then. Come again sometime.");
+  if (slot === undefined) return say("NameRaterComeAgainText", "OK, then. Come again sometime.");
   const mon = g.save.party[slot];
-  if (mon.egg) return engineText(g, "NameRater.NameRaterEggText", "Whoa… That's just an EGG.");
-  if (mon.ot_id !== g.save.playerId || mon.ot_name !== g.save.name) return engineText(g, "NameRater.NameRaterPerfectNameText", "Hm… That's a fine name.");
+  if (mon.egg) return say("NameRaterEggText", "Whoa… That's just an EGG.");
+  if (mon.ot_id !== g.save.playerId || mon.ot_name !== g.save.name) return say("NameRaterPerfectNameText", "Hm… That's a fine name.");
   g.strings.set(RAM.wStringBuffer1, nickname(g, mon));
-  await engineText(g, "NameRater.NameRaterBetterNameText", "Should I give it a better name?", false);
-  if (!(await g.yesNo())) return engineText(g, "NameRater.NameRaterComeAgainText", "OK, then. Come again sometime.");
+  await say("NameRaterBetterNameText", "Should I give it a better name?");
+  if (!(await g.yesNo())) return say("NameRaterComeAgainText", "OK, then. Come again sometime.");
+  await say("NameRaterWhatNameText", "What name shall I give it then?");
+  const before = nickname(g, mon);
   const { rename } = await import("./menu");
-  if (await rename(g, mon)) await engineText(g, "NameRater.NameRaterFinishedText", "That's a better name than before!");
+  // An empty or unchanged name counts as the same name.
+  const renamed = (await rename(g, mon)) && nickname(g, mon) !== before;
+  g.strings.set(RAM.wStringBuffer1, nickname(g, mon));
+  await say("NameRaterNamedText", `Hm… ${nickname(g, mon)}? What a great name! It's perfect.`);
+  await say(renamed ? "NameRaterFinishedText" : "NameRaterSameNameText", renamed ? "That's a better name than before!" : "It might look the same as before, but this new name is much better! Well done!");
 }
 
 async function nameRival(g: CrystalGame) {
