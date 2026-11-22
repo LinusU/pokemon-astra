@@ -27,9 +27,9 @@ export function paginate(text: string, limit = 110): string[] {
     // A hyphen at a line's end: a word split in two joins up ("some-/thing", "GOLDEN-/ROD", "#-/MON"),
     // while a hyphenated word keeps its hyphen ("BUG-/type").
     const t = para
-      .replace(/(POKé|[A-Z])-[\n\v](?=[A-Z])/g, "$1")
-      .replace(/([A-Z])-[\n\v](?=[a-z])/g, "$1-")
-      .replace(/([a-zé])-[\n\v](?=[a-z])/g, "$1")
+      .replace(/(POKé|[A-Z])- ?[\n\v](?=[A-Z])/g, "$1")
+      .replace(/([A-Z])- ?[\n\v](?=[a-z])/g, "$1-")
+      .replace(/([a-zé])- ?[\n\v](?=[a-z])/g, "$1")
       // A dash that starts a line belongs to the word before it ("worry--take it").
       .replace(/[\n\v](?=--)/g, "")
       .replace(/[\n\v]/g, " ").replace(/\s+/g, " ").trim();
