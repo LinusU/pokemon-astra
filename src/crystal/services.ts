@@ -338,7 +338,9 @@ async function itemPc(game: CrystalGame) {
     const action = await game.choose(["WITHDRAW ITEM", "DEPOSIT ITEM", "TOSS ITEM", "LOG OFF"], { cancel: true });
     if (action === undefined || action === 3) return;
     const from = action === 1 ? save.items : save.pcItems;
-    const ids = Object.keys(from).map(Number).filter(id => from[id] > 0 && (action !== 1 || game.rom.itemPocket(id) !== C("KEY_ITEM")));
+    // Crystal Legacy keeps HMs out of the PC, so they can't be left behind.
+    const hm = (id: number) => game.legacy && /^HM_/.test(itemConst(id) ?? "");
+    const ids = Object.keys(from).map(Number).filter(id => from[id] > 0 && (action !== 1 || game.rom.itemPocket(id) !== C("KEY_ITEM") && !hm(id)));
     if (!ids.length) {
       await game.say(action === 1 ? "There's nothing to deposit." : "There are no items stored.");
       continue;
