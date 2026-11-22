@@ -1,20 +1,38 @@
 import type { YellowGame } from "./runtime";
 import { choose } from "./services";
-import { MON, ITEM } from "./symbols";
+import type { YellowRom } from "./rom";
+import { MON, ITEM, SYM } from "./symbols";
 
-/** Celadon's prize corner. Yellow's prizes: Abra, Vulpix, Wigglytuff / Scyther, Pinsir, Porygon / TMs. */
-const PRIZES: { kind: "mon" | "item"; name: string; level?: number; cost: number }[][] = [
-  [{ kind: "mon", name: "ABRA", level: 15, cost: 180 }, { kind: "mon", name: "VULPIX", level: 20, cost: 1000 }, { kind: "mon", name: "WIGGLYTUFF", level: 25, cost: 2680 }],
-  [{ kind: "mon", name: "SCYTHER", level: 30, cost: 5500 }, { kind: "mon", name: "PINSIR", level: 30, cost: 5500 }, { kind: "mon", name: "PORYGON", level: 20, cost: 6500 }],
-  [{ kind: "item", name: "TM_DRAGON_RAGE", cost: 3300 }, { kind: "item", name: "TM_HYPER_BEAM", cost: 5500 }, { kind: "item", name: "TM_SUBSTITUTE", cost: 7700 }],
-];
+interface Prize { kind: "mon" | "item"; name: string; level?: number; cost: number }
+
+/**
+ * Celadon's prize corner, from the cartridge's tables: two windows of Pokémon
+ * (their levels from PrizeMonLevelDictionary), then one of TMs. Costs are BCD.
+ */
+export function prizes(rom: YellowRom): Prize[][] {
+  const menus = SYM.PrizeDifferentMenuPtrs, bank = rom.bankOf(menus);
+  const bcd = (b: number) => (b >> 4) * 10 + (b & 15);
+  const nameOf = (table: Record<string, number>, id: number) => Object.keys(table).find(k => table[k] === id) ?? "";
+  const level = (species: number) => {
+    for (let o = SYM.PrizeMonLevelDictionary, i = 0; i < 9; i++, o += 2) if (rom.u8(o) === species) return rom.u8(o + 1);
+  };
+  return [0, 1, 2].map(window => {
+    const entries = rom.far(bank, rom.u16(menus + window * 4)), costs = rom.far(bank, rom.u16(menus + window * 4 + 2));
+    const list: Prize[] = [];
+    for (let i = 0; i < 8 && rom.u8(entries + i) !== 0x50; i++) {
+      const id = rom.u8(entries + i), cost = bcd(rom.u8(costs + i * 2)) * 100 + bcd(rom.u8(costs + i * 2 + 1));
+      list.push(window < 2 ? { kind: "mon", name: nameOf(MON, id), level: level(id), cost } : { kind: "item", name: nameOf(ITEM, id), cost });
+    }
+    return list;
+  });
+}
 
 export async function prizeExchange(game: YellowGame) {
   if (!game.hasItem("COIN_CASE")) return game.say("A COIN CASE is required!");
   for (;;) {
     const window = await choose(game, `Coins ${game.coins}`, ["Prizes 1", "Prizes 2", "Prizes 3"], "We exchange your coins for prizes.");
     if (window === undefined) break;
-    const list = PRIZES[window];
+    const list = prizes(game.rom)[window];
     const label = (p: typeof list[number]) => p.kind === "mon" ? game.rom.monName(MON[p.name]) : game.rom.itemName(ITEM[p.name]);
     const pick = await choose(game, `Coins ${game.coins}`, list.map(p => `${label(p)}  ${p.cost}C`));
     if (pick === undefined) continue;

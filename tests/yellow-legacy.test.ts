@@ -60,6 +60,12 @@ describe.skipIf(!available)("The official Yellow Legacy V1.0.10 patch", () => {
       expect(ITEM.TM_FLAMETHROWER).toBe(0xcc);
       expect(rom.machineMove(ITEM.TM_FLAMETHROWER)).toBe(MOVE.FLAMETHROWER);
       expect(rom.trainerClassName(TRAINER.JANINE)).toBe("JANINE");
+      const { prizes } = await import("../src/yellow/game-corner");
+      expect(prizes(rom).map(w => w.map(p => `${p.name} ${p.level ?? ""} ${p.cost}`.replace("  ", " ")))).toEqual([
+        ["ABRA 15 230", "SEEL 20 500", "MAGMAR 22 1500"],
+        ["ELECTABUZZ 22 1500", "DRATINI 25 3000", "PORYGON 30 4500"],
+        ["TM_DRAGON_RAGE 1000", "TM_HYPER_BEAM 5000", "TM_SUBSTITUTE 3000"],
+      ]);
       // Brock's Onix knows more than Yellow's hand-picked Bide.
       expect(specialMoves(rom, TRAINER.BROCK, 1).length).toBeGreaterThan(1);
       const { freshYellowSave, isYellowSave } = await import("../src/yellow/save");

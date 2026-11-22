@@ -26,7 +26,7 @@ describe.skipIf(!available)("Pokémon Yellow cartridge data", () => {
     expect(maps).toBeGreaterThan(220);
   });
 
-  it("decodes dialogue, trainers, encounters and items", () => {
+  it("decodes dialogue, trainers, encounters and items", async () => {
     const pallet = rom.map(MAP.PALLET_TOWN)!;
     expect(rom.text(rom.mapText(pallet, 2))[0]).toMatchObject({ op: "text", s: expect.stringContaining("raising") });
     expect(rom.text(SYM["PalletTownOakText.HeyWaitDontGoOutText"])[0]).toMatchObject({ s: "OAK: Hey! Wait!\nDon't go out!" });
@@ -36,6 +36,11 @@ describe.skipIf(!available)("Pokémon Yellow cartridge data", () => {
     expect([rom.itemName(4), rom.itemPrice(4), rom.itemName(0xc4)]).toEqual(["POKé BALL", 200, "HM01"]);
     // TM01 Mega Punch, TM04 Whirlwind and HM01 Cut: the table lists the TMs before the HMs.
     expect([0xc9, 0xcc, 0xc4].map(item => rom.machineMove(item))).toEqual([5, 18, 15]);
+    const { prizes } = await import("../src/yellow/game-corner");
+    const list = (window: number) => prizes(rom)[window].map(p => `${p.name} ${p.level ?? ""} ${p.cost}`.replace("  ", " "));
+    expect(list(0)).toEqual(["ABRA 15 230", "VULPIX 18 1000", "WIGGLYTUFF 22 2680"]);
+    expect(list(1)).toEqual(["SCYTHER 30 6500", "PINSIR 30 6500", "PORYGON 26 9999"]);
+    expect(list(2)).toEqual(["TM_DRAGON_RAGE 3300", "TM_HYPER_BEAM 5500", "TM_SUBSTITUTE 7700"]);
     expect(rom.dex(rom.internal(25))).toBe(25);
   });
 });
