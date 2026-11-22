@@ -1,5 +1,5 @@
-export type AdventureId = "astra" | "yellow" | "yellow-legacy";
-export const ADVENTURES: AdventureId[] = ["astra", "yellow", "yellow-legacy"];
+export type AdventureId = "astra" | "yellow" | "yellow-legacy" | "crystal" | "crystal-legacy";
+export const ADVENTURES: AdventureId[] = ["astra", "yellow", "yellow-legacy", "crystal", "crystal-legacy"];
 /** What the journey list shows without opening the save itself. */
 export interface JourneySummary {
   place: string;

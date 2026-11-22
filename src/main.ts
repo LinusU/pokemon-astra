@@ -50,6 +50,7 @@ import { playEvolution } from "./ui/evolution";
 import { createJourney, deleteJourney, download, JourneyConflict, JourneyStore, listJourneys, peekJourney, type AdventureId, type JourneyEntry, type JourneySummary } from "./game/storage";
 import { mountJourneyList, type AdventureInfo } from "./ui/journeys";
 import { continueYellowJourney, hasYellowCartridge, isYellowAdventure, newYellowJourney, readYellowBackup, type YellowHost, type YellowRunner } from "./yellow/launch";
+import { continueCrystalJourney, hasCrystalCartridge, isCrystalAdventure, newCrystalJourney, readCrystalBackup, type CrystalHost } from "./crystal/launch";
 import {
   freshSave,
   isValidSave,
@@ -219,6 +220,8 @@ const ADVENTURE_LIST: AdventureInfo[] = [
   { id: "astra", name: "Astra", blurb: "Survey the eight beacons of the Astra region with Professor Alder." },
   { id: "yellow", name: "Yellow", blurb: "Kanto with Pikachu, read from your own Pokémon Yellow cartridge." },
   { id: "yellow-legacy", name: "Yellow Legacy", blurb: "Kanto rebalanced by Yellow Legacy, patched onto your own Pokémon Yellow cartridge." },
+  { id: "crystal", name: "Crystal", blurb: "Johto and Kanto, read from the Pokémon Crystal cartridge Astra already plays from." },
+  { id: "crystal-legacy", name: "Crystal Legacy", blurb: "Johto and Kanto rebalanced by Crystal Legacy, patched onto your own Pokémon Crystal cartridge." },
 ];
 function yellowHost(): YellowHost {
   return {
@@ -230,6 +233,10 @@ function yellowHost(): YellowHost {
     },
     journeys: error => void journeys(error),
   };
+}
+/** The Crystal adventures run like Yellow's: one runner takes over the frame loop and the music. */
+function crystalHost(): CrystalHost {
+  return yellowHost() as unknown as CrystalHost;
 }
 let journeyCursor = {};
 async function journeys(error?: string) {
@@ -249,19 +256,24 @@ async function journeys(error?: string) {
   sound.attach(engine, true);
   const missing = new Set<AdventureId>();
   for (const a of ADVENTURE_LIST) if (isYellowAdventure(a.id) && !await hasYellowCartridge(a.id)) missing.add(a.id);
+  for (const a of ADVENTURE_LIST) if (isCrystalAdventure(a.id) && !await hasCrystalCartridge(a.id)) missing.add(a.id);
   const notes: Partial<Record<AdventureId, string>> = {
     yellow: "You'll be asked for your Yellow cartridge.",
     "yellow-legacy": `You'll be asked for ${missing.has("yellow") ? "your Yellow cartridge and " : ""}the Yellow Legacy patch.`,
+    "crystal-legacy": "You'll be asked for the Crystal Legacy patch.",
   };
   mountJourneyList(layer, {
     entries, adventures: ADVENTURE_LIST.map(a => missing.has(a.id) ? { ...a, note: notes[a.id] } : a),
     sprite, cursor: journeyCursor, error,
     onContinue: entry => {
       if (isYellowAdventure(entry.adventure)) return void continueYellowJourney(yellowHost(), { ...entry, adventure: entry.adventure });
+      if (isCrystalAdventure(entry.adventure)) return void continueCrystalJourney(crystalHost(), { ...entry, adventure: entry.adventure });
       journeyStore = new JourneyStore(entry.id, astraSummary);
       void readJourney();
     },
-    onNew: adventure => isYellowAdventure(adventure) ? void newYellowJourney(yellowHost(), adventure, () => void journeys()) : intro(() => void journeys()),
+    onNew: adventure => isYellowAdventure(adventure) ? void newYellowJourney(yellowHost(), adventure, () => void journeys())
+      : isCrystalAdventure(adventure) ? void newCrystalJourney(crystalHost(), adventure, () => void journeys())
+      : intro(() => void journeys()),
     onExport: async entry => {
       try {
         download(`pokemon-${entry.adventure}-save.json`, await peekJourney(entry.id));
@@ -280,6 +292,12 @@ async function journeys(error?: string) {
         const data = JSON.parse(await file.text());
         if (isYellowAdventure(data?.adventure)) {
           if (!await readYellowBackup(data)) return "Choose a valid Yellow backup.";
+          await createJourney(data.adventure, data);
+          void journeys();
+          return;
+        }
+        if (isCrystalAdventure(data?.adventure)) {
+          if (!await readCrystalBackup(data)) return "Choose a valid Crystal backup.";
           await createJourney(data.adventure, data);
           void journeys();
           return;

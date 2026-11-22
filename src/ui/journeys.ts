@@ -39,7 +39,7 @@ export function mountJourneyList(layer: HTMLElement, options: JourneyListOptions
   const rows = options.entries.map(entry => {
     const s = entry.summary;
     const lead = s?.lead ? `<img src="${options.sprite(s.lead)}" alt="">` : `<i class="journey-blank" aria-hidden="true"></i>`;
-    const detail = s ? `${s.badges}/8 badges · ${s.caught} caught · ${playedLabel(entry.updated)}` : playedLabel(entry.updated);
+    const detail = s ? `${s.badges}/${badgeCount(entry.adventure)} badges · ${s.caught} caught · ${playedLabel(entry.updated)}` : playedLabel(entry.updated);
     return `<button class="journey-row" data-journey="${escapeHtml(entry.id)}">${lead}<span><em class="adventure-tag tag-${entry.adventure}">${escapeHtml(name(entry.adventure))}</em><strong>${escapeHtml(s?.player ? `${s.player} · ${s.place}` : s?.place ?? "New journey")}</strong><small>${escapeHtml(detail)}</small></span></button>`;
   });
   const p = panel(layer, options.entries.length ? "Your journeys" : "Begin a journey",
@@ -72,7 +72,7 @@ function journeyCard(layer: HTMLElement, entry: JourneyEntry, options: JourneyLi
   const info = options.adventures.find(a => a.id === entry.adventure);
   const s = entry.summary;
   const p = panel(layer, s?.place ?? info?.name ?? "Journey",
-    `<div class="journey-record">${s?.lead ? `<img src="${options.sprite(s.lead)}" alt="">` : ""}<div><strong>${escapeHtml(info?.name ?? entry.adventure)}${s?.player ? ` · ${escapeHtml(s.player)}` : ""}</strong><small>${s ? `${s.badges}/8 badges · ${s.caught} caught · ` : ""}${escapeHtml(playedLabel(entry.updated))}</small></div></div>
+    `<div class="journey-record">${s?.lead ? `<img src="${options.sprite(s.lead)}" alt="">` : ""}<div><strong>${escapeHtml(info?.name ?? entry.adventure)}${s?.player ? ` · ${escapeHtml(s.player)}` : ""}</strong><small>${s ? `${s.badges}/${badgeCount(entry.adventure)} badges · ${s.caught} caught · ` : ""}${escapeHtml(playedLabel(entry.updated))}</small></div></div>
     <div class="buttons"><button id="continue">Continue</button><button class="secondary" id="export">Export backup</button><button class="secondary" id="delete">Delete journey</button><button class="secondary" id="back">Back</button></div>`,
     "opening-panel arrival-card");
   p.querySelector<HTMLButtonElement>("#continue")!.onclick = () => options.onContinue(entry);
@@ -80,7 +80,7 @@ function journeyCard(layer: HTMLElement, entry: JourneyEntry, options: JourneyLi
   p.querySelector<HTMLButtonElement>("#back")!.onclick = () => mountJourneyList(layer, options);
   p.querySelector<HTMLButtonElement>("#delete")!.onclick = () => {
     const confirm = panel(layer, "Delete this journey?",
-      `<p>${escapeHtml(info?.name ?? entry.adventure)}${s ? ` · ${escapeHtml(s.place)} · ${s.badges}/8 badges` : ""}</p><p>Deleting removes this save from the browser. It cannot be undone, so export a backup first if you might want it again.</p>
+      `<p>${escapeHtml(info?.name ?? entry.adventure)}${s ? ` · ${escapeHtml(s.place)} · ${s.badges}/${badgeCount(entry.adventure)} badges` : ""}</p><p>Deleting removes this save from the browser. It cannot be undone, so export a backup first if you might want it again.</p>
       <div class="buttons"><button id="back">Keep journey</button><button class="secondary" id="export">Export backup</button><button class="secondary danger" id="confirm-delete">Delete</button></div>`,
       "opening-panel");
     confirm.querySelector<HTMLButtonElement>("#back")!.onclick = () => journeyCard(layer, entry, options);
@@ -94,6 +94,9 @@ function journeyCard(layer: HTMLElement, entry: JourneyEntry, options: JourneyLi
     };
   };
 }
+
+/** Johto and Kanto make sixteen badges. */
+const badgeCount = (adventure: AdventureId) => adventure.startsWith("crystal") ? 16 : 8;
 
 function adventurePicker(layer: HTMLElement, options: JourneyListOptions) {
   const p = panel(layer, "Choose an adventure",
