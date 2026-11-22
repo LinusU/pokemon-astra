@@ -113,16 +113,18 @@ async function ppItem(game: CrystalGame, item: number): Promise<ItemResult> {
   }
   let changed = false;
   for (const i of targets) {
-    const base = game.engine.move(m.moves[i]).pp, ups = m.pp[i] >> 6, full = base + Math.floor(base / 5) * ups;
+    // ComputeMaxPP: each PP Up adds a fifth of the base PP, at most 7, so 40 PP tops out at 61.
+    const base = game.engine.move(m.moves[i]).pp, ups = m.pp[i] >> 6, step = Math.min(7, Math.floor(base / 5)), full = base + step * ups;
     if (is(item, "PP_UP")) {
       if (ups >= 3 || base < 5) return "It won't have any effect.";
-      m.pp[i] = ((ups + 1) << 6) | Math.min(63, (m.pp[i] & 63) + Math.floor(base / 5));
+      m.pp[i] = ((ups + 1) << 6) | Math.min(63, (m.pp[i] & 63) + step);
       changed = true;
       continue;
     }
     const now = m.pp[i] & 63;
     if (now >= full) continue;
-    const add = is(item, "MAX_ETHER", "MAX_ELIXER") ? full : 10;
+    // RestorePP: Ether and Elixer give 10, the MysteryBerry 5.
+    const add = is(item, "MAX_ETHER", "MAX_ELIXER") ? full : is(item, "MYSTERYBERRY") ? 5 : 10;
     m.pp[i] = (ups << 6) | Math.min(full, now + add);
     changed = true;
   }
