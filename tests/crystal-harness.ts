@@ -21,7 +21,7 @@ export class FakeInput {
   update() {}
 }
 
-export async function headlessGame(adventure: CrystalAdventure, options: { hour?: number } = {}) {
+export async function headlessGame(adventure: CrystalAdventure, options: { hour?: number; day?: number } = {}) {
   const rom = await cartridge(adventure === "crystal" ? "crystal" : "legacy");
   wasm ??= (await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {})).instance;
   const engine = new Engine(wasm.exports as never, cartridgeBytes("crystal"));
@@ -32,7 +32,8 @@ export async function headlessGame(adventure: CrystalAdventure, options: { hour?
   const ui = new HeadlessUi();
   const input = new FakeInput();
   const hour = options.hour ?? 12;
-  const game = new CrystalGame({ engine, rom, input: input as never, save, ui, now: () => new Date(2026, 10, 18, hour, 30) });
+  const day = options.day ?? 18;
+  const game = new CrystalGame({ engine, rom, input: input as never, save, ui, now: () => new Date(2026, 10, day, hour, 30) });
   await game.begin();
   let clock = 0;
   const settle = async () => {
