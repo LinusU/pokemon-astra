@@ -10,8 +10,7 @@ import type { CrystalMon } from "./save";
 async function engine(game: CrystalGame, label: string, wait = true) {
   const at = TEXT[label];
   if (at === undefined) return;
-  await game.writeText(at);
-  if (wait) await game.waitButton();
+  await game.engineText(at, wait);
 }
 
 export function giveParkBalls(game: CrystalGame) {

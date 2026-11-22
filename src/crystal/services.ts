@@ -13,8 +13,8 @@ import type { CrystalMon } from "./save";
 /** Shows an engine text by label, or `fallback` on a cartridge without it. */
 export async function engineText(game: CrystalGame, label: string, fallback = "", wait = true) {
   const at = TEXT[label];
-  if (at !== undefined) await game.writeText(at);
-  else if (fallback) await game.say(fallback, false);
+  if (at !== undefined) return game.engineText(at, wait);
+  if (fallback) await game.say(fallback, false);
   if (wait) await game.waitButton();
 }
 

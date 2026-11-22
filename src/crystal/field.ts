@@ -46,8 +46,8 @@ function nameFor(game: CrystalGame, slot: number) {
 }
 async function text(game: CrystalGame, label: string, fallback: string, wait = true) {
   const at = TEXT[label];
-  if (at !== undefined) await game.writeText(at);
-  else await game.say(fallback, false);
+  if (at !== undefined) return game.engineText(at, wait);
+  await game.say(fallback, false);
   if (wait) await game.waitButton();
 }
 async function ask(game: CrystalGame, label: string, fallback: string) {
@@ -158,7 +158,7 @@ export async function useFlash(game: CrystalGame, slot: number) {
   nameFor(game, slot);
   game.flash = true;
   const at = TEXT._BlindingFlashText;
-  if (at !== undefined) { await game.writeText(at); await game.waitButton(); }
+  if (at !== undefined) await game.engineText(at);
   game.closeText();
 }
 export async function useFly(game: CrystalGame) {
@@ -293,7 +293,7 @@ export async function fish(game: CrystalGame, rod: 0 | 1 | 2) {
   const night = game.timeOfDay() === 2;
   if (Math.random() * 256 >= bite || !table.length) {
     const at = TEXT.RodNothingText ?? TEXT._RodNothingText;
-    if (at !== undefined) { await game.writeText(at); await game.waitButton(); } else await game.say("Not even a nibble!");
+    if (at !== undefined) await game.engineText(at); else await game.say("Not even a nibble!");
     game.closeText();
     return;
   }
@@ -305,7 +305,7 @@ export async function fish(game: CrystalGame, rod: 0 | 1 | 2) {
     pick = { ...pick, species: t.species, level: t.level };
   }
   const at = TEXT.RodBiteText ?? TEXT._RodBiteText;
-  if (at !== undefined) { await game.writeText(at); await game.waitButton(); } else await game.say("Oh! A bite!");
+  if (at !== undefined) await game.engineText(at); else await game.say("Oh! A bite!");
   game.closeText();
   game.save.vars.battleType = C("BATTLETYPE_FISH");
   game.battleSetup = { kind: "wild", species: pick.species, level: pick.level };

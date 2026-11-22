@@ -82,8 +82,8 @@ export async function gainLevel(game: CrystalGame, slot: number) {
 export async function moveReminder(game: CrystalGame, egg: boolean) {
   const say = async (label: string, fallback: string, wait = true) => {
     const at = TEXT[label];
-    if (at !== undefined) await game.writeText(at);
-    else await game.say(fallback, false);
+    if (at !== undefined) return game.engineText(at, wait);
+    await game.say(fallback, false);
     if (wait) await game.waitButton();
   };
   await say(egg ? "Text_EggMoveReminderIntro" : "Text_MoveReminderIntro", "Shall I teach your POKéMON a move it has forgotten?", false);

@@ -461,7 +461,10 @@ export class CrystalGame {
     if (name && /Nickname|Name/.test(name)) return this.strings.get(addr) ?? "";
     return "";
   }
-  /** Shows a cartridge text. The box stays open on its last page until closed. */
+  /**
+   * Shows a cartridge text. The box stays open on its last page until closed.
+   * Resolves true when the text ended with `prompt`, already waiting for A.
+   */
   async writeText(at: number) {
     const ops = this.rom.text(at);
     const asm = ops.find(op => op.op === "asm");
@@ -472,6 +475,12 @@ export class CrystalGame {
       const { runTextAsm } = await import("./specials");
       await runTextAsm(this, asm.at);
     }
+    return prompt && pages.length > 0;
+  }
+  /** A text the engine prints itself: shown, then A is waited for once, even if the text prompts. */
+  async engineText(at: number, wait = true) {
+    const prompted = await this.writeText(at);
+    if (wait && !prompted) await this.waitButton();
   }
   /** Shows a literal message, waiting for A. */
   async say(text: string, wait = true) {

@@ -20,8 +20,7 @@ export async function countStep(game: CrystalGame): Promise<boolean> {
     else {
       const at = TEXT._RepelWoreOffText;
       if (at !== undefined) {
-        await game.writeText(at);
-        await game.waitButton();
+        await game.engineText(at);
         game.closeText();
       } else await game.say("REPEL's effect wore off.");
     }

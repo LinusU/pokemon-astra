@@ -18,8 +18,8 @@ const TEXTS = [
 ];
 async function say(game: CrystalGame, index: number, wait = true) {
   const at = TEXT[`PrintDayCareText.${TEXTS[index]}`];
-  if (at !== undefined) await game.writeText(at);
-  if (wait) await game.waitButton();
+  if (at !== undefined) await game.engineText(at, wait);
+  else if (wait) await game.waitButton();
 }
 
 /** Experience the Day-Care adds as the player walks: one point a step. */
@@ -153,7 +153,7 @@ export async function dayCareManOutside(game: CrystalGame) {
   const d = game.save.daycare;
   const text = async (name: string) => {
     const at = TEXT[`DayCareManOutside.${name}`];
-    if (at !== undefined) { await game.writeText(at); await game.waitButton(); }
+    if (at !== undefined) await game.engineText(at);
   };
   if (!d.egg) {
     game.scriptVar = 0;
