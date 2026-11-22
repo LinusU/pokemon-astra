@@ -5,7 +5,7 @@
  */
 import type { BattleOptions, Pokemon } from "../engine";
 import { autoPlay, BattleLaunch, finishedBattle, type FinishedBattle } from "../ui/battle-launch";
-import { C, CONST, MON, SYM, constName } from "./symbols";
+import { C, CONST, MON, STD, SYM, TEXT, constName } from "./symbols";
 import type { CrystalGame, Obj } from "./runtime";
 import { towards } from "./runtime";
 import { runScript, type TrainerHeader } from "./script";
@@ -305,10 +305,19 @@ export async function afterBattle(game: CrystalGame) {
   game.playMusic(undefined);
 }
 
+/** Script_Whiteout: healed, half the money gone, back at the last Pokémon Center, or the contest's end. */
 export async function blackout(game: CrystalGame) {
-  await game.say("{PLAYER} is out of useable POKéMON!\f{PLAYER} whited out!");
-  game.save.money = Math.floor(game.save.money / 2);
+  const text = TEXT._WhitedOutText;
+  if (text !== undefined) await game.engineText(text);
+  else await game.say("{PLAYER} is out of useable POKéMON!\f{PLAYER} whited out!");
+  game.closeText();
   game.heal();
+  // During the Bug-Catching Contest, the contest ends and the judging starts (BugContestResultsWarpScript).
+  if (game.hasFlag("ENGINE_BUG_CONTEST_TIMER") && STD.includes("BugContestResultsWarpScript")) {
+    await runScript(game, game.rom.far(game.rom.sym("StdScripts") + STD.indexOf("BugContestResultsWarpScript") * 3));
+    return;
+  }
+  game.save.money = Math.floor(game.save.money / 2);
   await game.blackoutWarp();
 }
 
