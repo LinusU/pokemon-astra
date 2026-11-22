@@ -30,16 +30,17 @@ export function asmPlan(rom: YellowRom, bank: number, at: number): AsmPlan {
       pc = addr(w);
       continue;
     }
-    if (op === 0xcd) {
-      if (w === SYM.TalkToTrainer) return prints.length ? { kind: "custom" } : { kind: "trainer", at: addr(hl) };
-      if (w === SYM.PrintText) { prints.push(addr(hl)); pc += 3; continue; }
-      if (w === SYM.Bankswitch) {
+    const call = callAt(rom, pc);
+    if (call) {
+      if (call.to === SYM.TalkToTrainer) return prints.length ? { kind: "custom" } : { kind: "trainer", at: addr(hl) };
+      if (call.to === SYM.PrintText) { prints.push(addr(hl)); pc += call.size; continue; }
+      if (call.to === SYM.Bankswitch) {
         const routine = rom.far(b, hl);
-        if (routine === SYM.PlayPikachuSoundClip) { pikachu = e; pc += 3; continue; }
+        if (routine === SYM.PlayPikachuSoundClip) { pikachu = e; pc += call.size; continue; }
         const inner = asmPlan(rom, b, routine);
         if (inner.kind === "print") prints.push(...inner.at);
         else if (inner.kind !== "end") return prints.length ? { kind: "custom" } : { kind: "far", at: routine };
-        pc += 3;
+        pc += call.size;
         continue;
       }
       return { kind: "custom" };
@@ -47,4 +48,15 @@ export function asmPlan(rom: YellowRom, bank: number, at: number): AsmPlan {
     return { kind: "custom" };
   }
   return prints.length ? { kind: "print", at: prints, pikachu } : { kind: "end" };
+}
+
+/**
+ * The routine a `call` at `pc` reaches, or an `rst` whose vector jumps on to
+ * one: Yellow Legacy far-calls with `rst $00`, a `jp Bankswitch`.
+ */
+function callAt(rom: YellowRom, pc: number): { to: number; size: number } | undefined {
+  const op = rom.u8(pc);
+  if (op === 0xcd) return { to: rom.u16(pc + 1), size: 3 };
+  const vector = op & 0x38;
+  if ((op & 0xc7) === 0xc7 && rom.u8(vector) === 0xc3) return { to: rom.u16(vector + 1), size: 1 };
 }
