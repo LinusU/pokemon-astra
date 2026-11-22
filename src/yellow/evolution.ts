@@ -79,7 +79,6 @@ export function learn(game: YellowGame, slot: number, move: number): Promise<boo
   });
 }
 
-/** Whether Yellow lets a species learn a TM (item $C9+) or HM ($C4+). */
 /**
  * Whether a species can learn a TM or HM item's move: from the game data when
  * Crystal has a machine for it, otherwise (Gen 1 machines such as Mega Punch)
