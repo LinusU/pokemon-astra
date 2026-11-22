@@ -911,9 +911,12 @@ export class CrystalGame {
       else this.ctx.menuInput?.update(this.layer, input, now, true);
     } else if (this.ui.busy) this.ui.frame(input, now);
     else if (this.mode === "menu") {
-      if (input.hit("b")) this.layer.querySelector<HTMLButtonElement>("[data-bag-cancel], #back, #close")?.click();
-      else if (input.hit("menu")) this.layer.querySelector<HTMLButtonElement>("#close")?.click();
-      else this.ctx.menuInput?.update(this.layer, input, now, false);
+      // The topmost overlay, such as a party chooser over the Pack, takes the input.
+      const overlays = this.layer.querySelectorAll<HTMLElement>(":scope > .crystal-overlay");
+      const top = overlays[overlays.length - 1] ?? this.layer;
+      if (input.hit("b")) top.querySelector<HTMLButtonElement>("[data-bag-cancel], #back, #close")?.click();
+      else if (input.hit("menu")) top.querySelector<HTMLButtonElement>("#close")?.click();
+      else this.ctx.menuInput?.update(top, input, now, false);
     }
     this.updateMovers(dt);
     if (this.mode === "world") this.control(dt);
