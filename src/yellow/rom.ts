@@ -132,7 +132,7 @@ const DIRECTIONS: [Direction, number][] = [["north", 8], ["south", 4], ["west", 
 export class YellowRom {
   private maps = new Map<number, MapHeader>();
   private tilesets = new Map<number, Tileset>();
-  private labels?: Map<number, string>;
+  private labels?: Map<number, string[]>;
   constructor(readonly bytes: Uint8Array) {}
 
   u8(o: number) { return this.bytes[o]; }
@@ -141,10 +141,21 @@ export class YellowRom {
   far(bank: number, ptr: number) { return ptr < 0x4000 ? ptr : bank * 0x4000 + (ptr - 0x4000); }
   bankOf(offset: number) { return offset < 0x4000 ? 0 : Math.floor(offset / 0x4000); }
   sym(name: string) { return addr(name); }
+  /** Every published label at a file offset. Yellow Legacy sometimes puts an empty label right above another. */
+  labelsAt(offset: number): readonly string[] {
+    if (!this.labels) {
+      this.labels = new Map();
+      for (const [name, at] of Object.entries(SYM)) {
+        const list = this.labels.get(at);
+        if (list) list.push(name);
+        else this.labels.set(at, [name]);
+      }
+    }
+    return this.labels.get(offset) ?? [];
+  }
   /** The published label at a file offset, if any. */
   label(offset: number) {
-    this.labels ??= new Map(Object.entries(SYM).map(([k, v]) => [v, k]));
-    return this.labels.get(offset);
+    return this.labelsAt(offset).at(-1);
   }
 
   /** Decodes characters until "@" (or a length limit). */

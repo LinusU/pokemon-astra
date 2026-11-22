@@ -44,12 +44,13 @@ export function coverageGaps(rom: YellowRom): Gap[] {
       const label = rom.label(at) ?? `@${at.toString(16)}`;
       const asm = rom.text(at).find(op => op.op === "asm") as { at: number } | undefined;
       if (!asm) continue;
-      if (script?.texts?.[label] || SHARED_TEXTS[label]) continue;
+      const handled = (names: readonly string[]) => names.some(name => script?.texts?.[name] || SHARED_TEXTS[name]);
+      if (handled([label, ...rom.labelsAt(at)])) continue;
       const plan = asmPlan(rom, map.bank, asm.at);
       if (plan.kind === "end" || plan.kind === "print" || plan.kind === "trainer") continue;
       if (plan.kind === "far") {
         const routine = rom.label(plan.at);
-        if (routine && (script?.texts?.[routine] || SHARED_TEXTS[routine])) continue;
+        if (handled(rom.labelsAt(plan.at))) continue;
         gaps.push({ map: map.label, kind: "text", label: `${label} -> ${routine ?? "?"}` });
         continue;
       }

@@ -399,7 +399,7 @@ export class YellowGame implements Game {
     if (printed.length) await this.showText(printed, asm || script ? false : options.wait !== false);
     if (script) return this.special(script.kind, script.at);
     if (!asm) return;
-    const handler = this.textHandler(label);
+    const handler = this.textHandler(label, at);
     if (handler) return handler(this);
     const plan = asmPlan(this.rom, this.header.bank, (asm as { at: number }).at);
     if (plan.kind === "end") return;
@@ -414,15 +414,20 @@ export class YellowGame implements Game {
     }
     if (plan.kind === "far") {
       const routine = this.rom.label(plan.at);
-      const far = routine && this.textHandler(routine);
+      const far = routine && this.textHandler(routine, plan.at);
       if (far) return far(this);
       label = routine ?? label;
     }
     this.log(`No handler for ${label}`);
     if (!printed.length) await this.say("…");
   }
-  private textHandler(label: string) {
-    return MAP_SCRIPTS[this.header.label]?.texts?.[label] ?? SHARED_TEXTS[label];
+  /** The handler for a text, by its label or any other label at the same address. */
+  private textHandler(label: string, at?: number) {
+    const texts = MAP_SCRIPTS[this.header.label]?.texts;
+    for (const name of [label, ...at === undefined ? [] : this.rom.labelsAt(at)]) {
+      const handler = texts?.[name] ?? SHARED_TEXTS[name];
+      if (handler) return handler;
+    }
   }
   /** Shows a literal string (with {PLAYER} and {RIVAL}). */
   say(text: string, wait = true) {
@@ -1267,7 +1272,7 @@ export class YellowGame implements Game {
     const trainer = npc?.object.trainer;
     const pokemon = npc?.object.pokemon;
     if (!trainer && !pokemon) return;
-    const intro = this.textHandler(this.rom.label(header.before) ?? "");
+    const intro = this.textHandler(this.rom.label(header.before) ?? "", header.before);
     if (intro) await intro(this);
     else await this.showText(this.rom.text(header.before));
     this.music();
