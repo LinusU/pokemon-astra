@@ -395,11 +395,42 @@ async function displayCoins(g: CrystalGame) {
   g.strings.set(RAM.wStringBuffer1, String(g.save.coins));
 }
 
+/**
+ * PokeSeer (engine/events/poke_seer.asm): where, when and at what level a
+ * Pokémon was met, read from its caught data, then advice on how much it has
+ * grown since. The map script's waitbutton follows the last text.
+ */
 async function pokeSeer(g: CrystalGame) {
+  const say = (label: string, fallback: string) => engineText(g, label, fallback, false);
+  await say("SeerSeeAllText", "I see all.");
+  await g.waitButton();
   const slot = await selectMon(g);
-  if (slot === undefined) return;
+  if (slot === undefined) return say("SeerDoNothingText", "Do nothing.");
   const m = g.save.party[slot];
-  await g.say(m.ot_name === g.save.name ? `I see… You met ${nickname(g, m)} when it was level ${m.caught?.[0] || m.level}.` : `I see… ${nickname(g, m)} came to you from someone else.`);
+  if (m.egg) return say("SeerEggText", "Hm… That's an EGG.");
+  const [data = 0, place = 0] = m.caught ?? [];
+  if (!(data | place)) return say("SeerCantTellAThingText", "I can't tell a thing about it.");
+  // GetCaughtLevel, GetCaughtTime and GetCaughtLocation.
+  const caughtLevel = data & 0x3f, level = caughtLevel === 1 ? CONST.EGG_LEVEL ?? 5 : caughtLevel;
+  const time = ["Morning", "Day", "Night"][(data >> 6) - 1] ?? "Unknown";
+  const location = place & 0x7f;
+  if (location === CONST.LANDMARK_GIFT) return say("SeerCantTellAThingText", "I can't tell a thing about it.");
+  g.strings.set(RAM.wSeerNickname, nickname(g, m));
+  g.strings.set(RAM.wSeerOT, m.ot_name);
+  g.strings.set(RAM.wSeerOTGrammar, "");
+  g.strings.set(RAM.wSeerCaughtLevelString, level ? String(level) : "???");
+  g.strings.set(RAM.wSeerTimeOfDay, time);
+  g.strings.set(RAM.wSeerCaughtLocation, location ? g.rom.landmarkName(location) : "Unknown");
+  if (location === CONST.LANDMARK_EVENT) await say("SeerNoLocationText", `${nickname(g, m)} was met at level ${level}.`);
+  else {
+    if (m.ot_id === g.save.playerId) await say("SeerNameLocationText", `You met ${nickname(g, m)} here.`);
+    else await say("SeerTradeText", `${m.ot_name} met ${nickname(g, m)} first.`);
+    await say("SeerTimeLevelText", `The time was ${time}. Its level was ${level || "???"}.`);
+  }
+  // SeerAdvice: how many levels it has gained since.
+  const grown = (m.level - level) & 0xff;
+  const advice: [number, string][] = [[9, "SeerMoreCareText"], [29, "SeerMoreConfidentText"], [59, "SeerMuchStrengthText"], [89, "SeerMightyText"], [100, "SeerImpressedText"], [255, "SeerMoreCareText"]];
+  await say(advice.find(([most]) => grown <= most)![1], "");
 }
 
 async function diploma(g: CrystalGame) {
