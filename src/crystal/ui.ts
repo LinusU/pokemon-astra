@@ -65,7 +65,8 @@ export class DomUi implements CrystalUi {
   }
   text(pages: string[], wait: boolean): Promise<void> {
     if (!pages.length) return Promise.resolve();
-    this.pages = pages;
+    // A copy: reading pages empties this list, not the caller's.
+    this.pages = [...pages];
     this.waiting = wait;
     return new Promise(resolve => {
       this.resolve = resolve;

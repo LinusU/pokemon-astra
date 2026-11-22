@@ -474,13 +474,14 @@ export class CrystalGame {
     const ops = this.rom.text(at);
     const asm = ops.find(op => op.op === "asm");
     const { pages, prompt } = this.textString(ops);
+    const prompted = prompt && pages.length > 0;
     this.textOpen = true;
     if (pages.length) await this.ui.text(pages, prompt);
     if (asm && asm.op === "asm") {
       const { runTextAsm } = await import("./specials");
       await runTextAsm(this, asm.at);
     }
-    return prompt && pages.length > 0;
+    return prompted;
   }
   /** A text the engine prints itself: shown, then A is waited for once, even if the text prompts. */
   async engineText(at: number, wait = true) {
