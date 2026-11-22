@@ -608,7 +608,11 @@ export class CrystalGame {
     this.save.map = [group, number];
     const env = header.environment;
     if (env === C("TOWN") || env === C("ROUTE")) this.save.lastOutdoor = [group, number];
-    if (options.arrival !== "continue") this.flash = false;
+    if (options.arrival !== "continue") {
+      this.flash = false;
+      // HandleNewMap → ResetMapBufferEventFlags: EVENT_TEMPORARY_UNTIL_MAP_RELOAD_1–8 clear.
+      for (let i = 1; i <= 8; i++) { const e = CONST[`EVENT_TEMPORARY_UNTIL_MAP_RELOAD_${i}`]; if (e !== undefined) this.events.delete(e); }
+    }
     this.objects = header.objects.map((event, i) => ({
       slot: i + 1, event, x: event.x, y: event.y, facing: this.defaultFacing(event), walkFrame: 0,
       visible: this.objectVisible(event), home: { x: event.x, y: event.y }, wait: 1 + Math.random() * 2,
