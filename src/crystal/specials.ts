@@ -344,11 +344,13 @@ function initRoamMons(g: CrystalGame) {
   });
 }
 
+/** GiveDratini: the Dragon Shrine's Dratini knows Extremespeed when the elder's questions were answered well (var 0). */
 async function giveDratini(g: CrystalGame) {
+  if (g.scriptVar >= 2) return;
   const slot = [...g.save.party.keys()].reverse().find(i => g.save.party[i].species === MON.DRATINI);
   if (slot === undefined) return;
   const mon = g.save.party[slot];
-  const moves = g.scriptVar === 1 ? [MOVE.WRAP, MOVE.THUNDER_WAVE, MOVE.TWISTER, MOVE.EXTREMESPEED] : [MOVE.WRAP, MOVE.THUNDER_WAVE, MOVE.TWISTER, MOVE.SAFEGUARD];
+  const moves = g.scriptVar === 0 ? [MOVE.WRAP, MOVE.THUNDER_WAVE, MOVE.TWISTER, MOVE.EXTREMESPEED] : [MOVE.WRAP, MOVE.LEER, MOVE.THUNDER_WAVE, MOVE.TWISTER];
   g.save.party[slot] = { ...mon, moves, pp: moves.map(m => g.engine.move(m).pp) };
 }
 
