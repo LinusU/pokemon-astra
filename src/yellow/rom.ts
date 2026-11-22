@@ -375,6 +375,10 @@ export class YellowRom {
     for (let i = 1; i < item; i++) o += this.stringLength(o);
     return this.string(o, 20);
   }
+  /** The move a TM or HM item teaches. Like TMToMove, the table lists TM01–TM50, then HM01–HM05. */
+  machineMove(item: number) {
+    return this.u8(addr("TechnicalMachines") + (item >= 0xc9 ? item - 0xc9 : 50 + item - 0xc4));
+  }
   itemPrice(item: number) {
     if (item >= 0xc9) {
       const tm = item - 0xc9, packed = this.u8(addr("TechnicalMachinePrices") + (tm >> 1));

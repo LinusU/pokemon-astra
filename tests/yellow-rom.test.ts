@@ -34,6 +34,8 @@ describe.skipIf(!available)("Pokémon Yellow cartridge data", () => {
     expect(rom.trainerMoney(1)).toBe(15);
     expect(rom.wild(MAP.ROUTE_1).grass).toHaveLength(10);
     expect([rom.itemName(4), rom.itemPrice(4), rom.itemName(0xc4)]).toEqual(["POKé BALL", 200, "HM01"]);
+    // TM01 Mega Punch, TM04 Whirlwind and HM01 Cut: the table lists the TMs before the HMs.
+    expect([0xc9, 0xcc, 0xc4].map(item => rom.machineMove(item))).toEqual([5, 18, 15]);
     expect(rom.dex(rom.internal(25))).toBe(25);
   });
 });

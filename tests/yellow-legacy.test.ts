@@ -4,7 +4,7 @@ import { applyBps, BpsError, crc32, isBps } from "../src/yellow/bps";
 import { YELLOW_SHA1 as LEGACY_TABLE_SHA1 } from "../src/yellow/generated/symbols-legacy";
 import { specialMoves } from "../src/yellow/learnsets";
 import { identifyYellow, LEGACY_SHA1, YellowRom } from "../src/yellow/rom";
-import { MAP, MOVE, TRAINER, useCartridge } from "../src/yellow/symbols";
+import { ITEM, MAP, MOVE, TRAINER, useCartridge } from "../src/yellow/symbols";
 
 /** A BPS patch from its actions: source reads, target reads, then the CRCs. */
 function bps(source: Uint8Array, target: Uint8Array, actions: number[]) {
@@ -56,6 +56,9 @@ describe.skipIf(!available)("The official Yellow Legacy V1.0.10 patch", () => {
     await useCartridge("legacy");
     try {
       const rom = new YellowRom(legacy);
+      // Legacy's TM04 is Flamethrower instead of Whirlwind.
+      expect(ITEM.TM_FLAMETHROWER).toBe(0xcc);
+      expect(rom.machineMove(ITEM.TM_FLAMETHROWER)).toBe(MOVE.FLAMETHROWER);
       expect(rom.trainerClassName(TRAINER.JANINE)).toBe("JANINE");
       // Brock's Onix knows more than Yellow's hand-picked Bide.
       expect(specialMoves(rom, TRAINER.BROCK, 1).length).toBeGreaterThan(1);

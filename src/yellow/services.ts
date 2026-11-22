@@ -285,7 +285,7 @@ export async function pokeFlute(game: YellowGame) {
 }
 
 export async function teachMachine(game: YellowGame, id: number) {
-  const move = game.rom.u8(SYM.TechnicalMachines + id - 0xc4);
+  const move = game.rom.machineMove(id);
   const { teachMove } = await import("./evolution");
   return teachMove(game, id, move);
 }

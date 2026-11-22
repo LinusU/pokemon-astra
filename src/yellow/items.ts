@@ -49,7 +49,7 @@ export function itemDescription(game: YellowGame, id: number): string | undefine
   if (n === "ESCAPE_ROPE") return "Leads you out of a cave or dungeon to the last Pokémon Center.";
   if (n === "BICYCLE") return "Ride twice as fast as walking.";
   if (id >= 0xc4) {
-    const move = game.rom.u8(game.rom.sym("TechnicalMachines") + id - 0xc4);
+    const move = game.rom.machineMove(id);
     return move ? `Teaches ${game.engine.move(move).name}.` : undefined;
   }
 }
