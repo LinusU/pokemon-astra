@@ -1056,8 +1056,9 @@ export class CrystalGame {
       const dir = (Object.keys(STEP) as Facing[]).find(d => from.x + STEP[d][0] === x && from.y + STEP[d][1] === y);
       if (dir && this.world.sideBlocked(this.map, from.x, from.y, dir)) return false;
     }
-    if (this.save.state === "surf") return this.world.isWater(coll) || this.world.isLand(coll) && !this.world.ledge(coll);
-    return this.world.isLand(coll) && !this.world.ledge(coll);
+    // Ledges are land: the player walks onto them, and jumps from them (hopLedge).
+    if (this.save.state === "surf") return this.world.isWater(coll) || this.world.isLand(coll);
+    return this.world.isLand(coll);
   }
   private neighbours = new Map<string, LiveMap>();
   neighbour(group: number, number: number): LiveMap {
@@ -1086,16 +1087,10 @@ export class CrystalGame {
       if (warp >= 0) return void this.runScript(() => this.useWarp(warp));
     }
     const ahead = this.collisionAt(nx, ny);
-    if (this.world.canHop(ahead, dir) && this.save.state !== "surf" && !this.blocked(nx + dx, ny + dy)) {
-      me.from = { x: me.x, y: me.y, t: 0, duration: WALK_SECONDS * 2, hop: true };
-      me.x += dx * 2;
-      me.y += dy * 2;
-      this.sfx("SFX_JUMP_OVER_LEDGE");
-      return;
-    }
     const boulder = this.objects.find(o => o.visible && o.x === nx && o.y === ny);
     if (boulder && this.pushBoulder(boulder)) return;
     if (this.blocked(nx, ny) || !this.passable(nx, ny, me)) {
+      if (this.hopLedge(dir)) return;
       if (!this.bumped) this.sfx("SFX_BUMP");
       this.bumped = true;
       return;
@@ -1105,6 +1100,23 @@ export class CrystalGame {
     me.from = { x: me.x, y: me.y, t: 0, duration: this.moveDuration() };
     me.x = nx;
     me.y = ny;
+  }
+
+  /**
+   * TryJump: a ledge is the square the player stands on. When the step ahead is
+   * blocked (by the cliff below it), facing the ledge's way jumps two squares.
+   */
+  private hopLedge(dir: Facing, from?: { x: number; y: number }) {
+    const me = this.me, [dx, dy] = STEP[dir];
+    if (this.save.state === "surf" || !this.world.canHop(this.world.collision(this.map, me.x, me.y), dir)) return false;
+    if (this.blocked(me.x + dx * 2, me.y + dy * 2)) return false;
+    me.from = { x: from?.x ?? me.x, y: from?.y ?? me.y, t: 0, duration: WALK_SECONDS * 2, hop: true };
+    me.free = undefined;
+    me.x += dx * 2;
+    me.y += dy * 2;
+    this.bumped = false;
+    this.sfx("SFX_JUMP_OVER_LEDGE");
+    return true;
   }
 
   private pushing = 0;
@@ -1157,15 +1169,7 @@ export class CrystalGame {
   private pushAgainst(dir: Facing, pos: { x: number; y: number }) {
     const me = this.me, [dx, dy] = STEP[dir];
     const lateral = dx ? Math.abs(pos.y - me.y) : Math.abs(pos.x - me.x);
-    const ahead = this.collisionAt(me.x + dx, me.y + dy);
-    if (lateral < 0.35 && this.save.state !== "surf" && this.world.canHop(ahead, dir) && !this.blocked(me.x + dx * 2, me.y + dy * 2)) {
-      me.from = { x: pos.x, y: pos.y, t: 0, duration: WALK_SECONDS * 2, hop: true };
-      me.free = undefined;
-      me.x += dx * 2;
-      me.y += dy * 2;
-      this.sfx("SFX_JUMP_OVER_LEDGE");
-      return true;
-    }
+    if (lateral < 0.35 && this.hopLedge(dir, pos)) return true;
     const boulder = this.objects.find(o => o.visible && o.x === me.x + dx && o.y === me.y + dy);
     if (boulder && lateral < 0.35) {
       this.pushing += 1 / 60;

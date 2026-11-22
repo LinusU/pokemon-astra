@@ -247,6 +247,27 @@ describe.skipIf(!hasEngine || !CARTRIDGES.length).each(CARTRIDGES)("Crystal's sy
     expect(g.itemCount(ITEM.TM_DYNAMICPUNCH)).toBe(0);
   }, 60000);
 
+  it("jumps down a ledge from the ledge's own square", async () => {
+    const h = await headlessGame(adventure);
+    const g = h.game;
+    g.save.party = [g.makeMon(MON.TYRANITAR, 70)];
+    const [group, number] = MAP.ROUTE_30;
+    await g.warpTo(group, number, 0, 0);
+    // The cartridge's ledges are a ledge square with the cliff's wall below it.
+    let ledge: { x: number; y: number } | undefined;
+    for (let y = 1; y < g.map.height * 2 - 2 && !ledge; y++) for (let x = 0; x < g.map.width * 2 && !ledge; x++)
+      if (g.world.collision(g.map, x, y) === C("COLL_HOP_DOWN") && g.world.collision(g.map, x, y - 1) === C("COLL_FLOOR") && g.world.collision(g.map, x, y + 2) === C("COLL_FLOOR") && !g.blocked(x, y - 1) && !g.blocked(x, y + 2)) ledge = { x, y };
+    expect(ledge).toBeTruthy();
+    g.place(0, ledge!.x, ledge!.y - 1, "down");
+    await h.step("down");
+    expect([g.me.x, g.me.y]).toEqual([ledge!.x, ledge!.y]);
+    await h.step("down");
+    expect([g.me.x, g.me.y]).toEqual([ledge!.x, ledge!.y + 2]);
+    // And there's no climbing back up.
+    await h.step("up");
+    expect([g.me.x, g.me.y]).toEqual([ledge!.x, ledge!.y + 2]);
+  }, 60000);
+
   it("buys from a Mart", async () => {
     const h = await headlessGame(adventure);
     const g = h.game;

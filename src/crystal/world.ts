@@ -133,7 +133,7 @@ export class CrystalWorld {
     for (const [name, dir] of Object.entries(HOPS)) if (this.c(name) === coll) return dir;
     return undefined;
   }
-  /** A ledge square jumped from `dir`: down-right ledges also take a step down from the left. */
+  /** Whether a player standing on ledge square `coll` jumps when facing `dir` (TryJump's ledge table: diagonal ledges both ways). */
   canHop(coll: number, dir: Facing) {
     const ledge = this.ledge(coll);
     if (!ledge) return false;
