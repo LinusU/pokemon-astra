@@ -175,18 +175,41 @@ export function openCrystalMenu(game: CrystalGame): Promise<(() => Promise<void>
             if (choice === 2) { save.vars.registered = id; return message(`${item.name} was registered.`, () => view("bag")); }
             if (choice === 3) {
               if (game.rom.itemPocket(id) === C("KEY_ITEM") || game.rom.itemPocket(id) === C("TM_HM") && !game.rom.itemPrice(id)) return message("That's too important to toss!", () => view("bag"));
-              game.takeItem(id, save.items[id]);
-              return view("bag");
+              // TossItem: how many, then a last check.
+              const { quantity } = await import("./services");
+              const n = await quantity(game, `Toss out how many ${item.name}?`, save.items[id] ?? 0);
+              if (!n) return view("bag");
+              await game.say(`Throw away ${n} ${item.name}?`, false);
+              const yes = await game.yesNo();
+              game.closeText();
+              if (!yes) return view("bag");
+              game.takeItem(id, n);
+              return message(`Threw away ${item.name}.`, () => view("bag"));
             }
             if (choice === 1) {
+              const pocket = game.rom.itemPocket(id);
+              if (pocket === C("KEY_ITEM") || pocket === C("TM_HM")) return message("This item can't be held.", () => view("bag"));
               const slot = await choosePartyMon(game, "Give to which POKéMON?", m => !m.egg);
-              if (slot !== undefined) {
-                const mon = save.party[slot];
-                if (mon.item) game.giveItem(mon.item);
-                mon.item = id;
+              if (slot === undefined) return view("bag");
+              const mon = save.party[slot], name = mon.nickname || game.monName(mon.species);
+              if (mon.item) {
+                const held = itemTitle(game.rom.itemName(mon.item));
+                await game.say(`${name} is already holding ${held}. Switch items?`, false);
+                const yes = await game.yesNo();
+                game.closeText();
+                if (!yes) return view("bag");
+                // The new item leaves the Pack first, so there is room for the old one.
                 game.takeItem(id);
+                if (!game.giveItem(mon.item)) {
+                  game.giveItem(id);
+                  return message("The PACK is full.", () => view("bag"));
+                }
+                mon.item = id;
+                return message(`Took ${name}'s ${held} and made it hold ${item.name}.`, () => view("bag"));
               }
-              return view("bag");
+              game.takeItem(id);
+              mon.item = id;
+              return message(`Made ${name} hold ${item.name}.`, () => view("bag"));
             }
             const { useItem } = await import("./items");
             const result = await useItem(game, id);
