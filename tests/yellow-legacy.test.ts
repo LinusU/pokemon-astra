@@ -4,7 +4,7 @@ import { applyBps, BpsError, crc32, isBps } from "../src/yellow/bps";
 import { YELLOW_SHA1 as LEGACY_TABLE_SHA1 } from "../src/yellow/generated/symbols-legacy";
 import { specialMoves } from "../src/yellow/learnsets";
 import { identifyYellow, LEGACY_SHA1, YellowRom } from "../src/yellow/rom";
-import { ITEM, MAP, MOVE, TRAINER, useCartridge } from "../src/yellow/symbols";
+import { ITEM, MAP, MON, MOVE, SYM, TRAINER, useCartridge } from "../src/yellow/symbols";
 
 /** A BPS patch from its actions: source reads, target reads, then the CRCs. */
 function bps(source: Uint8Array, target: Uint8Array, actions: number[]) {
@@ -66,6 +66,8 @@ describe.skipIf(!available)("The official Yellow Legacy V1.0.10 patch", () => {
         ["ELECTABUZZ 22 1500", "DRATINI 25 3000", "PORYGON 30 4500"],
         ["TM_DRAGON_RAGE 1000", "TM_HYPER_BEAM 5000", "TM_SUBSTITUTE 3000"],
       ]);
+      // The Old Rod hooks a level 5 Goldeen or Poliwag.
+      expect([0, 1, 2, 3].map(i => rom.u8(SYM.OldRodMons + i))).toEqual([5, MON.GOLDEEN, 5, MON.POLIWAG]);
       // Brock's Onix knows more than Yellow's hand-picked Bide.
       expect(specialMoves(rom, TRAINER.BROCK, 1).length).toBeGreaterThan(1);
       const { freshYellowSave, isYellowSave } = await import("../src/yellow/save");

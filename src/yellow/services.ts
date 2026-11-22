@@ -3,6 +3,7 @@ import { mountStoragePc, type PcState } from "../ui/storage-pc";
 import { sortCollection } from "../game/collection";
 import { escapeHtml, panel } from "../ui/shell";
 import { ITEM, MAP, MON, SYM } from "./symbols";
+import { oldRodMons } from "./legacy";
 import type { YellowGame } from "./runtime";
 import { titleItem } from "./menu";
 import { STEP } from "./world";
@@ -246,9 +247,13 @@ export async function fish(game: YellowGame, rod: "OLD_ROD" | "GOOD_ROD" | "SUPE
     }
     await game.delay(40);
     let pick: { species: number; level: number } | undefined;
-    if (rod === "OLD_ROD") pick = { species: MON.MAGIKARP, level: 5 };
-    else if (rod === "GOOD_ROD") {
-      if (Math.random() < 0.5) pick = Math.random() < 0.5 ? { species: MON.GOLDEEN, level: 10 } : { species: MON.POLIWAG, level: 10 };
+    // Yellow's Old Rod always hooks a level 5 Magikarp; Yellow Legacy's draws on a table like the Good Rod's.
+    const legacyOldRod = game.legacy && oldRodMons();
+    if (rod === "OLD_ROD" && !legacyOldRod) pick = { species: MON.MAGIKARP, level: 5 };
+    else if (rod !== "SUPER_ROD") {
+      // Half the casts bite; the bite is either of the table's two (level, species) pairs.
+      const table = legacyOldRod || SYM.GoodRodMons, i = Math.random() < 0.5 ? 0 : 1;
+      if (Math.random() < 0.5) pick = { level: game.rom.u8(table + i * 2), species: game.rom.u8(table + i * 2 + 1) };
     } else pick = superRod(game);
     if (!pick || Math.random() < 0.25) {
       await game.say("Not even a nibble!");
