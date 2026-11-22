@@ -6,7 +6,7 @@ import { MEDICINE } from "../game/medicine";
 import { escapeHtml } from "./shell";
 import "./bag.css";
 
-const pocketLabels = { items: "Items", balls: "Poké Balls", key: "Key Items" };
+const pocketLabels = { items: "Items", balls: "Poké Balls", key: "Key Items", tms: "TM/HM" };
 export type BagPocket = keyof typeof pocketLabels;
 export type BagState = { pocket?: BagPocket; selected?: Partial<Record<BagPocket, string>> };
 export type BagItem = {
