@@ -185,6 +185,29 @@ describe.skipIf(!hasEngine || !CARTRIDGES.length).each(CARTRIDGES)("Crystal's sy
     expect(g.event(readTrainerHeader(g, swimmer.event.script).flag)).toBe(true);
   }, 60000);
 
+  it("rides the Bicycle where the cartridge allows it", async () => {
+    const h = await headlessGame(adventure);
+    const g = h.game;
+    g.save.party = [g.makeMon(MON.TYRANITAR, 70)];
+    g.giveItem(ITEM.BICYCLE);
+    const { useItem } = await import("../src/crystal/items");
+    const ride = async () => {
+      const r = await useItem(g, ITEM.BICYCLE);
+      if (typeof r === "function") await g.runScript(r);
+    };
+    await g.warpTo(MAP.CHERRYGROVE_POKECENTER_1F[0], MAP.CHERRYGROVE_POKECENTER_1F[1], 3, 5);
+    await ride();
+    expect(g.save.state).toBe("normal");
+    await g.warpTo(MAP.ROUTE_30[0], MAP.ROUTE_30[1], 0, 0);
+    const land = Array.from({ length: 400 }, (_, i) => ({ x: i % 20, y: Math.floor(i / 20) + 20 })).find(p => g.world.isLand(g.world.collision(g.map, p.x, p.y)))!;
+    g.place(0, land.x, land.y);
+    await ride();
+    expect(g.save.state).toBe("bike");
+    // Off it on going indoors.
+    await g.warpTo(MAP.CHERRYGROVE_POKECENTER_1F[0], MAP.CHERRYGROVE_POKECENTER_1F[1], 3, 5);
+    expect(g.save.state).toBe("normal");
+  }, 60000);
+
   it("buys from a Mart", async () => {
     const h = await headlessGame(adventure);
     const g = h.game;

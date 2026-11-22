@@ -208,13 +208,23 @@ async function teachMachine(game: CrystalGame, item: number, moveName: string): 
   if (itemConst(item)?.startsWith("TM_")) game.takeItem(item);
 }
 
+/** BikeFunction: towns, routes, caves and gates, standing on land; Cycling Road keeps the player on it. */
 async function toggleBike(game: CrystalGame) {
   const env = game.map.environment;
-  if (game.save.state === "surf") return game.say("You can't get on your BIKE now.");
-  if (game.save.state !== "bike" && (env === C("INDOOR") || env === C("GATE")) && !CONST.ENGINE_BIKE_INDOORS) return game.say("You can't ride a BIKE here.");
-  game.save.state = game.save.state === "bike" ? "normal" : "bike";
-  game.ctx.sound?.refreshMusic();
-  await game.say(game.save.state === "bike" ? `${game.save.name} got on the BICYCLE.` : `${game.save.name} got off the BICYCLE.`);
+  const here = [C("TOWN"), C("ROUTE"), C("CAVE"), C("GATE")].includes(env) && game.world.isLand(game.world.collision(game.map, game.me.x, game.me.y));
+  if (game.save.state === "surf" || !here) return game.say("OAK: {PLAYER}! This isn't the time to use that!");
+  game.strings.set(RAM.wStringBuffer2, game.rom.itemName(ITEM.BICYCLE));
+  const say = async (label: string, fallback: string) => {
+    const at = TEXT[label];
+    if (at !== undefined) { await game.engineText(at); game.closeText(); } else await game.say(fallback);
+  };
+  if (game.save.state === "bike") {
+    if (game.hasFlag("ENGINE_ALWAYS_ON_BIKE")) return say("_CantGetOffBikeText", "You can't get off here!");
+    game.setPlayerState(C("PLAYER_NORMAL"));
+    return say("_GotOffBikeText", `${game.save.name} got off the BICYCLE.`);
+  }
+  game.setPlayerState(C("PLAYER_BIKE"));
+  await say("_GotOnBikeText", `${game.save.name} got on the BICYCLE.`);
 }
 
 async function itemfinder(game: CrystalGame) {
