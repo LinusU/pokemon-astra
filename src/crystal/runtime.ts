@@ -709,9 +709,18 @@ export class CrystalGame {
       await this.mapCallbacks();
     });
   }
+  /**
+   * MapSetupScript_ReloadMap (`reloadmap`, after a battle): the map's blocks
+   * again with its TILES callback, and its music. People stay where scripts
+   * left them, and the map's other callbacks don't run again.
+   */
   async reloadMap() {
-    this.enterMap(this.map.group, this.map.number, { arrival: "continue" });
-    await this.mapCallbacks();
+    this.map.live = this.map.blocks.slice();
+    await this.callbacks(C("MAPCALLBACK_TILES"));
+    this.map.version++;
+    if (!this.keepMusic) this.musicOverride = undefined;
+    this.keepMusic = false;
+    this.ctx.sound?.refreshMusic();
   }
   async warpCheck() {
     const i = this.world.warpAt(this.map, this.me.x, this.me.y);
