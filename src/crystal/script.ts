@@ -307,7 +307,8 @@ const COMMANDS: Record<string, Command> = {
   },
   winlosstext: s => { s.winLoss = [s.pointer(), s.pointer()]; },
   startbattle: async (_, g) => { g.scriptVar = await g.startBattle(); },
-  reloadmapafterbattle: async (_, g) => { await g.afterBattle(); },
+  // A loss that whites out jumps to Script_BattleWhiteout: the rest of the script never runs.
+  reloadmapafterbattle: async (_, g) => (await g.afterBattle() ? END_ALL : undefined),
   catchtutorial: async (s, g) => { s.byte(); await g.catchTutorial(); },
   trainertext: async (s, g) => {
     const which = s.byte();

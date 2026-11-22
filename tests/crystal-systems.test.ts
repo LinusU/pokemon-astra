@@ -55,6 +55,24 @@ describe.skipIf(!hasEngine || !CARTRIDGES.length).each(CARTRIDGES)("Crystal's sy
     expect(h.ui.log.join(" ")).toMatch(/ELM/);
   }, 60000);
 
+  it("gives no badge for a lost gym battle", async () => {
+    const h = await headlessGame(adventure);
+    const g = h.game;
+    g.save.party = [g.makeMon(MON.CYNDAQUIL, 2)];
+    g.save.money = 1000;
+    g.save.spawn = { group: MAP.VIOLET_CITY[0], number: MAP.VIOLET_CITY[1] };
+    const [group, number] = MAP.VIOLET_GYM;
+    await g.warpTo(group, number, 5, 3, "up");
+    const falkner = g.objects.find(o => o.visible && o.event.sprite === C("SPRITE_FALKNER"))!;
+    await g.runScript(() => g.talkTo(falkner));
+    expect(g.hasFlag("ENGINE_ZEPHYRBADGE")).toBe(false);
+    expect(g.ev("EVENT_BEAT_FALKNER")).toBe(false);
+    // The spawn point is the street in front of the Pokémon Center.
+    expect(g.map.name).toBe("VIOLET_CITY");
+    expect(g.save.money).toBe(500);
+    expect(g.save.party[0].hp).toBe(g.save.party[0].stats[0]);
+  }, 60000);
+
   it("buys from a Mart", async () => {
     const h = await headlessGame(adventure);
     const g = h.game;

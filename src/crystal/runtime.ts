@@ -1273,9 +1273,10 @@ export class CrystalGame {
   startBattle(): Promise<number> {
     return import("./battle").then(m => m.startBattle(this));
   }
+  /** After a battle: true when the player whited out, which ends the script that started it. */
   async afterBattle() {
     const { afterBattle } = await import("./battle");
-    await afterBattle(this);
+    return afterBattle(this);
   }
   async catchTutorial() {
     const { catchTutorial } = await import("./battle");

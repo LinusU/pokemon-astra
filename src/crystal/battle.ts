@@ -321,9 +321,10 @@ export async function afterBattle(game: CrystalGame) {
   if (game.save.vars.whitedOut) {
     delete game.save.vars.whitedOut;
     await blackout(game);
-    return;
+    return true;
   }
   game.playMusic(undefined);
+  return false;
 }
 
 /** Script_Whiteout: healed, half the money gone, back at the last Pokémon Center, or the contest's end. */
