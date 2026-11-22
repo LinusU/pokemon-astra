@@ -166,7 +166,8 @@ async function stone(game: CrystalGame, item: number): Promise<ItemResult> {
   if (slot === undefined) return;
   const { evolutionTarget, evolveTo } = await import("./battle");
   const target = evolutionTarget(game, game.save.party[slot], "item", item);
-  if (!target || game.save.party[slot].egg) return "It won't have any effect.";
+  // EvoStoneEffect: a held Everstone stops even a stone.
+  if (!target || game.save.party[slot].egg || game.save.party[slot].item === CONST.EVERSTONE) return "It won't have any effect.";
   game.takeItem(item);
   return () => evolveTo(game, slot, target);
 }
