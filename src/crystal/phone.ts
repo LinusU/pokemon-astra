@@ -36,10 +36,12 @@ export async function specialCall(game: CrystalGame) {
   const env = game.map.environment;
   if (outsideOnly && env !== C("TOWN") && env !== C("ROUTE")) return false;
   const c = contact(game, game.rom.u8(o + 2));
-  game.save.specialCall = 0;
   game.save.vars.caller = c.index;
   await ring(game, c);
+  // The caller's script reads the call's id (VAR_SPECIALPHONECALL) to choose
+  // what to say, and clears it itself with `specialphonecall SPECIALCALL_NONE`.
   await runScript(game, game.rom.far(o + 3));
+  if (game.save.specialCall === id) game.save.specialCall = 0;
   await hangUp(game);
   return true;
 }
