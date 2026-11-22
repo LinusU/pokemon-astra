@@ -8,7 +8,7 @@ import { writeFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { hasLegacy } from "./crystal-fixtures";
 import { hasEngine, headlessGame } from "./crystal-harness";
-import { C, CONST, ITEM, MAP, MON } from "../src/crystal/symbols";
+import { C, CONST, ITEM, MAP, MON, MOVE, RAM } from "../src/crystal/symbols";
 import type { Obj } from "../src/crystal/runtime";
 import { STEP, type Facing } from "../src/crystal/world";
 import { readTrainerHeader } from "../src/crystal/script";
@@ -19,10 +19,9 @@ type Harness = Awaited<ReturnType<typeof headlessGame>>;
 function walker(h: Harness) {
   const g = h.game;
   const log: string[] = [];
-  let seen = 0;
   const flush = (title: string) => {
-    log.push(`=== ${title} (${g.map.name} ${g.me.x},${g.me.y})`, ...h.ui.log.slice(seen));
-    seen = h.ui.log.length;
+    log.push(`=== ${title} (${g.map.name} ${g.me.x},${g.me.y})`, ...h.ui.log);
+    h.ui.log.length = 0;
   };
   const sprite = (name: string) => C(`SPRITE_${name}`);
   const where = () => `${g.map.name} ${g.me.x},${g.me.y}`;
@@ -98,6 +97,35 @@ function walker(h: Harness) {
       await h.settle();
     },
     ev(name: string) { return g.ev(name); },
+    /** Uses an item from the Pack, on party Pokémon `slot` when it asks for one. */
+    async useItem(name: string, slot = 0) {
+      const { useItem } = await import("../src/crystal/items");
+      h.ui.answers = [slot];
+      const result = await useItem(g, ITEM[name]);
+      if (typeof result === "function") await g.runScript(result);
+      h.ui.answers = [];
+      return result;
+    },
+    /** Squares of the current map whose collision passes `test`. */
+    squares(test: (coll: number) => boolean) {
+      const out: { x: number; y: number }[] = [];
+      for (let y = 0; y < g.map.height * 2; y++) for (let x = 0; x < g.map.width * 2; x++) if (test(g.world.collision(g.map, x, y))) out.push({ x, y });
+      return out;
+    },
+    /** Walks next to a square and presses A facing it (trees, water, boulders). */
+    async inspectFrom(at: { x: number; y: number }) {
+      for (const [dir, [dx, dy]] of Object.entries(STEP) as [Facing, [number, number]][]) {
+        const x = at.x - dx, y = at.y - dy;
+        if (!g.world.inside(g.map, x, y) || !g.passable(x, y)) continue;
+        try { await h.goto(x, y); } catch { continue; }
+        if (g.me.x !== x || g.me.y !== y) continue;
+        g.me.facing = dir;
+        await g.runScript(() => g.interact());
+        await h.settle();
+        return;
+      }
+      throw Error(`Can't reach ${at.x},${at.y} on ${where()}`);
+    },
     /** Talks to every trainer on the map who hasn't been beaten yet. */
     async beatTrainers() {
       for (let i = 0; i < 12; i++) {
@@ -253,6 +281,83 @@ describe.skipIf(!run || !hasEngine || !hasLegacy)("Crystal Legacy's story", () =
       await w.to(5, 10);
       w.flush("Rival in Azalea");
       expect(w.ev("EVENT_RIVAL_AZALEA_TOWN")).toBe(true);
+
+      // ------------------------------------------------------------ Ilex Forest: Farfetch'd and HM01 Cut
+      await w.warp("ILEX_FOREST", 4, 42, "up");
+      await w.talk("YOUNGSTER", { x: 7, y: 28 });
+      w.flush("Charcoal apprentice");
+      // Herd Farfetch'd: talking to it from the right side sends it on to its next spot, from a
+      // wrong side back to an earlier one. Remember the wrong sides and try the others.
+      const position = () => g.peek(RAM.wFarfetchdPosition) || 1;
+      const wrong = new Set<string>();
+      for (let guard = 0; guard < 80 && !w.ev("EVENT_HERDED_FARFETCHD"); guard++) {
+        const bird = w.find("BIRD"), before = position();
+        const sides = (Object.entries(STEP) as [Facing, [number, number]][]).filter(([dir]) => !wrong.has(`${before}:${dir}`));
+        let tried = false;
+        for (const [dir, [dx, dy]] of sides) {
+          const x = bird.x - dx, y = bird.y - dy;
+          try { for (let i = 0; i < 3 && (g.me.x !== x || g.me.y !== y); i++) await h.goto(x, y); } catch { continue; }
+          if (g.me.x !== x || g.me.y !== y) continue;
+          g.me.facing = dir;
+          await g.runScript(() => g.interact());
+          await h.settle();
+          tried = true;
+          if (position() < before) wrong.add(`${before}:${dir}`);
+          break;
+        }
+        if (!tried) throw Error(`Farfetch'd can't be reached at position ${before}, ${bird.x},${bird.y}`);
+      }
+      w.flush("Farfetch'd herded");
+      expect(w.ev("EVENT_HERDED_FARFETCHD")).toBe(true);
+      await w.talk("BLACK_BELT");
+      w.flush("Charcoal master");
+      expect(w.has("HM_CUT")).toBe(true);
+      // Teach Cut from the Pack and cut the tree on the way out of the forest.
+      g.save.party.push(g.makeMon(MON.SCYTHER, 30));
+      await w.useItem("HM_CUT", g.save.party.length - 1);
+      expect(g.save.party.at(-1)!.moves).toContain(MOVE.CUT);
+      const tree = w.squares(c => g.world.isCutTree(c))[0];
+      expect(tree).toBeTruthy();
+      await w.inspectFrom(tree);
+      w.flush("Cut the tree");
+      expect(g.world.isCutTree(g.collisionAt(tree.x, tree.y))).toBe(false);
+      await w.to(1, 6);
+      await h.step("up");
+      w.flush("Out of Ilex Forest");
+      expect(g.map.name).toBe("ROUTE_34_ILEX_FOREST_GATE");
+
+      // ------------------------------------------------------------ Goldenrod City
+      w.strengthen(45);
+      await w.warp("GOLDENROD_BIKE_SHOP", 3, 6, "up");
+      await w.talk("CLERK");
+      w.flush("Bike Shop");
+      expect(w.has("BICYCLE")).toBe(true);
+      await w.warp("RADIO_TOWER_1F", 3, 6, "up");
+      h.ui.answers = [true, true, false, false, true, false];
+      await w.talk("COOLTRAINER_F");
+      h.ui.answers = [];
+      w.flush("Radio Card quiz");
+      expect(g.hasFlag("ENGINE_RADIO_CARD")).toBe(true);
+      await w.warp("GOLDENROD_GYM", 3, 16, "up");
+      await w.talk("WHITNEY");
+      w.flush("Whitney");
+      expect(w.ev("EVENT_BEAT_WHITNEY")).toBe(true);
+      // She cries until the player comes near; then she hands over the badge.
+      await w.to(8, 5);
+      w.flush("Whitney cries");
+      await w.talk("WHITNEY");
+      w.flush("Plain Badge");
+      expect(g.hasFlag("ENGINE_PLAINBADGE")).toBe(true);
+      await w.warp("GOLDENROD_FLOWER_SHOP", 3, 6, "up");
+      await w.talk("TEACHER");
+      w.flush("SquirtBottle");
+      expect(w.has("SQUIRTBOTTLE")).toBe(true);
+
+      // ------------------------------------------------------------ Route 36: Sudowoodo
+      await w.warp("ROUTE_36", 36, 13, "up");
+      await w.talk("SUDOWOODO");
+      w.flush("Sudowoodo");
+      expect(w.ev("EVENT_FOUGHT_SUDOWOODO")).toBe(true);
     } finally {
       w.flush("end");
       if (process.env.CRYSTAL_WALKTHROUGH_LOG) writeFileSync(process.env.CRYSTAL_WALKTHROUGH_LOG, w.log.join("\n"));
