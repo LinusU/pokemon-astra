@@ -432,10 +432,9 @@ export async function hallOfFame(game: CrystalGame) {
     await new Promise<void>(resolve => { p.querySelector<HTMLButtonElement>("#back")!.onclick = () => resolve(); });
     game.layer.replaceChildren();
   }
-  // As in Crystal, the journey continues at home in New Bark Town.
+  // After the credits, the journey continues in New Bark Town (SPAWN_NEW_BARK); the blackout spot stays as it was.
   game.heal();
-  const home = spawnPoint(game, 0);
-  game.save.spawn = { group: home.group, number: home.number };
+  const home = spawnPoint(game, CONST.SPAWN_NEW_BARK ?? 0);
   game.playMusic(undefined);
   await game.warpTo(home.group, home.number, home.x, home.y, "down");
   game.persist(true);
