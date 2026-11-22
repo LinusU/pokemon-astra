@@ -9,8 +9,8 @@ export async function countStep(game: CrystalGame): Promise<boolean> {
   const { dayCareStep, eggStep } = await import("./daycare");
   dayCareStep(game);
   if (await eggStep(game)) return true;
-  // Friendship grows for every Pokémon a step… every 256 of them.
-  if (save.steps % 256 === 0) for (const m of save.party) if (!m.egg) m.happiness = Math.min(255, m.happiness + 1);
+  // StepHappiness: every other 256-step cycle, so a point every 512 steps.
+  if (save.steps % 512 === 0) for (const m of save.party) if (!m.egg) m.happiness = Math.min(255, m.happiness + 1);
   if (save.repel && !--save.repel) {
     // Crystal Legacy offers another Repel of the same kind (UseAnotherRepelScript).
     const kind = save.vars.repelType ?? 0;
