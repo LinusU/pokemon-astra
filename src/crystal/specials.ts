@@ -209,17 +209,35 @@ async function buenasPassword(g: CrystalGame) {
   void options;
   g.scriptVar = g.peek(RAM.wBuenasPassword) >> 7 ? 1 : 0;
 }
+/**
+ * BuenaPrize (engine/events/buena.asm): the prizes in BuenaPrizeItems,
+ * bought one at a time with Blue Card points until the player cancels.
+ */
 async function buenaPrize(g: CrystalGame) {
-  const points = g.save.vars.blueCard ?? 0;
-  const prizes: [string, number][] = [["ULTRA_BALL", 2], ["FULL_RESTORE", 2], ["NUGGET", 3], ["RARE_CANDY", 3], ["PROTEIN", 5], ["IRON", 5], ["CARBOS", 5], ["CALCIUM", 5], ["HP_UP", 5]];
-  await engineText(g, "BuenaPrize.BuenaAskWhichPrizeText", "Which prize would you like?", false);
-  const pick = await g.choose(prizes.map(([n, c]) => `${g.rom.itemName(ITEM[n])} ${c}`), { cancel: true, title: `Points: ${points}` });
-  if (pick === undefined) return engineText(g, "BuenaPrize.BuenaComeAgainText", "Come again!");
-  const [item, cost] = prizes[pick];
-  if (points < cost) return engineText(g, "BuenaPrize.BuenaNotEnoughPointsText", "You don't have enough points.");
-  if (!g.giveItem(ITEM[item])) return engineText(g, "BuenaPrize.BuenaNoRoomText", "You have no room for it.");
-  g.save.vars.blueCard = points - cost;
-  await engineText(g, "BuenaPrize.BuenaHereYouGoText", "Here you go!");
+  const say = (label: string, fallback: string) => engineText(g, `BuenaPrize.${label}`, fallback, false);
+  const prizes: [number, number][] = [];
+  if (SYM.BuenaPrizeItems !== undefined) for (let o = SYM.BuenaPrizeItems; prizes.length < (CONST.NUM_BUENA_PRIZES ?? 9); o += 2) prizes.push([g.rom.u8(o), g.rom.u8(o + 1)]);
+  else for (const [n, c] of [["ULTRA_BALL", 2], ["FULL_RESTORE", 2], ["NUGGET", 3], ["RARE_CANDY", 3], ["PROTEIN", 5], ["IRON", 5], ["CARBOS", 5], ["CALCIUM", 5], ["HP_UP", 5]] as const) prizes.push([ITEM[n], c]);
+  for (;;) {
+    const points = g.save.vars.blueCard ?? 0;
+    await say("BuenaAskWhichPrizeText", "Which prize would you like?");
+    const pick = await g.choose(prizes.map(([item, cost]) => `${g.rom.itemName(item)} ${cost}`), { cancel: true, title: `Points: ${points}` });
+    if (pick === undefined) break;
+    const [item, cost] = prizes[pick];
+    g.strings.set(RAM.wStringBuffer1, g.rom.itemName(item));
+    await say("BuenaIsThatRightText", `${g.rom.itemName(item)}? Is that right?`);
+    if (!(await g.yesNo())) continue;
+    if (points < cost) await say("BuenaNotEnoughPointsText", "You don't have enough points.");
+    else if (!g.giveItem(item)) await say("BuenaNoRoomText", "You have no room for it.");
+    else {
+      g.save.vars.blueCard = points - cost;
+      g.sfx("SFX_TRANSACTION");
+      await say("BuenaHereYouGoText", "Here you go!");
+    }
+    // The next "Which prize?" replaces the reply as soon as it has been read.
+    await g.delay(45);
+  }
+  await engineText(g, "BuenaPrize.BuenaComeAgainText", "Come again!");
 }
 
 /** Odd Egg: a baby Pokémon, sometimes shiny. */
