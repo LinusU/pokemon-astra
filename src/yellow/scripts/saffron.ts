@@ -131,7 +131,7 @@ defineMap("CopycatsHouse2F", {
 // ---------------------------------------------------------------------------
 
 /** Sabrina's rewards: the Marsh Badge's explanation, TM46 and the badge itself. */
-async function sabrinaRewards(g: Game) {
+export async function sabrinaRewards(g: Game) {
   await g.text("TEXT_SAFFRONGYM_SABRINA_MARSH_BADGE_INFO");
   g.set("EVENT_BEAT_SABRINA");
   if (g.give("TM_PSYWAVE")) {

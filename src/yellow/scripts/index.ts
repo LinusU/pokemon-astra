@@ -9,3 +9,5 @@ import "./saffron";
 import "./fuchsia-cinnabar";
 import "./indigo";
 import "./safari";
+// Yellow Legacy's additions, layered over the ports above.
+import "./legacy";

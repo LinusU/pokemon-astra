@@ -199,7 +199,7 @@ defineMap("CeladonDiner", {
 // ---------------------------------------------------------------- Celadon Gym
 
 /** The Rainbow Badge and Erika's TM. */
-async function receiveTM21(g: Game) {
+export async function receiveTM21(g: Game) {
   await g.text("TEXT_CELADONGYM_RAINBOWBADGE_INFO");
   g.set("EVENT_BEAT_ERIKA");
   if (g.give("TM_MEGA_DRAIN")) {
