@@ -97,25 +97,33 @@ async function bankOfMom(g: CrystalGame) {
   await engineText(g, "MomDeterminedText", "", false);
 }
 
+/**
+ * MoveDeletion (engine/events/move_deleter.asm). Its closing texts don't
+ * wait: the map script's own waitbutton follows.
+ */
 async function moveDeletion(g: CrystalGame) {
-  await engineText(g, "MoveDeletion.DeleterIntroText", "Um… I'm the MOVE DELETER.", false);
-  if (!(await g.yesNo())) return engineText(g, "MoveDeletion.DeleterNoComeAgainText", "Come again!");
+  const say = (label: string, fallback: string) => engineText(g, `MoveDeletion.${label}`, fallback, false);
+  await say("DeleterIntroText", "Um… I'm the MOVE DELETER.");
+  if (!(await g.yesNo())) return say("DeleterNoComeAgainText", "Come again!");
+  await say("DeleterAskWhichMonText", "Which POKéMON?");
   const slot = await selectMon(g, "Which POKéMON?");
-  if (slot === undefined) return engineText(g, "MoveDeletion.DeleterNoComeAgainText", "Come again!");
+  if (slot === undefined) return say("DeleterNoComeAgainText", "Come again!");
   const mon = g.save.party[slot];
-  if (mon.egg) return engineText(g, "MoveDeletion.DeleterEggText", "An EGG doesn't know any moves!");
+  if (mon.egg) return say("MailEggText", "An EGG doesn't know any moves!");
   const known = mon.moves.filter(Boolean);
-  if (known.length < 2) return engineText(g, "MoveDeletion.MoveKnowsOneText", "That POKéMON knows only one move.");
+  if (known.length < 2) return say("MoveKnowsOneText", "That POKéMON knows only one move.");
+  await say("DeleterAskWhichMoveText", "Which move should it forget, then?");
   const pick = await g.choose(known.map(m => g.engine.move(m).name.toUpperCase()), { cancel: true });
-  if (pick === undefined) return engineText(g, "MoveDeletion.DeleterNoComeAgainText", "Come again!");
+  if (pick === undefined) return say("DeleterNoComeAgainText", "Come again!");
   g.strings.set(RAM.wStringBuffer1, g.engine.move(known[pick]).name.toUpperCase());
-  await engineText(g, "MoveDeletion.AskDeleteMoveText", "Should that move be forgotten?", false);
-  if (!(await g.yesNo())) return engineText(g, "MoveDeletion.DeleterNoComeAgainText", "Come again!");
+  await say("AskDeleteMoveText", "Should that move be forgotten?");
+  if (!(await g.yesNo())) return say("DeleterNoComeAgainText", "Come again!");
   const i = mon.moves.indexOf(known[pick]);
   const moves = [...mon.moves.slice(0, i), ...mon.moves.slice(i + 1), 0];
   const pp = [...mon.pp.slice(0, i), ...mon.pp.slice(i + 1), 0];
   g.save.party[slot] = { ...mon, moves, pp };
-  await engineText(g, "MoveDeletion.DeleterForgotMoveText", "It's forgotten the move.");
+  g.sfx("SFX_MOVE_DELETED");
+  await say("DeleterForgotMoveText", "It's forgotten the move.");
 }
 
 /** The Goldenrod move tutor: Flamethrower, Thunderbolt or Ice Beam for a Pokémon that can learn it. */
