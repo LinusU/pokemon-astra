@@ -80,6 +80,8 @@ export class DomUi implements CrystalUi {
   private finish() {
     const r = this.resolve;
     this.resolve = undefined;
+    // Nothing waits for A any more, so the prompt goes until the next wait.
+    this.layer.querySelector(".crystal-text .advance")?.remove();
     r?.();
   }
   private advance() {
