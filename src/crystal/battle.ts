@@ -281,6 +281,8 @@ async function applyResult(game: CrystalGame, battle: FinishedBattle, bag: Retur
   if (battle.end === "caught") {
     const mon = result.party[result.caught!];
     if (mon && !mon.ot_name) mon.ot_name = game.save.name;
+    // CheckCaughtCelebi reads BATTLERESULT_CAUGHT_CELEBI after the shrine's battle.
+    if (mon?.species === MON.CELEBI) game.save.vars.caughtCelebi = 1;
     if (mon) await game.offerNickname(mon as CrystalMon);
     if (result.caught! >= 6) await game.say(`${game.monName(mon.species)} was sent to BILL's PC.`);
   }
