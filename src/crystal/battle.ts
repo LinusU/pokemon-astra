@@ -326,7 +326,8 @@ async function applyResult(game: CrystalGame, battle: FinishedBattle, bag: Retur
   }
   await evolveAfterBattle(game, result.may_evolve);
   game.persist();
-  return battle.end === "win" ? C("WIN") : C("DRAW");
+  // A catch leaves wBattleResult as it started the battle: WIN. Running away is a DRAW.
+  return battle.end === "win" || battle.end === "caught" ? C("WIN") : C("DRAW");
 }
 
 /** After `startbattle`: a blackout sends the player to their last Pokémon Center. */
