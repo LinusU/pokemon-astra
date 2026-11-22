@@ -99,7 +99,10 @@ export class CrystalGraphics {
   /** A tile's 64 pixels (0–3) and its palette slot. */
   private tile(tilesetId: number, id: number) {
     const t = this.tileset(tilesetId);
-    const index = id >= 0x80 ? id - 0x80 + 0x60 : id;
+    // Crystal's tilesets hold $60 tiles in each VRAM bank; Crystal Legacy's
+    // expanded ones (pret wiki: "Expand tilesets from 192 to 255 tiles") $80.
+    const expanded = t.graphics.length > 0xc0 * 16;
+    const index = id >= 0x80 && !expanded ? id - 0x20 : id;
     const pixels = new Uint8Array(64);
     for (let y = 0; y < 8; y++) {
       const lo = t.graphics[index * 16 + y * 2] ?? 0, hi = t.graphics[index * 16 + y * 2 + 1] ?? 0;
