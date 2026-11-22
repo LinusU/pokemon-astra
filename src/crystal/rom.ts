@@ -261,6 +261,7 @@ export class CrystalRom {
       case "<ID>": return "ID";
       case "<TARGET>": case "<USER>": case "<ENEMY>": return "";
       case "¯": return "";
+      case "<BSP>": return " ";
     }
     if (c.startsWith("<")) return c === "<" ? "<" : "";
     return c;
