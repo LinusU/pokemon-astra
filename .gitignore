@@ -8,6 +8,8 @@ coverage/
 native/target/
 public/astra_native.wasm
 *.gb
+*.bps
+*.ips
 *.srm
 .DS_Store
 artifacts/
