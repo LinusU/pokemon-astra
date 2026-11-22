@@ -107,12 +107,14 @@ export function openCrystalMenu(game: CrystalGame): Promise<(() => Promise<void>
     const close = () => { game.layer.replaceChildren(); game.persist(); resolve(); };
     const main = () => {
       const save = game.save;
+      // During the Bug-Catching Contest the Pack is put away and Quit takes Save's place (StartMenu .SetUpMenuItems).
+      const contest = game.hasFlag("ENGINE_BUG_CONTEST_TIMER");
       const options: [string, string][] = [
         ...(game.hasFlag("ENGINE_POKEDEX") ? [["dex", "Pokédex"] as [string, string]] : []),
         ...(save.party.length ? [["party", "Pokémon"] as [string, string]] : []),
-        ["bag", "Pack"],
+        ...(contest ? [] : [["bag", "Pack"] as [string, string]]),
         ...(game.hasFlag("ENGINE_POKEGEAR") ? [["gear", "Pokégear"] as [string, string]] : []),
-        ["card", save.name], ["save", "Save"], ["options", "Option"], ["journeys", "Journeys"], ["close", "Exit"],
+        ["card", save.name], contest ? ["quit", "Quit"] : ["save", "Save"], ["options", "Option"], ...(contest ? [] : [["journeys", "Journeys"] as [string, string]]), ["close", "Exit"],
       ];
       if (!options.some(([k]) => k === selection)) selection = options[0][0];
       const p = panel(game.layer, "Menu", `<nav class="journey-list" aria-label="Start menu">${options.map(([k, label]) =>
@@ -215,6 +217,13 @@ export function openCrystalMenu(game: CrystalGame): Promise<(() => Promise<void>
           <div class="buttons"><button id="back">Back</button></div>`, "yellow-card-panel");
         p.querySelector<HTMLButtonElement>("#back")!.onclick = main;
         return;
+      }
+      if (v === "quit") {
+        // StartMenu_Quit: retire from the contest.
+        return run(async () => {
+          const { contestQuit } = await import("./contest");
+          await contestQuit(game);
+        });
       }
       if (v === "save") {
         const p = panel(game.layer, "Save", `<p>${escapeHtml(game.summary().place)} · ${game.badges().count} badges</p><p>Your journey also saves itself as you walk.</p><div class="buttons"><button id="confirm">Save now</button><button class="secondary" id="export">Export backup</button><button class="secondary" id="back">Back</button></div>`);

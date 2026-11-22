@@ -29,6 +29,23 @@ describe.skipIf(!hasEngine || !CARTRIDGES.length).each(CARTRIDGES)("Crystal's sy
     expect(g.save.party.some(m => m.species === MON.PIDGEY)).toBe(true);
   }, 60000);
 
+  it("lets the player retire from the Bug-Catching Contest", async () => {
+    const h = await headlessGame(adventure, { day: 17 });
+    const g = h.game;
+    g.save.party = [g.makeMon(MON.TYRANITAR, 60), g.makeMon(MON.PIDGEY, 5)];
+    const [group, number] = MAP.ROUTE_36_NATIONAL_PARK_GATE;
+    await g.warpTo(group, number, 5, 5, "left");
+    const officer = g.objects.find(o => o.visible && o.event.sprite === C("SPRITE_OFFICER"))!;
+    await g.runScript(() => g.talkTo(officer));
+    expect(g.map.name).toBe("NATIONAL_PARK_BUG_CONTEST");
+    const { contestQuit } = await import("../src/crystal/contest");
+    await g.runScript(() => contestQuit(g));
+    await h.settle();
+    expect(g.map.name).toBe("ROUTE_36_NATIONAL_PARK_GATE");
+    expect(g.hasFlag("ENGINE_BUG_CONTEST_TIMER")).toBe(false);
+    expect(g.save.party.some(m => m.species === MON.PIDGEY)).toBe(true);
+  }, 60000);
+
   it("hatches an Egg from the Day-Care", async () => {
     const h = await headlessGame(adventure);
     const g = h.game;

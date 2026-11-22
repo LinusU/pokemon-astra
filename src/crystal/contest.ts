@@ -93,6 +93,15 @@ export async function contestTimeUp(game: CrystalGame) {
   else await game.say("The contest is over!");
 }
 
+/** StartMenu_Quit: asked to end the contest, the player goes back to the gate for the judging. */
+export async function contestQuit(game: CrystalGame) {
+  await engine(game, "_StartMenuContestEndText", false);
+  if (!(await game.yesNo())) return game.closeText();
+  game.closeText();
+  const at = contestScript(game, "returnToGate");
+  if (at !== undefined) await runScript(game, at);
+}
+
 function score(game: CrystalGame, m: CrystalMon | undefined) {
   if (!m) return 0;
   const [hp, atk, def, spe, sat, sdf] = m.stats;
