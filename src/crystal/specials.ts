@@ -59,42 +59,74 @@ async function selectApricornForKurt(g: CrystalGame) {
   g.poke(RAM.wKurtApricornQuantity, n);
 }
 
-/** Mom's bank: save, withdraw, deposit or change whether she saves. */
+/**
+ * BankOfMom (engine/events/mom.asm): the first time, Mom asks whether to
+ * save some of the player's prize money; after that she keeps the money,
+ * hands it back and changes whether she saves.
+ */
 async function bankOfMom(g: CrystalGame) {
-  const saving = g.flag(C("ENGINE_MOM_SAVING_MONEY"));
   const { quantity } = await import("./services");
+  const say = (label: string, fallback: string, wait = true) => engineText(g, label, fallback, wait);
   const amount = async (max: number) => {
     const steps = [10, 100, 1000, 10000, 100000].filter(v => v <= max);
     if (!steps.length) return 0;
-    const pick = await g.choose(steps.map(v => `¥${v}`), { cancel: true });
+    const pick = await g.choose(steps.map(v => `¥${v}`), { title: `Mom: ¥${g.save.momMoney}  You: ¥${g.save.money}`, cancel: true });
     if (pick === undefined) return 0;
     const n = await quantity(g, `¥${steps[pick]}`, Math.min(99, Math.floor(max / steps[pick])));
     return n * steps[pick];
   };
-  if (!g.save.vars.momIntro) {
-    g.save.vars.momIntro = 1;
-    await engineText(g, "MomLeavingText1", "", true);
-    if (TEXT.MomLeavingText2 !== undefined) await engineText(g, "MomLeavingText2");
+  const saving = (on: boolean) => {
+    g.setFlag(C("ENGINE_MOM_ACTIVE"), true);
+    g.setFlag(C("ENGINE_MOM_SAVING_MONEY"), on);
+  };
+  if (!g.flag(C("ENGINE_MOM_ACTIVE"))) {
+    // .InitializeBank
+    await say("MomLeavingText1", "Do you want to save some money?", false);
+    const yes = await g.yesNo();
+    if (yes) await say("MomLeavingText2", "OK, I'll take care of your money.", false);
+    saving(yes);
+    await say("MomLeavingText3", "Be careful.", false);
+    return;
   }
-  for (;;) {
-    await engineText(g, "MomBankWhatDoYouWantToDoText", "What do you want to do?", false);
-    const pick = await g.choose(["GET", "SAVE", "CHANGE", "CANCEL"], { title: `Mom: ¥${g.save.momMoney}  You: ¥${g.save.money}`, cancel: true });
-    if (pick === 0) {
+  // .IsThisAboutYourMoney
+  await say("MomIsThisAboutYourMoneyText", "Is this about your money?", false);
+  if (!(await g.yesNo())) return say("MomJustDoWhatYouCanText", "Just do what you can.", false);
+  await say("MomBankWhatDoYouWantToDoText", "What do you want to do?", false);
+  const pick = await g.choose(["GET", "SAVE", "CHANGE", "CANCEL"], { title: `Mom: ¥${g.save.momMoney}  You: ¥${g.save.money}`, cancel: true });
+  if (pick === 0) {
+    await say("MomTakeMoneyText", "How much do you want to take?", false);
+    for (;;) {
       const n = await amount(g.save.momMoney);
-      if (!n) continue;
+      if (!n) return say("MomJustDoWhatYouCanText", "Just do what you can.", false);
+      if (n > g.save.momMoney) { await say("MomHaventSavedThatMuchText", "You haven't saved that much."); continue; }
+      if (g.save.money + n > 999999) { await say("MomNotEnoughRoomInWalletText", "You can't take that much."); continue; }
       g.save.momMoney -= n;
-      g.save.money = Math.min(999999, g.save.money + n);
-    } else if (pick === 1) {
-      const n = await amount(g.save.money);
-      if (!n) continue;
-      g.save.money -= n;
-      g.save.momMoney = Math.min(999999, g.save.momMoney + n);
-    } else if (pick === 2) {
-      await engineText(g, saving ? "MomStartSavingMoneyText" : "MomIsThisAboutYourMoneyText", saving ? "Do you want to stop saving money?" : "Do you want to save some money?", false);
-      if (await g.yesNo()) g.setFlag(C("ENGINE_MOM_SAVING_MONEY"), !g.flag(C("ENGINE_MOM_SAVING_MONEY")));
-    } else break;
+      g.save.money += n;
+      g.sfx("SFX_TRANSACTION");
+      return say("MomTakenMoneyText", "Here, my dear. Be careful.", false);
+    }
   }
-  await engineText(g, "MomDeterminedText", "", false);
+  if (pick === 1) {
+    await say("MomStoreMoneyText", "How much do you want to save?", false);
+    for (;;) {
+      const n = await amount(g.save.money);
+      if (!n) return say("MomJustDoWhatYouCanText", "Just do what you can.", false);
+      if (n > g.save.money) { await say("MomInsufficientFundsInWalletText", "You don't have that much."); continue; }
+      if (g.save.momMoney + n > 999999) { await say("MomNotEnoughRoomInBankText", "You can't save that much."); continue; }
+      g.save.money -= n;
+      g.save.momMoney += n;
+      g.sfx("SFX_TRANSACTION");
+      return say("MomStoredMoneyText", "Your money's safe here! Get going!", false);
+    }
+  }
+  if (pick === 2) {
+    // .StopOrStartSavingMoney
+    await say("MomSaveMoneyText", "Do you want to save money?", false);
+    const yes = await g.yesNo();
+    saving(yes);
+    if (yes) return say("MomStartSavingMoneyText", "OK, I'll save your money. Trust me!", false);
+  }
+  await say("MomJustDoWhatYouCanText", "Just do what you can.", false);
 }
 
 /**
