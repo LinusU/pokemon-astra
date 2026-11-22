@@ -12,7 +12,7 @@ import type { MusicScene } from "../game/music";
 import { escapeHtml, panel } from "../ui/shell";
 import { BattleLaunch, type FinishedBattle } from "../ui/battle-launch";
 import { JourneyConflict, type JourneyStore } from "../game/storage";
-import { EVENT, HS, ITEM, MAP, MAP_OBJECT, MAP_SCRIPT, MAP_TEXT, MON, RAM, SPRITE, SYM, TEXT_PREDEFS, TRAINER } from "./generated/symbols";
+import { EVENT, HS, ITEM, MAP, MAP_OBJECT, MAP_SCRIPT, MAP_TEXT, MON, RAM, SPRITE, SYM, TEXT_PREDEFS, TRAINER } from "./symbols";
 import { YellowRom, type MapHeader, type MapObject, type TextOp } from "./rom";
 import { YellowWorld, STEP, opposite, type Facing } from "./world";
 import { YellowGraphics, mapPalette, type Rgb } from "./gfx";

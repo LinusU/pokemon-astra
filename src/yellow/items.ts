@@ -1,7 +1,7 @@
 import type { Pokemon } from "../engine";
 import { useMedicine, MEDICINE } from "../game/medicine";
 import { mountParty } from "../ui/party";
-import { ITEM } from "./generated/symbols";
+import { ITEM } from "./symbols";
 import type { YellowGame } from "./runtime";
 
 const KEY_ITEMS = new Set([

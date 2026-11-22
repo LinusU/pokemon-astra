@@ -3,7 +3,8 @@
  * player's own cartridge. Offsets come from the pret disassembly's symbol file
  * (see scripts/yellow-symbols.mjs); the data itself is never bundled.
  */
-import { MAP_LABELS, SYM, YELLOW_SHA1 } from "./generated/symbols";
+import { YELLOW_SHA1 } from "./generated/symbols";
+import { MAP_LABELS, SYM } from "./symbols";
 
 export class UnsupportedYellowCartridge extends Error {}
 

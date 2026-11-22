@@ -1,6 +1,6 @@
 // Ported Yellow map scripts. See docs/YELLOW_PORTING.md.
 // Mt. Moon, Cerulean City, Bill's House, Nugget Bridge, the Route 5-8 gates, the Day-Care.
-import { DEX, MAP, MOVE } from "../generated/symbols";
+import { DEX, MAP, MOVE } from "../symbols";
 import { defineMap, SHARED_TEXTS, type Game } from "../script";
 
 // ---------------------------------------------------------------- Mt. Moon
@@ -546,7 +546,7 @@ defineMap("UndergroundPathRoute8", underground("ROUTE_8"));
 
 // ---------------------------------------------------------------- Day-Care
 
-const HM_MOVES = [MOVE.CUT, MOVE.FLY, MOVE.SURF, MOVE.STRENGTH, MOVE.FLASH];
+const hmMoves = () => [MOVE.CUT, MOVE.FLY, MOVE.SURF, MOVE.STRENGTH, MOVE.FLASH];
 
 /** The species constant for a Pokédex number, with the printed name for text. */
 function speciesName(dex: number) {
@@ -577,7 +577,7 @@ async function depositMon(g: Game) {
   const slot = await g.choosePartyMon("Which Pokémon?");
   if (slot === undefined) return g.text("DaycareGentlemanText.AllRightThenText");
   const mon = g.save.party[slot];
-  if (mon.moves.some(m => HM_MOVES.includes(m))) return g.text("DaycareGentlemanText.CantAcceptMonWithHMText");
+  if (mon.moves.some(m => hmMoves().includes(m))) return g.text("DaycareGentlemanText.CantAcceptMonWithHMText");
   g.textVar("wNameBuffer", monName(mon));
   await g.text("DaycareGentlemanText.WillLookAfterMonText");
   g.save.party.splice(slot, 1);

@@ -3,7 +3,7 @@
  * battle engine's level-up moves, like every Pokémon's.
  */
 import type { Pokemon } from "../engine";
-import { SYM } from "./generated/symbols";
+import { SYM } from "./symbols";
 import type { YellowRom } from "./rom";
 
 /** Yellow gives some trainers hand-picked moves (gym leaders' signature moves, for instance). */

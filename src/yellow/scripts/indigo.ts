@@ -1,7 +1,7 @@
 // Route 23, Victory Road, the Indigo Plateau and the Elite Four, the Hall of Fame,
 // Cerulean Cave, the Summer Beach House and the link-cable rooms.
 import { defineMap, type Game } from "../script";
-import { MAP, MOVE, MON } from "../generated/symbols";
+import { MAP, MOVE, MON } from "../symbols";
 
 /** In-progress guards for scripted sequences (kept outside the save so a reload can't leave one stuck). */
 const busy = new Set<string>();

@@ -3,7 +3,7 @@ import { mountPartnerSummary } from "../ui/partner-summary";
 import { mountBag, type BagPocket, type BagState } from "../ui/bag";
 import { escapeHtml, panel } from "../ui/shell";
 import { download } from "../game/storage";
-import { ITEM } from "./generated/symbols";
+import { ITEM } from "./symbols";
 import type { YellowGame } from "./runtime";
 import { titleCase } from "./runtime";
 import { useYellowItem, itemPocket, itemDescription } from "./items";

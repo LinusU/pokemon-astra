@@ -1,6 +1,6 @@
 import type { YellowGame } from "./runtime";
 import { choose } from "./services";
-import { MON, ITEM } from "./generated/symbols";
+import { MON, ITEM } from "./symbols";
 
 /** Celadon's prize corner. Yellow's prizes: Abra, Vulpix, Wigglytuff / Scyther, Pinsir, Porygon / TMs. */
 const PRIZES: { kind: "mon" | "item"; name: string; level?: number; cost: number }[][] = [

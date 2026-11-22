@@ -1,5 +1,5 @@
 /** Which parts of the cartridge's map logic still need a hand-written port. */
-import { MAP_TEXT, SYM } from "./generated/symbols";
+import { MAP_TEXT, SYM } from "./symbols";
 import { asmPlan } from "./asm";
 import type { YellowRom } from "./rom";
 import { MAP_SCRIPTS, SHARED_TEXTS } from "./script";

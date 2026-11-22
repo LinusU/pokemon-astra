@@ -1,5 +1,5 @@
 // Ported Yellow map scripts: Viridian City, Route 1, Route 2, Route 22, Pewter City. See docs/YELLOW_PORTING.md.
-import { MAP } from "../generated/symbols";
+import { MAP } from "../symbols";
 import { oaksAide } from "./shared";
 import { defineMap, type Game } from "../script";
 

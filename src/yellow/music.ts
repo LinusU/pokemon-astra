@@ -1,4 +1,4 @@
-import { MUSIC } from "./generated/symbols";
+import { MUSIC } from "./symbols";
 
 /**
  * Yellow's songs, played with Crystal's arrangement of the same Kanto music

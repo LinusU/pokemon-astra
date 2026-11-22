@@ -1,5 +1,5 @@
 // Handlers shared by many maps: hidden objects and common text routines.
-import { MAP, SYM } from "../generated/symbols";
+import { MAP, SYM } from "../symbols";
 import { SHARED_TEXTS, type Game } from "../script";
 
 const hidden = (routine: string, handler: (g: Game) => Promise<void>) => { SHARED_TEXTS["hidden:" + routine] = handler; };

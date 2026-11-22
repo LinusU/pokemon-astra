@@ -1,5 +1,5 @@
 /** Colors and canvases for Yellow maps and sprites, decoded from the cartridge. */
-import { CONST, MAP, PAL, SPRITE, SYM, TILESET } from "./generated/symbols";
+import { CONST, MAP, PAL, SPRITE, SYM, TILESET } from "./symbols";
 import type { MapHeader, YellowRom } from "./rom";
 import type { Facing } from "./world";
 

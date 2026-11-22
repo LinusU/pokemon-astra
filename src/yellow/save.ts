@@ -1,6 +1,6 @@
 import type { Pokemon } from "../engine";
 import type { JourneySummary } from "../game/storage";
-import { HS, MAP } from "./generated/symbols";
+import { HS, MAP } from "./symbols";
 import type { YellowRom } from "./rom";
 import type { Facing } from "./world";
 

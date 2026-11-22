@@ -2,7 +2,7 @@
 import { mountStoragePc, type PcState } from "../ui/storage-pc";
 import { sortCollection } from "../game/collection";
 import { escapeHtml, panel } from "../ui/shell";
-import { ITEM, MAP, MON, SYM } from "./generated/symbols";
+import { ITEM, MAP, MON, SYM } from "./symbols";
 import type { YellowGame } from "./runtime";
 import { titleItem } from "./menu";
 import { STEP } from "./world";

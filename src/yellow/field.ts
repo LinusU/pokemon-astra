@@ -1,6 +1,6 @@
 /** Field moves: Cut, Surf, Strength, Flash, Fly, Dig, Teleport and Softboiled. */
 import type { Pokemon } from "../engine";
-import { MAP, SPRITE, SYM, TILESET } from "./generated/symbols";
+import { MAP, SPRITE, SYM, TILESET } from "./symbols";
 import type { YellowGame } from "./runtime";
 import { STEP } from "./world";
 

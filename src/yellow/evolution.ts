@@ -2,7 +2,7 @@ import type { Pokemon } from "../engine";
 import { playEvolution } from "../ui/evolution";
 import { chooseEvolutionMove } from "../ui/learn-move";
 import { mountParty } from "../ui/party";
-import { SYM } from "./generated/symbols";
+import { SYM } from "./symbols";
 import type { YellowGame } from "./runtime";
 
 /** Gen 1 species only: Yellow has no Crobat, Steelix or other Johto evolutions. */

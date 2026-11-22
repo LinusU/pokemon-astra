@@ -1,4 +1,4 @@
-import { SYM } from "./generated/symbols";
+import { SYM } from "./symbols";
 import type { YellowRom } from "./rom";
 
 export type AsmPlan =

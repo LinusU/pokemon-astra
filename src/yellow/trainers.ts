@@ -1,4 +1,4 @@
-import { RAM } from "./generated/symbols";
+import { RAM } from "./symbols";
 import type { MapHeader, YellowRom } from "./rom";
 import type { Facing } from "./world";
 

@@ -3,7 +3,7 @@
  * the player's Crystal cartridge. Yellow's blocks, collision and events are
  * unchanged; only the pictures come from Crystal.
  */
-import { MAP, TILESET } from "./generated/symbols";
+import { MAP, TILESET } from "./symbols";
 import { CRYSTAL_MAP_GROUP, CRYSTAL_SYM, CRYSTAL_TILESET } from "./generated/crystal";
 import { CRYSTAL_LOOKS, type CrystalLook, type CrystalTile } from "./crystal-look";
 import type { MapHeader, YellowRom } from "./rom";

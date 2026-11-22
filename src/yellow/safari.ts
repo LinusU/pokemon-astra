@@ -4,7 +4,7 @@
  * and flee chances, and the player's Pokémon never fight.
  */
 import { escapeHtml } from "../ui/shell";
-import { MAP, SYM } from "./generated/symbols";
+import { MAP, SYM } from "./symbols";
 import type { BattleOutcome } from "./script";
 import type { YellowGame } from "./runtime";
 

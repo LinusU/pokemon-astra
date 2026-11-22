@@ -1,6 +1,6 @@
 // Ported Yellow map scripts. See docs/YELLOW_PORTING.md.
 // Vermilion City, the S.S. Anne, Route 11/12, Rock Tunnel, Lavender Town and Pokémon Tower.
-import { MAP } from "../generated/symbols";
+import { MAP } from "../symbols";
 import { oaksAide } from "./shared";
 import { defineMap, SHARED_TEXTS, type Game } from "../script";
 

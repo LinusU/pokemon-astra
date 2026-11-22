@@ -5,7 +5,7 @@
  * Pokémon); those keep Yellow's sprite in Crystal-style colors.
  */
 import { CRYSTAL_OW_PALETTE, CRYSTAL_SPRITE, CRYSTAL_SYM } from "./generated/crystal";
-import { MAP_TEXT, SPRITE, SYM, TRAINER } from "./generated/symbols";
+import { MAP_TEXT, SPRITE, SYM, TRAINER } from "./symbols";
 import type { MapObject, YellowRom } from "./rom";
 import type { Facing } from "./world";
 import type { Rgb } from "./gfx";

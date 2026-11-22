@@ -1,4 +1,4 @@
-import { SYM } from "./generated/symbols";
+import { SYM } from "./symbols";
 import type { YellowGame } from "./runtime";
 
 /** In-game trades, read from the cartridge's TradeMons table (14 bytes each). */

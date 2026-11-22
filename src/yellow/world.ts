@@ -1,4 +1,4 @@
-import { MAP, SYM, TILESET } from "./generated/symbols";
+import { MAP, SYM, TILESET } from "./symbols";
 import type { MapHeader, Tileset, YellowRom } from "./rom";
 
 export type Facing = "down" | "up" | "left" | "right";
