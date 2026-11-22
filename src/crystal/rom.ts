@@ -397,8 +397,10 @@ export class CrystalRom {
     return this.waterTables.get(`${group}:${number}`);
   }
   /** A fishing group's table for a rod: (chance, species, level), species 0 meaning a time group. */
+  /** A map's fishing group (1-based, as map headers number them: GetFishGroupIndex) for a rod. */
   fish(group: number, rod: 0 | 1 | 2) {
-    const o = this.sym("FishGroups") + group * 7;
+    if (!group) return { bite: 0, table: [] };
+    const o = this.sym("FishGroups") + (group - 1) * 7;
     const table = this.near(o + 1 + rod * 2);
     const out: { chance: number; species: number; level: number }[] = [];
     for (let e = table; out.length < 8; e += 3) {

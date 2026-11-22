@@ -287,7 +287,8 @@ export function pushBoulder(game: CrystalGame, o: Obj) {
 // ------------------------------------------------------------------ fishing
 export async function fish(game: CrystalGame, rod: 0 | 1 | 2) {
   const { x, y } = game.front();
-  if (!game.world.isWater(game.collisionAt(x, y))) return game.say("You can't fish here.");
+  // TryFish: not while surfing, and only at water with nobody in the way.
+  if (game.save.state === "surf" || !game.world.isWater(game.collisionAt(x, y)) || game.blocked(x, y)) return game.say("You can't fish here.");
   await game.delay(30);
   const { bite, table } = game.rom.fish(game.map.fishGroup, rod);
   const night = game.timeOfDay() === 2;

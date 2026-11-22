@@ -22,6 +22,13 @@ describe.skipIf(!hasCrystal)("Crystal cartridge", () => {
     const elm = rom.mapByName("ELMS_LAB");
     expect(elm.objects.some(o => o.sprite === C("SPRITE_ELM"))).toBe(true);
   });
+  it("reads a map's fishing group", async () => {
+    const rom = await cartridge("crystal");
+    // New Bark Town fishes in the ocean: Magikarp and Tentacool on the Old Rod.
+    const ocean = rom.fish(rom.mapByName("NEW_BARK_TOWN").fishGroup, 0).table.map(e => e.species);
+    expect(ocean).toEqual([MON.MAGIKARP, MON.MAGIKARP, MON.TENTACOOL]);
+    expect(rom.fish(rom.mapByName("ROUTE_4").fishGroup, 0).table).toEqual([]);
+  });
   it("reads encounter tables", async () => {
     const rom = await cartridge("crystal");
     const [g, n] = [rom.mapByName("ROUTE_29").group, rom.mapByName("ROUTE_29").number];
