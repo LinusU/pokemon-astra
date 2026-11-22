@@ -96,4 +96,19 @@ describe.skipIf(!available || !crystal)("Yellow items in Crystal battles", () =>
       expect(map.get(ITEM[item]), item).toBeGreaterThan(0);
     expect(engine.itemName(map.get(ITEM.POKE_BALL)!)).toBe("POKE BALL");
   });
+  it("takes machine compatibility from the game data where Crystal has the machine", async () => {
+    const { Engine } = await import("../src/engine");
+    const { canLearnMachine } = await import("../src/yellow/evolution");
+    const { ITEM } = await import("../src/yellow/generated/symbols");
+    const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});
+    const engine = new Engine(instance.exports as never, readFileSync("pokecrystal11.gbc"));
+    const rom = new YellowRom(new Uint8Array(readFileSync("pokeyellow.gbc")));
+    const game = { engine, rom } as never;
+    for (let dex = 1; dex <= 151; dex++) {
+      // Toxic is a Crystal TM; Mega Punch is not, so Yellow's own list decides it.
+      expect(canLearnMachine(game, dex, ITEM.TM_TOXIC), `${dex}`).toBe(engine.machineMoves(dex).has(92));
+      const bit = (rom.u8(SYM.BaseStats + (dex - 1) * 28 + 20) & 1) !== 0;
+      expect(canLearnMachine(game, dex, ITEM.TM_MEGA_PUNCH), `${dex}`).toBe(bit);
+    }
+  });
 });

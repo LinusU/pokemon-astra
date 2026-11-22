@@ -294,16 +294,26 @@ export class Engine {
     while (this.earlierStages.has(id)) id = this.earlierStages.get(id)!;
     return id;
   }
-  /** Egg moves and the TM/HM moves a species can learn. Crystal Legacy keeps Crystal's egg moves and TM list, so those come from the cartridge. */
+  private machines?: number[];
+  /** The moves Crystal's TMs, HMs and move tutor teach. Crystal Legacy keeps the list, so it comes from the cartridge. */
+  machineList(): readonly number[] {
+    if (!this.machines) {
+      this.machines = [];
+      for (let i = 0; this.rom[0x1167a + i]; i++) this.machines.push(this.rom[0x1167a + i]);
+    }
+    return this.machines;
+  }
+  /** The TM, HM and tutor moves a species can learn, from the game data. */
+  machineMoves(id: number) {
+    const base = this.speciesData(id).base;
+    return new Set(this.machineList().filter((_, i) => base[24 + (i >> 3)] & (1 << (i & 7))));
+  }
+  /** Egg moves and the TM/HM moves a species can learn. Crystal Legacy keeps Crystal's egg moves, so those come from the cartridge. */
   inheritableMoves(id: number) {
-    const moves = new Set<number>();
+    const moves = this.machineMoves(id);
     const ptr = 0x23b11 + (id - 1) * 2;
     let cursor = 0x20000 + ((this.rom[ptr] | (this.rom[ptr + 1] << 8)) & 0x3fff);
     while (this.rom[cursor] !== 0xff) moves.add(this.rom[cursor++]);
-    const base = this.speciesData(id).base;
-    for (let i = 0; this.rom[0x1167a + i]; i++) {
-      if (base[24 + (i >> 3)] & (1 << (i & 7))) moves.add(this.rom[0x1167a + i]);
-    }
     return moves;
   }
   teachMove(mon: Pokemon, move: number, slot: number): Pokemon {

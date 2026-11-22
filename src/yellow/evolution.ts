@@ -80,8 +80,15 @@ export function learn(game: YellowGame, slot: number, move: number): Promise<boo
 }
 
 /** Whether Yellow lets a species learn a TM (item $C9+) or HM ($C4+). */
+/**
+ * Whether a species can learn a TM or HM item's move: from the game data when
+ * Crystal has a machine for it, otherwise (Gen 1 machines such as Mega Punch)
+ * from the cartridge's own list.
+ */
 export function canLearnMachine(game: YellowGame, dex: number, item: number) {
   if (dex < 1 || dex > 151) return false;
+  const move = game.rom.machineMove(item);
+  if (game.engine.machineList().includes(move)) return game.engine.machineMoves(dex).has(move);
   const bit = item >= 0xc9 ? item - 0xc9 : 50 + item - 0xc4;
   const flags = SYM.BaseStats + (dex - 1) * 28 + 20;
   return !!(game.rom.u8(flags + (bit >> 3)) & (1 << (bit & 7)));
