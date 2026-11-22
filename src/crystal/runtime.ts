@@ -648,6 +648,8 @@ export class CrystalGame {
     this.following = undefined;
     // Biking indoors and surfing onto land end when the map changes.
     if (this.save.state === "bike" && (env === C("INDOOR") || env === C("DUNGEON") || env === C("ENVIRONMENT_5"))) this.save.state = "normal";
+    // .CheckForcedBiking: Cycling Road puts the player on the Bicycle.
+    if (this.hasFlag("ENGINE_ALWAYS_ON_BIKE")) this.save.state = "bike";
     if (this.save.state === "surf" && options.arrival === "warp") this.save.state = "normal";
     this.ctx.sound?.refreshMusic();
   }
@@ -991,8 +993,17 @@ export class CrystalGame {
     if (this.save.state === "bike") return WALK_SECONDS / 2;
     return WALK_SECONDS / (this.ctx.input.held("speed") || this.ctx.input.held("b") ? 1.6 : 1);
   }
-  private control(dt: number) {
+  /** Cycling Road downhill (BIKEFLAGS_DOWNHILL): with no direction held, the Bicycle rolls down. */
+  private controlInput(): Input {
     const input = this.ctx.input;
+    if (!this.hasFlag("ENGINE_DOWNHILL") || this.save.state !== "bike") return input;
+    if ((["up", "down", "left", "right"] as const).some(d => input.held(d))) return input;
+    const rolling = Object.create(input) as Input;
+    rolling.held = (a: Parameters<Input["held"]>[0]) => a === "down" || input.held(a);
+    return rolling;
+  }
+  private control(dt: number) {
+    const input = this.controlInput();
     if (this.me.from) {
       const tapped = (["up", "down", "left", "right"] as const).find(d => input.hit(d));
       if (tapped) this.queued = tapped;
@@ -1099,7 +1110,7 @@ export class CrystalGame {
   private pushing = 0;
   /** Astra-style movement: any direction, with the map's rules applied as the player's centre enters a square. */
   private controlFree(dt: number) {
-    const input = this.ctx.input, me = this.me;
+    const input = this.controlInput(), me = this.me;
     const heading = heldHeading(input, me.facing);
     if (!heading) {
       this.pushing = 0;
