@@ -26,20 +26,35 @@ export async function countStep(game: CrystalGame): Promise<boolean> {
     }
     return true;
   }
-  // Poison: every fourth step costs 1 HP, never below 1 outside battle (Crystal).
-  if (save.steps % 4 === 0 && save.party.some(m => !m.egg && m.hp > 1 && (m.status & 0x08))) {
-    let fainted = false;
+  // Poison (DoPoisonStep): every fourth step costs each poisoned Pokémon 1 HP, and it can faint.
+  if (save.steps % 4 === 0 && save.party.some(m => !m.egg && m.hp > 0 && (m.status & 0x08))) {
+    const fainted: typeof save.party = [];
     for (const m of save.party) {
-      if (m.egg || !(m.status & 0x08) || m.hp <= 1) continue;
+      if (m.egg || !(m.status & 0x08) || m.hp <= 0) continue;
       m.hp--;
-      if (m.hp === 1) {
-        m.status &= ~0x08;
-        await game.say(`${m.nickname || game.monName(m.species)} survived the poisoning!`);
-        fainted = true;
+      if (!m.hp) {
+        m.status = 0;
+        fainted.push(m);
       }
     }
     game.sfx("SFX_POISON");
-    if (fainted) return true;
+    if (fainted.length) {
+      for (const m of fainted) {
+        // HAPPINESS_POISONFAINT
+        m.happiness = Math.max(0, m.happiness - (m.happiness < 200 ? 5 : 10));
+        game.setBuffer(0, m.nickname || game.monName(m.species));
+        const at = TEXT._PoisonFaintText;
+        if (at !== undefined) await game.engineText(at);
+        else await game.say(`${m.nickname || game.monName(m.species)} fainted!`);
+      }
+      game.closeText();
+      // OverworldWhiteoutScript when nobody is left standing.
+      if (!save.party.some(m => !m.egg && m.hp > 0)) {
+        const { blackout } = await import("./battle");
+        await blackout(game);
+      }
+      return true;
+    }
   }
   // The Bug-Catching Contest's 20 minutes.
   if (save.contest && game.contestMinutes() <= 0) {
