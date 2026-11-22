@@ -53,6 +53,9 @@ describe.skipIf(!hasEngine || !CARTRIDGES.length).each(CARTRIDGES)("Crystal's sy
     await g.runScript(() => g.arrived());
     expect(g.save.specialCall).toBe(0);
     expect(h.ui.log.join(" ")).toMatch(/ELM/);
+    // The call is about the theft, not Pokérus: Elm's script reads the call's id.
+    expect(g.ev("EVENT_ELM_CALLED_ABOUT_STOLEN_POKEMON")).toBe(true);
+    expect(h.ui.log.join(" ")).not.toMatch(/POKéRUS/);
   }, 60000);
 
   it("gives no badge for a lost gym battle", async () => {
