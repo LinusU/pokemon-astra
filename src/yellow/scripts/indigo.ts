@@ -1,11 +1,11 @@
 // Route 23, Victory Road, the Indigo Plateau and the Elite Four, the Hall of Fame,
 // Cerulean Cave, the Summer Beach House and the link-cable rooms.
-import { defineMap, type Game } from "../script";
+import { defineMap, type Game, type MapScript } from "../script";
 import { MAP, MOVE, MON } from "../symbols";
 
 /** In-progress guards for scripted sequences (kept outside the save so a reload can't leave one stuck). */
 const busy = new Set<string>();
-async function once(key: string, body: () => Promise<void>) {
+export async function once(key: string, body: () => Promise<void>) {
   if (busy.has(key)) return;
   busy.add(key);
   try {
@@ -139,7 +139,7 @@ const E4_EVENTS = [
   "EVENT_BEAT_LANCES_ROOM_TRAINER_0", "EVENT_BEAT_LANCE", "EVENT_LANCES_ROOM_LOCK_DOOR",
 ];
 
-function resetEliteFour(g: Game, includeChampion: boolean) {
+export function resetEliteFour(g: Game, includeChampion: boolean) {
   for (const ev of E4_EVENTS) g.reset(ev);
   if (includeChampion) g.reset("EVENT_BEAT_CHAMPION_RIVAL");
   g.vars.championsIntro = 0;
@@ -158,7 +158,7 @@ defineMap("IndigoPlateauLobby", {
 
 const E4_ENTRANCE: [number, number][] = [[4, 10], [5, 10], [4, 11], [5, 11]];
 
-interface EliteRoom {
+export interface EliteRoom {
   beat: string;
   autowalk: string;
   open: number;
@@ -168,13 +168,16 @@ interface EliteRoom {
   first?: boolean;
 }
 
-/** Lorelei, Bruno and Agatha: the door behind the player is locked and the exit opens after the win. */
-function eliteRoom(label: string, o: EliteRoom) {
+/**
+ * Lorelei, Bruno and Agatha: the door behind the player is locked and the exit
+ * opens once the room's member is beaten (`beaten`, by default o.beat).
+ */
+export function eliteRoomScript(label: string, o: EliteRoom, beaten = (g: Game) => g.ev(o.beat)): MapScript {
   const exit = (g: Game) => {
-    const want = g.ev(o.beat) ? o.open : o.closed;
+    const want = beaten(g) ? o.open : o.closed;
     if (g.block(2, 0) !== want) g.setBlock(2, 0, want);
   };
-  defineMap(label, {
+  return {
     onEnter(g) {
       if (o.first) g.vars.elite4Started = 1;
       exit(g);
@@ -196,21 +199,24 @@ function eliteRoom(label: string, o: EliteRoom) {
         await g.delay(3);
       });
     },
-  });
+  };
 }
 
-eliteRoom("LoreleisRoom", {
-  beat: "EVENT_BEAT_LORELEIS_ROOM_TRAINER_0", autowalk: "EVENT_AUTOWALKED_INTO_LORELEIS_ROOM",
-  open: 0x05, closed: 0x24, dontRun: "TEXT_LORELEISROOM_DONT_RUN_AWAY", first: true,
-});
-eliteRoom("BrunosRoom", {
-  beat: "EVENT_BEAT_BRUNOS_ROOM_TRAINER_0", autowalk: "EVENT_AUTOWALKED_INTO_BRUNOS_ROOM",
-  open: 0x05, closed: 0x24, dontRun: "TEXT_BRUNOSROOM_BRUNO_DONT_RUN_AWAY",
-});
-eliteRoom("AgathasRoom", {
-  beat: "EVENT_BEAT_AGATHAS_ROOM_TRAINER_0", autowalk: "EVENT_AUTOWALKED_INTO_AGATHAS_ROOM",
-  open: 0x0e, closed: 0x3b, dontRun: "TEXT_AGATHASROOM_AGATHA_DONT_RUN_AWAY",
-});
+export const ELITE_ROOMS: Record<string, EliteRoom> = {
+  LoreleisRoom: {
+    beat: "EVENT_BEAT_LORELEIS_ROOM_TRAINER_0", autowalk: "EVENT_AUTOWALKED_INTO_LORELEIS_ROOM",
+    open: 0x05, closed: 0x24, dontRun: "TEXT_LORELEISROOM_DONT_RUN_AWAY", first: true,
+  },
+  BrunosRoom: {
+    beat: "EVENT_BEAT_BRUNOS_ROOM_TRAINER_0", autowalk: "EVENT_AUTOWALKED_INTO_BRUNOS_ROOM",
+    open: 0x05, closed: 0x24, dontRun: "TEXT_BRUNOSROOM_BRUNO_DONT_RUN_AWAY",
+  },
+  AgathasRoom: {
+    beat: "EVENT_BEAT_AGATHAS_ROOM_TRAINER_0", autowalk: "EVENT_AUTOWALKED_INTO_AGATHAS_ROOM",
+    open: 0x0e, closed: 0x3b, dontRun: "TEXT_AGATHASROOM_AGATHA_DONT_RUN_AWAY",
+  },
+};
+for (const [label, room] of Object.entries(ELITE_ROOMS)) defineMap(label, eliteRoomScript(label, room));
 
 const LANCE_TRIGGERS: [number, number][] = [[5, 1], [6, 2], [5, 11], [6, 11], [24, 16]];
 
@@ -267,20 +273,42 @@ defineMap("ChampionsRoom", {
 
 const CHAMPION_RIVAL = 1, CHAMPION_OAK = 2;
 
-async function championScene(g: Game) {
+/** The texts and team of the Champion's battle; Yellow Legacy's rematch has its own. */
+export interface ChampionScene {
+  intro: string;
+  team(g: Game): number;
+  win: string;
+  lose: string;
+  /** Set EVENT_BEAT_CHAMPION_RIVAL (the first win). */
+  beat: boolean;
+  after: string;
+  congratulates: string;
+  disappointed: string;
+  comeWithMe: string;
+}
+const CHAMPION: ChampionScene = {
+  intro: "ChampionsRoomRivalText.IntroText",
+  // The rival fields one team per Eevee evolution: 1 Jolteon, 2 Flareon, 3 Vaporeon (wRivalStarter).
+  team: g => Math.min(3, Math.max(1, g.vars.rivalStarter || 1)),
+  win: "RivalDefeatedText", lose: "RivalVictoryText", beat: true,
+  after: "ChampionsRoomRivalAfterBattleText",
+  congratulates: "TEXT_CHAMPIONSROOM_OAK_CONGRATULATES_PLAYER",
+  disappointed: "ChampionsRoomOakDisappointedWithRivalText",
+  comeWithMe: "ChampionsRoomOakComeWithMeText",
+};
+
+export async function championScene(g: Game, t = CHAMPION) {
   g.vars.championsIntro = 1;
   // The rival walks up to the player.
   await g.move("player", "U3R1U1");
   await g.delay(3);
   // API REQUEST: the original also turns battle animations on (wOptions) here; there is no option accessor.
-  await g.text("ChampionsRoomRivalText.IntroText");
+  await g.text(t.intro);
   await g.delay(3);
-  // Yellow's rival fields one team per Eevee evolution: 1 Vaporeon, 2 Flareon, 3 Jolteon.
-  const team = Math.min(3, Math.max(1, g.vars.rivalStarter || 1));
-  const won = await g.trainerBattle("RIVAL3", team, { win: "RivalDefeatedText", lose: "RivalVictoryText" });
+  const won = await g.trainerBattle("RIVAL3", t.team(g), { win: t.win, lose: t.lose });
   if (!won) return;
-  g.set("EVENT_BEAT_CHAMPION_RIVAL");
-  await g.text("ChampionsRoomRivalAfterBattleText");
+  if (t.beat) g.set("EVENT_BEAT_CHAMPION_RIVAL");
+  await g.text(t.after);
   // Oak arrives.
   g.music("MUSIC_CITIES1");
   await g.text("ChampionsRoomOakText");
@@ -289,11 +317,11 @@ async function championScene(g: Game) {
   g.face("player", "left");
   g.face(CHAMPION_RIVAL, "left");
   g.face(CHAMPION_OAK, "down");
-  await g.text("TEXT_CHAMPIONSROOM_OAK_CONGRATULATES_PLAYER");
+  await g.text(t.congratulates);
   g.face(CHAMPION_OAK, "right");
-  await g.text("ChampionsRoomOakDisappointedWithRivalText");
+  await g.text(t.disappointed);
   g.face(CHAMPION_OAK, "down");
-  await g.text("ChampionsRoomOakComeWithMeText");
+  await g.text(t.comeWithMe);
   await g.move(CHAMPION_OAK, "U2");
   g.hide("HS_CHAMPIONS_ROOM_OAK");
   // The player follows Oak to the Hall of Fame.
