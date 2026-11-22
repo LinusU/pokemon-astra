@@ -3,6 +3,7 @@ import { useMedicine, MEDICINE } from "../game/medicine";
 import { mountParty } from "../ui/party";
 import { ITEM } from "./symbols";
 import type { YellowGame } from "./runtime";
+import { offerAnotherRepel } from "./legacy";
 
 const KEY_ITEMS = new Set([
   "TOWN_MAP", "BICYCLE", "SURFBOARD", "POKEDEX", "OLD_AMBER", "DOME_FOSSIL", "HELIX_FOSSIL", "SECRET_KEY", "BIKE_VOUCHER",
@@ -39,9 +40,21 @@ const MEDICINE_KEYS: Record<string, keyof typeof MEDICINE> = {
   ICE_HEAL: "ice_heal", FULL_HEAL: "full_heal", ETHER: "ether", MAX_ELIXER: "max_elixer",
 };
 const HEALS: Record<string, number> = { MAX_POTION: 9999, FRESH_WATER: 50, SODA_POP: 60, LEMONADE: 80 };
+const REPEL_STEPS: Record<string, number> = { REPEL: 100, SUPER_REPEL: 200, MAX_REPEL: 250 };
 
-/** A step ran the Repel out. */
+/** A step ran the Repel out. Yellow says so; Yellow Legacy first offers another of the same Repel. */
 export async function repelWoreOff(game: YellowGame) {
+  const id = game.save.repelItem;
+  delete game.save.repelItem;
+  if (id !== undefined && game.legacy && game.save.items[id] > 0) {
+    if (await offerAnotherRepel(game, game.rom.itemName(id))) {
+      game.save.items[id]--;
+      if (!game.save.items[id]) delete game.save.items[id];
+      game.save.repel = REPEL_STEPS[name(id)];
+      game.save.repelItem = id;
+    }
+    return;
+  }
   await game.text("RepelWoreOffText");
 }
 
@@ -100,8 +113,9 @@ export async function useYellowItem(game: YellowGame, id: number): Promise<strin
     game.ctx.sound.heal();
     return `${result.nickname || engine.species(result.species).name} was restored.`;
   }
-  if (n === "REPEL" || n === "SUPER_REPEL" || n === "MAX_REPEL") {
-    save.repel = n === "REPEL" ? 100 : n === "SUPER_REPEL" ? 200 : 250;
+  if (REPEL_STEPS[n]) {
+    save.repel = REPEL_STEPS[n];
+    save.repelItem = id;
     consume();
     return `${save.name} used ${game.rom.itemName(id)}.`;
   }

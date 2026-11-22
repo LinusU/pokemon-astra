@@ -46,6 +46,8 @@ export interface YellowSave {
   bike?: boolean;
   surfing?: boolean;
   repel?: number;
+  /** The Repel item in effect, so its wearing off can offer another. */
+  repelItem?: number;
   safari?: { steps: number; balls: number };
   /** The Route 5 Day-Care: the Pokémon left there and the steps walked since. */
   daycare?: { mon: Pokemon; steps: number };
@@ -110,7 +112,7 @@ export function isYellowSave(data: unknown, adventure: YellowAdventure): data is
     Array.isArray(s.party) && s.party.length <= 6 && Array.isArray(s.storage) &&
     counts(s.items) && counts(s.pcItems) && int(s.money, 0, 999999) && int(s.coins, 0, 9999) && int(s.badges, 0, 255) &&
     ints(s.seen, 1, 251) && ints(s.caught, 1, 251) && !!s.pikachu && int(s.pikachu.happiness, 0, 255) &&
-    ints(s.visited, 0, 255) && int(s.steps, 0, Number.MAX_SAFE_INTEGER) && typeof s.seconds === "number" && s.seconds >= 0 && Number.isFinite(s.seconds) &&
+    ints(s.visited, 0, 255) && int(s.steps, 0, Number.MAX_SAFE_INTEGER) && (s.repelItem === undefined || int(s.repelItem, 1, 255)) && typeof s.seconds === "number" && s.seconds >= 0 && Number.isFinite(s.seconds) &&
     !!s.settings && int(s.settings.battleSpeed, 1, 3) &&
     (s.settings.movement === undefined || ["free", "grid"].includes(s.settings.movement)) &&
     (s.settings.look === undefined || ["crystal", "yellow"].includes(s.settings.look));

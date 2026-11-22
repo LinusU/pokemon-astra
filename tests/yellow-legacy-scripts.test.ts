@@ -123,3 +123,36 @@ describe("Yellow Legacy's services", () => {
     expect(g.log).toContain("mon OMANYTE 10");
   });
 });
+
+describe("Yellow Legacy's Repel", () => {
+  /** The runtime pieces Repels use. */
+  function game(legacy: boolean, o: { answers?: boolean[]; items?: Record<string, number>; events?: string[] } = {}) {
+    const g = fakeGame({ answers: o.answers, events: o.events });
+    const player = { facing: "up" };
+    return Object.assign(g, {
+      legacy,
+      save: { ...g.save, items: o.items ?? {}, repel: 0, lastMap: 0, blackout: 1 } as Record<string, unknown>,
+      rom: { itemName: () => "SUPER REPEL" },
+      heal() { g.log.push("heal"); }, ctx: { sound: { heal() {} } }, persist: async () => {},
+      face(who: string, f: string) { if (who === "player") player.facing = f; }, player,
+    });
+  }
+  it("offer another Repel of the same kind on Legacy", async () => {
+    const { repelWoreOff } = await import("../src/yellow/items");
+    const { ITEM } = await import("../src/yellow/symbols");
+    const id = ITEM.SUPER_REPEL;
+    const yes = game(true, { answers: [true], items: { [id]: 2 } });
+    yes.save.repelItem = id;
+    await repelWoreOff(yes as never);
+    expect(yes.log).toEqual(["RepelWoreOffUseAnotherText", "yes"]);
+    expect([yes.save.repel, yes.save.repelItem, (yes.save.items as Record<number, number>)[id]]).toEqual([200, id, 1]);
+    const none = game(true, { items: {} });
+    none.save.repelItem = id;
+    await repelWoreOff(none as never);
+    expect(none.log).toEqual(["RepelWoreOffText"]);
+    const yellow = game(false, { items: { [id]: 2 } });
+    yellow.save.repelItem = id;
+    await repelWoreOff(yellow as never);
+    expect(yellow.log).toEqual(["RepelWoreOffText"]);
+  });
+});
