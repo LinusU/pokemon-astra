@@ -55,7 +55,6 @@ export class DomUi implements CrystalUi {
   private box(page: string, arrow: boolean) {
     let box = this.layer.querySelector<HTMLElement>(".crystal-text");
     if (!box) {
-      this.layer.querySelector(".crystal-choices")?.remove();
       box = document.createElement("div");
       box.className = "dialogue crystal-text";
       box.setAttribute("role", "status");
