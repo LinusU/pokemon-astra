@@ -216,7 +216,8 @@ export async function useFieldMove(game: CrystalGame, slot: number, move: FieldM
     case "surf": return useSurf(game, slot);
     case "strength": return useStrength(game, slot);
     case "whirlpool": return useWhirlpool(game, slot);
-    case "waterfall": return game.world.isWaterfall(game.collisionAt(x, y)) ? useWaterfall(game, slot) : game.say("There's no waterfall here.");
+    // CheckMapCanWaterfall: facing up a waterfall.
+    case "waterfall": return game.me.facing === "up" && game.world.isWaterfall(game.collisionAt(x, y)) ? useWaterfall(game, slot) : game.say("There's no waterfall here.");
     case "headbutt": return game.world.isHeadbuttTree(game.collisionAt(x, y)) ? useHeadbutt(game, slot) : game.say("There's nothing to HEADBUTT.");
     case "rocksmash": return rock && isRock(game, rock) ? useRockSmash(game, slot, rock) : game.say("There's no rock to smash.");
     case "flash": return useFlash(game, slot);
@@ -254,7 +255,7 @@ export async function fieldPrompt(game: CrystalGame) {
     if (await ask(game, "AskWhirlpoolText", "A whirlpool is in the way. Want to use WHIRLPOOL?")) await useWhirlpool(game, slot);
     return;
   }
-  if (game.world.isWaterfall(coll) && game.save.state === "surf") {
+  if (game.world.isWaterfall(coll) && game.save.state === "surf" && game.me.facing === "up") {
     const slot = fieldUser(game, "waterfall");
     if (slot === undefined) return text(game, "Script_CantDoWaterfall.HugeWaterfallText", "Wow, it's a huge waterfall.");
     if (await ask(game, "Script_AskWaterfall.AskWaterfallText", "Do you want to use WATERFALL?")) await useWaterfall(game, slot);
