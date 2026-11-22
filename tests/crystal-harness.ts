@@ -37,7 +37,7 @@ export async function headlessGame(adventure: CrystalAdventure, options: { hour?
   await game.begin();
   let clock = 0;
   const settle = async () => {
-    for (let i = 0; i < 200; i++) {
+    for (let i = 0; i < 5000; i++) {
       await new Promise(r => setTimeout(r, 0));
       if (game.mode === "world") return;
     }
