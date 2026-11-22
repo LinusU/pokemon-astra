@@ -194,7 +194,7 @@ export async function useEscape(game: CrystalGame, kind: "dig" | "teleport" | "r
 }
 
 export async function useFieldMove(game: CrystalGame, slot: number, move: FieldMove) {
-  if (!hasBadge(game, move)) return text(game, "BadgeRequiredText", "A new BADGE is required.");
+  if (!hasBadge(game, move)) return text(game, "_BadgeRequiredText", "Sorry! A new BADGE is required.");
   const { x, y } = game.front();
   const rock = game.objects.find(o => o.visible && o.x === x && o.y === y);
   switch (move) {
