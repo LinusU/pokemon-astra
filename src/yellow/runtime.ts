@@ -12,14 +12,14 @@ import type { MusicScene } from "../game/music";
 import { escapeHtml, panel } from "../ui/shell";
 import { BattleLaunch, type FinishedBattle } from "../ui/battle-launch";
 import { JourneyConflict, type JourneyStore } from "../game/storage";
-import { EVENT, HS, ITEM, MAP, MAP_OBJECT, MAP_SCRIPT, MAP_TEXT, MON, RAM, SPRITE, SYM, TEXT_PREDEFS, TRAINER } from "./symbols";
+import { cartridgeInUse, EVENT, HS, ITEM, MAP, MAP_OBJECT, MAP_SCRIPT, MAP_TEXT, MON, RAM, SPRITE, SYM, TEXT_PREDEFS, TRAINER } from "./symbols";
 import { YellowRom, type MapHeader, type MapObject, type TextOp } from "./rom";
 import { YellowWorld, STEP, opposite, type Facing } from "./world";
 import { YellowGraphics, mapPalette, type Rgb } from "./gfx";
 import { CrystalGraphics } from "./crystal-gfx";
 import { CrystalSprites } from "./crystal-sprites";
 import { yellowSummary, type YellowSave } from "./save";
-import { MAP_SCRIPTS, SHARED_TEXTS, type Actor, type BattleOutcome, type Emote, type Game } from "./script";
+import { mapScript, sharedText, type Actor, type BattleOutcome, type Emote, type Game } from "./script";
 import { textPages } from "./textbox";
 import { asmPlan } from "./asm";
 import { specialMoves, withMoves } from "./learnsets";
@@ -130,6 +130,9 @@ export class YellowGame implements Game {
   // ------------------------------------------------------------ Game interface
   get map() { return this.header.id; }
   get mapLabel() { return this.header.label; }
+  get legacy() { return cartridgeInUse() === "legacy"; }
+  /** The current map's script, with Yellow Legacy's logic on Legacy's cartridge. */
+  private get script() { return mapScript(this.header.label, this.legacy); }
   get playerState() { return this.me; }
   get currentMap() { return this.header; }
   /** Strength stays active until the player leaves the map. */
@@ -385,7 +388,7 @@ export class YellowGame implements Game {
   private async textId(id: number, options: { wait?: boolean } = {}): Promise<void> {
     const constants = MAP_TEXT[this.header.label] ?? {};
     const name = Object.keys(constants).find(k => constants[k] === id);
-    const override = name && MAP_SCRIPTS[this.header.label]?.texts?.[name];
+    const override = name && this.script?.texts?.[name];
     if (override) return override(this);
     const at = this.rom.mapText(this.header, id);
     await this.runText(this.rom.label(at) ?? `@${at}`, at, options);
@@ -423,9 +426,9 @@ export class YellowGame implements Game {
   }
   /** The handler for a text, by its label or any other label at the same address. */
   private textHandler(label: string, at?: number) {
-    const texts = MAP_SCRIPTS[this.header.label]?.texts;
+    const texts = this.script?.texts;
     for (const name of [label, ...at === undefined ? [] : this.rom.labelsAt(at)]) {
-      const handler = texts?.[name] ?? SHARED_TEXTS[name];
+      const handler = texts?.[name] ?? sharedText(name, this.legacy);
       if (handler) return handler;
     }
   }
@@ -538,7 +541,7 @@ export class YellowGame implements Game {
     this.ctx.sound.refreshMusic();
     this.placePikachu();
     // Map setup (blocks, objects) runs before the map is shown.
-    void MAP_SCRIPTS[this.header.label]?.onEnter?.(this);
+    void this.script?.onEnter?.(this);
   }
   private blocksVersion = 0;
   setBlock(bx: number, by: number, block: number) {
@@ -604,7 +607,7 @@ export class YellowGame implements Game {
       if (facing) this.me.facing = facing;
       this.enterMap(id, true);
     });
-    await MAP_SCRIPTS[this.header.label]?.onStep?.(this);
+    await this.script?.onStep?.(this);
   }
 
   private async useWarp(index: number) {
@@ -629,7 +632,7 @@ export class YellowGame implements Game {
       await this.walk("player", ["down"]);
       this.standingOnWarp = false;
     }
-    await MAP_SCRIPTS[this.header.label]?.onStep?.(this);
+    await this.script?.onStep?.(this);
     this.persist();
   }
 
@@ -809,7 +812,7 @@ export class YellowGame implements Game {
     boulder.y = y;
     boulder.home = { x, y };
     this.ctx.sound.overworld("strength");
-    boulder.onPath = () => void this.runScript(() => MAP_SCRIPTS[this.header.label]?.onStep?.(this));
+    boulder.onPath = () => void this.runScript(() => this.script?.onStep?.(this));
     return true;
   }
 
@@ -1065,7 +1068,7 @@ export class YellowGame implements Game {
 
   /** Map scripts, trainer sightlines and grass encounters after each step. */
   private async afterArrival(entering: boolean) {
-    await MAP_SCRIPTS[this.header.label]?.onStep?.(this);
+    await this.script?.onStep?.(this);
     if (this.mode !== "world" && this.mode !== "script") return;
     const spotted = trainerTrigger(this, this.trainers, this.npcs.filter(n => !n.hidden));
     if (spotted) {
@@ -1134,7 +1137,7 @@ export class YellowGame implements Game {
     }
     const hidden = this.rom.hiddenObjects(this.header.id).find(h => h.x === this.me.x + dx && h.y === this.me.y + dy);
     if (hidden) return this.hiddenObject(hidden);
-    if (await MAP_SCRIPTS[this.header.label]?.onInteract?.(this)) return;
+    if (await this.script?.onInteract?.(this)) return;
     const { fieldPrompt } = await import("./field");
     if (await fieldPrompt(this)) return;
     // Bookshelves, statues and displays in buildings without their own sign.
@@ -1170,7 +1173,7 @@ export class YellowGame implements Game {
       const index = this.rom.hiddenObjects(this.header.id).indexOf(h);
       return slotMachine(this, h.arg, index);
     }
-    const handler = SHARED_TEXTS["hidden:" + h.routine];
+    const handler = sharedText("hidden:" + h.routine, this.legacy);
     if (handler) {
       this.hidden = h;
       return handler(this);
@@ -1285,7 +1288,7 @@ export class YellowGame implements Game {
         const hs = this.rom.missables().findIndex(m => m.map === this.header.id && m.object === npc!.object.index);
         if (hs >= 0) this.toggle(hs, false);
         else npc!.hidden = true;
-        const after = MAP_SCRIPTS[this.header.label]?.texts?.["after:" + header.object];
+        const after = this.script?.texts?.["after:" + header.object];
         if (after) await after(this);
       }
       return;
@@ -1294,7 +1297,7 @@ export class YellowGame implements Game {
     const won = await this.battleTrainer(trainer.klass, trainer.index, { endText: header.end });
     if (won) {
       this.setEvent(header.event, true);
-      const after = MAP_SCRIPTS[this.header.label]?.texts?.["after:" + header.object];
+      const after = this.script?.texts?.["after:" + header.object];
       if (after) await after(this);
     }
   }
@@ -1588,7 +1591,7 @@ export class YellowGame implements Game {
   /** The map script, as it runs once the player has control again. */
   private async afterControl() {
     if (this.mode !== "script") return;
-    await MAP_SCRIPTS[this.header.label]?.onStep?.(this);
+    await this.script?.onStep?.(this);
   }
   private async safariEncounter(species: number, level: number) {
     const previous = this.mode;

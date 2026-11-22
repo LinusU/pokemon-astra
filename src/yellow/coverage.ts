@@ -1,8 +1,8 @@
 /** Which parts of the cartridge's map logic still need a hand-written port. */
-import { MAP, MAP_TEXT, SYM } from "./symbols";
+import { cartridgeInUse, MAP, MAP_TEXT, SYM } from "./symbols";
 import { asmPlan } from "./asm";
 import type { YellowRom } from "./rom";
-import { MAP_SCRIPTS, SHARED_TEXTS } from "./script";
+import { mapScript, sharedText } from "./script";
 
 export const BUILTIN_HIDDEN = new Set(["HiddenItems", "HiddenCoins", "OpenPokemonCenterPC", "OpenRedsPC", "BillsHousePC", "StartSlotMachine"]);
 const GENERIC_SCRIPT_TABLE = () => new Set([SYM.CheckFightingMapTrainers, SYM.DisplayEnemyTrainerTextAndStartBattle, SYM.EndTrainerBattle]);
@@ -26,13 +26,13 @@ export function genericMapScript(rom: YellowRom, bank: number, at: number) {
 export interface Gap { map: string; kind: "script" | "text" | "hidden"; label: string }
 
 export function coverageGaps(rom: YellowRom): Gap[] {
-  const gaps: Gap[] = [];
+  const gaps: Gap[] = [], legacy = cartridgeInUse() === "legacy";
   // Unused map slots are never entered (Yellow Legacy points some of them at other banks' data).
   const unused = new Set(Object.entries(MAP).flatMap(([name, id]) => name.startsWith("UNUSED_MAP_") ? [id] : []));
   for (let id = 0; id < rom.mapCount; id++) {
     const map = !unused.has(id) && rom.map(id);
     if (!map) continue;
-    const script = MAP_SCRIPTS[map.label];
+    const script = mapScript(map.label, legacy);
     if (!genericMapScript(rom, map.bank, map.script) && !script?.onStep && !script?.onEnter && !script?.generic)
       gaps.push({ map: map.label, kind: "script", label: rom.label(map.script) ?? map.label + "_Script" });
     const ids = new Set<number>([...map.objects.map(o => o.text), ...map.signs.map(s => s.text)]);
@@ -44,7 +44,7 @@ export function coverageGaps(rom: YellowRom): Gap[] {
       const label = rom.label(at) ?? `@${at.toString(16)}`;
       const asm = rom.text(at).find(op => op.op === "asm") as { at: number } | undefined;
       if (!asm) continue;
-      const handled = (names: readonly string[]) => names.some(name => script?.texts?.[name] || SHARED_TEXTS[name]);
+      const handled = (names: readonly string[]) => names.some(name => script?.texts?.[name] || sharedText(name, legacy));
       if (handled([label, ...rom.labelsAt(at)])) continue;
       const plan = asmPlan(rom, map.bank, asm.at);
       if (plan.kind === "end" || plan.kind === "print" || plan.kind === "trainer") continue;
@@ -57,7 +57,7 @@ export function coverageGaps(rom: YellowRom): Gap[] {
       gaps.push({ map: map.label, kind: "text", label });
     }
     for (const h of rom.hiddenObjects(id)) {
-      if (BUILTIN_HIDDEN.has(h.routine) || SHARED_TEXTS["hidden:" + h.routine]) continue;
+      if (BUILTIN_HIDDEN.has(h.routine) || sharedText("hidden:" + h.routine, legacy)) continue;
       gaps.push({ map: map.label, kind: "hidden", label: h.routine });
     }
   }

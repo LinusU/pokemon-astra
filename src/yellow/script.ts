@@ -12,6 +12,8 @@ export type Emote = "exclamation" | "question" | "smile";
 
 export interface Game {
   readonly save: YellowSave;
+  /** The cartridge is Yellow Legacy: its additions in scripts/legacy.ts apply. */
+  readonly legacy: boolean;
   /** Current map id and its label (PalletTown). */
   readonly map: number;
   readonly mapLabel: string;
@@ -150,4 +152,49 @@ export const SHARED_TEXTS: Record<string, (g: Game) => Promise<void>> = {};
 
 export function defineMap(label: string, script: MapScript) {
   MAP_SCRIPTS[label] = script;
+}
+
+type Handler = (g: Game) => Promise<void>;
+type Hook = (g: Game) => void | Promise<void>;
+export interface LegacyScript {
+  /** Runs instead of Yellow's hook, which it receives to run itself where Legacy keeps it. */
+  onEnter?(g: Game, yellow?: Hook): void | Promise<void>;
+  onStep?(g: Game, yellow?: Hook): void | Promise<void>;
+  /** Handlers by label or TEXT_* id, replacing Yellow's (`yellow`) for that entry. */
+  texts?: Record<string, (g: Game, yellow?: Handler) => Promise<void>>;
+}
+
+/** Yellow Legacy's map logic, layered over Yellow's while Legacy's cartridge is in play. */
+const LEGACY_SCRIPTS: Record<string, LegacyScript> = {};
+const LEGACY_SHARED_TEXTS: Record<string, (g: Game, yellow?: Handler) => Promise<void>> = {};
+
+export function defineLegacy(label: string, script: LegacyScript) {
+  const known = LEGACY_SCRIPTS[label];
+  LEGACY_SCRIPTS[label] = { ...known, ...script, texts: { ...known?.texts, ...script.texts } };
+}
+export function defineLegacyText(label: string, handler: (g: Game, yellow?: Handler) => Promise<void>) {
+  LEGACY_SHARED_TEXTS[label] = handler;
+}
+
+const merged = new Map<string, MapScript | undefined>();
+/** A map's script: Yellow's, with Yellow Legacy's layered on top for Legacy's cartridge. */
+export function mapScript(label: string, legacy: boolean): MapScript | undefined {
+  const yellow = MAP_SCRIPTS[label], extra = legacy ? LEGACY_SCRIPTS[label] : undefined;
+  if (!extra) return yellow;
+  let script = merged.get(label);
+  if (!script) {
+    script = { ...yellow, texts: { ...yellow?.texts } };
+    for (const hook of ["onEnter", "onStep"] as const) {
+      const own = extra[hook];
+      if (own) script[hook] = g => own(g, yellow?.[hook]);
+    }
+    for (const [name, handler] of Object.entries(extra.texts ?? {})) script.texts![name] = g => handler(g, yellow?.texts?.[name]);
+    merged.set(label, script);
+  }
+  return script;
+}
+/** A shared text handler, with Yellow Legacy's for Legacy's cartridge. */
+export function sharedText(label: string, legacy: boolean): Handler | undefined {
+  const yellow = SHARED_TEXTS[label], extra = legacy ? LEGACY_SHARED_TEXTS[label] : undefined;
+  return extra ? g => extra(g, yellow) : yellow;
 }
