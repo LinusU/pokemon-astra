@@ -1,0 +1,1369 @@
+/**
+ * Pokémon Crystal (and Crystal Legacy), played with Astra's engine: the
+ * Crystal battle engine, menus and audio, over Johto and Kanto read from the
+ * player's cartridge, with the cartridge's own scripts run by script.ts.
+ */
+import type { Engine, Pokemon } from "../engine";
+import type { PokemonPortrait } from "../engine/appearance";
+import type { Input } from "../game/input";
+import type { GameAudio } from "../game/audio";
+import type { MusicScene } from "../game/music";
+import type { MenuInput } from "../ui/menu-input";
+import { BODY_RADIUS, bodyTouches, heldHeading, walkFreely, walkSpeed } from "../game/free-movement";
+import { JourneyConflict, type JourneyStore } from "../game/storage";
+import { C, CONST, ITEM, MON, RAM, SYM, cartridgeInUse, constName, mapName, ramName } from "./symbols";
+import { CrystalRom, type BgEvent, type CrystalMap, type ObjectEvent, type TextOp } from "./rom";
+import { CrystalWorld, FACINGS, STEP, opposite, type Facing, type LiveMap } from "./world";
+import { crystalSummary, type CrystalMon, type CrystalSave } from "./save";
+import { readTrainerHeader, runScript, UnsupportedScript, type TrainerHeader } from "./script";
+import { DomUi, paginate, type CrystalUi } from "./ui";
+import type { TimeOfDay } from "./gfx";
+
+export interface CrystalContext {
+  engine: Engine;
+  rom: CrystalRom;
+  input: Input;
+  menuInput?: MenuInput;
+  layer?: HTMLElement;
+  canvas?: HTMLCanvasElement;
+  sound?: GameAudio;
+  sprite?: (mon: PokemonPortrait | number, back?: boolean) => string;
+  cry?: (species: number) => void;
+  store?: JourneyStore;
+  save: CrystalSave;
+  exit?: () => void;
+  saveWarning?: HTMLElement;
+  /** Tests answer dialogue without a page. */
+  ui?: CrystalUi;
+  /** The clock, for tests. */
+  now?: () => Date;
+}
+
+export interface Mover {
+  x: number;
+  y: number;
+  facing: Facing;
+  from?: { x: number; y: number; t: number; duration: number; hop?: boolean };
+  walkFrame: number;
+  free?: { x: number; y: number };
+  stride?: number;
+  moving?: boolean;
+  onPath?: () => void;
+  emote?: { kind: number; until: number };
+  /** Hidden by a movement script (hide_object), but still there. */
+  invisible?: boolean;
+  fixedFacing?: boolean;
+  sliding?: boolean;
+}
+export interface Obj extends Mover {
+  slot: number;
+  event: ObjectEvent;
+  visible: boolean;
+  home: { x: number; y: number };
+  wait: number;
+  /** The movement data: function and facing. */
+  fn: number;
+}
+
+export type BattleSetup =
+  | { kind: "wild"; species: number; level: number; shiny?: boolean; type?: number }
+  | { kind: "random" }
+  | { kind: "trainer"; klass: number; id: number; winLoss?: [number, number] };
+
+const WALK_SECONDS = 1 / 4.2;
+
+export class CrystalGame {
+  readonly rom: CrystalRom;
+  readonly world: CrystalWorld;
+  readonly ui: CrystalUi;
+  save: CrystalSave;
+  map!: LiveMap;
+  me: Mover;
+  objects: Obj[] = [];
+  stopped = false;
+  mode: "world" | "script" | "menu" | "battle" = "world";
+  scriptVar = 0;
+  lastTalked = 0;
+  lastText?: number;
+  lastItem = 0;
+  textOpen = false;
+  menuHeader?: number;
+  battleSetup?: BattleSetup;
+  battleResult = 0;
+  keepMusic = false;
+  /** RAM strings: string buffers and names, by address. */
+  strings = new Map<number, string>();
+  private events: Set<number>;
+  private flags: Set<number>;
+  private deferred: number[] = [];
+  private clock = 0;
+  private waiters: { until: number; resolve: () => void }[] = [];
+  private musicOverride?: number;
+  private lastSave = 0;
+  private saveIssue = false;
+  private encounterCooldown = 0;
+  private bumped = false;
+  private turnHeld = 0;
+  private queued?: Facing;
+  following?: { leader: number; follower: number };
+  fade = 0;
+  private fadeTarget = 0;
+  private fadeResolve?: () => void;
+  flash = false;
+  shake = 0;
+  renderer?: { render(now: number): void };
+  inBattle?: { trainer: boolean; klass?: number };
+  battleCue?: string;
+  autoBattle = false;
+
+  constructor(readonly ctx: CrystalContext) {
+    this.rom = ctx.rom;
+    this.world = new CrystalWorld(ctx.rom);
+    this.save = ctx.save;
+    this.events = new Set(this.save.events);
+    this.flags = new Set(this.save.flags);
+    this.ui = ctx.ui ?? new DomUi(ctx.layer!, ctx.input, ctx.menuInput!);
+    this.me = { x: this.save.x, y: this.save.y, facing: this.save.facing, walkFrame: 0 };
+    this.dailyReset();
+    this.enterMap(this.save.map[0], this.save.map[1], { arrival: "continue" });
+    ctx.input.setGamepadLayout?.(!!this.save.settings.swapGamepadAB);
+    ctx.sound?.attach(ctx.engine, this.save.settings.music !== false);
+  }
+  /** Starts the game once the first map is ready: callbacks and scene scripts. */
+  async begin() {
+    await this.runScript(async () => {
+      await this.mapCallbacks();
+      await this.afterArrival(true);
+    });
+  }
+  stop() {
+    this.stopped = true;
+    this.ctx.layer?.replaceChildren();
+  }
+  get legacy() { return cartridgeInUse() === "legacy"; }
+  get engine() { return this.ctx.engine; }
+  get layer() { return this.ctx.layer!; }
+
+  // ------------------------------------------------------------ flags, scenes, variables
+  event(i: number) { return this.events.has(i); }
+  setEvent(i: number, on: boolean) {
+    if (i === 0xffff || i < 0) return;
+    if (on) this.events.add(i);
+    else this.events.delete(i);
+    // Objects tied to the flag appear or disappear with it.
+    for (const o of this.objects) if (o.event.flag === i) o.visible = !on && this.objectTime(o.event);
+  }
+  ev(name: string) { return this.event(C(name)); }
+  flag(i: number) { return this.flags.has(i); }
+  setFlag(i: number, on: boolean) {
+    if (on) this.flags.add(i);
+    else this.flags.delete(i);
+  }
+  hasFlag(name: string) { return this.flag(C(name)); }
+  sceneOf(group: number, number: number) { return this.save.scenes[`${group}:${number}`] ?? 0; }
+  setScene(group: number, number: number, scene: number) { this.save.scenes[`${group}:${number}`] = scene; }
+
+  badges() {
+    let johto = 0, kanto = 0;
+    for (let i = 0; i < 8; i++) {
+      if (this.flag(C("ENGINE_ZEPHYRBADGE") + i)) johto |= 1 << i;
+      if (this.flag(C("ENGINE_BOULDERBADGE") + i)) kanto |= 1 << i;
+    }
+    return { johto, kanto, count: popcount(johto) + popcount(kanto) };
+  }
+
+  /** A RAM byte, with the variables the save holds elsewhere. */
+  peek(addr: number): number {
+    const live = this.live(addr);
+    if (live !== undefined) return live & 0xff;
+    return this.save.ram[addr] ?? 0;
+  }
+  poke(addr: number, v: number) {
+    v &= 0xff;
+    if (this.writeLive(addr, v)) return;
+    this.save.ram[addr] = v;
+  }
+  private liveAt(name: string, addr: number, size = 1) {
+    const base = RAM[name];
+    return base !== undefined && addr >= base && addr < base + size ? addr - base : -1;
+  }
+  private live(addr: number): number | undefined {
+    let i: number;
+    if (addr === RAM.wScriptVar) return this.scriptVar;
+    if ((i = this.liveAt("wMoney", addr, 3)) >= 0) return (this.save.money >> (8 * (2 - i))) & 0xff;
+    if ((i = this.liveAt("wMomsMoney", addr, 3)) >= 0) return (this.save.momMoney >> (8 * (2 - i))) & 0xff;
+    if ((i = this.liveAt("wCoins", addr, 2)) >= 0) return (this.save.coins >> (8 * (1 - i))) & 0xff;
+    if (addr === RAM.wPartyCount) return this.save.party.length;
+    if (addr === RAM.wPlayerGender) return this.save.gender;
+    if (addr === RAM.wBattleResult) return this.battleResult;
+    if (addr === RAM.wTimeOfDay) return this.timeOfDay();
+    if (addr === RAM.wMapGroup) return this.map.group;
+    if (addr === RAM.wMapNumber) return this.map.number;
+    if (addr === RAM.wXCoord) return this.me.x;
+    if (addr === RAM.wYCoord) return this.me.y;
+    if (addr === RAM.wUnlockedUnowns) return this.save.unlockedUnowns;
+    if (addr === RAM.wPlayerState) return this.playerStateValue();
+    if (addr === RAM.wSpecialPhoneCallID) return this.save.specialCall & 0xff;
+    return undefined;
+  }
+  private writeLive(addr: number, v: number) {
+    let i: number;
+    if (addr === RAM.wScriptVar) { this.scriptVar = v; return true; }
+    if ((i = this.liveAt("wMoney", addr, 3)) >= 0) { this.save.money = setByte(this.save.money, 2 - i, v); return true; }
+    if ((i = this.liveAt("wMomsMoney", addr, 3)) >= 0) { this.save.momMoney = setByte(this.save.momMoney, 2 - i, v); return true; }
+    if ((i = this.liveAt("wCoins", addr, 2)) >= 0) { this.save.coins = setByte(this.save.coins, 1 - i, v); return true; }
+    if (addr === RAM.wUnlockedUnowns) { this.save.unlockedUnowns = v; return true; }
+    if (addr === RAM.wPlayerGender) { this.save.gender = (v & 1) as 0 | 1; return true; }
+    if (addr === RAM.wSpecialPhoneCallID) { this.save.specialCall = v; return true; }
+    return false;
+  }
+  /** A 3-byte banked pointer held in RAM. */
+  ramPointer(addr: number) {
+    return this.rom.at(this.peek(addr), this.peek(addr + 1) | (this.peek(addr + 2) << 8));
+  }
+  readVar(v: number): number {
+    const name = constName("VAR_", v) ?? "";
+    switch (name) {
+      case "VAR_STRINGBUFFER2": return this.peek(RAM.wStringBuffer2);
+      case "VAR_PARTYCOUNT": return this.save.party.length;
+      case "VAR_BATTLERESULT": return this.battleResult & ~0xc0 & 0xff;
+      case "VAR_BATTLETYPE": return this.save.vars.battleType ?? 0;
+      case "VAR_TIMEOFDAY": return this.timeOfDay();
+      case "VAR_DEXCAUGHT": return this.save.caught.length;
+      case "VAR_DEXSEEN": return this.save.seen.length;
+      case "VAR_BADGES": return this.badges().count;
+      case "VAR_MOVEMENT": return this.playerStateValue();
+      case "VAR_FACING": return FACINGS.indexOf(this.me.facing);
+      case "VAR_HOUR": return this.now().getHours();
+      case "VAR_WEEKDAY": return this.now().getDay();
+      case "VAR_MAPGROUP": return this.map.group;
+      case "VAR_MAPNUMBER": return this.map.number;
+      case "VAR_UNOWNCOUNT": return this.save.unownDex.length;
+      case "VAR_ENVIRONMENT": return this.map.environment;
+      case "VAR_BOXSPACE": return 20 - (this.save.boxes[this.save.box]?.length ?? 0);
+      case "VAR_CONTESTMINUTES": return this.contestMinutes();
+      case "VAR_XCOORD": return this.me.x;
+      case "VAR_YCOORD": return this.me.y;
+      case "VAR_SPECIALPHONECALL": return this.save.specialCall & 0xff;
+      case "VAR_BT_WIN_STREAK": return 0;
+      case "VAR_KURT_APRICORNS": return this.peek(RAM.wKurtApricornQuantity);
+      case "VAR_CALLERID": return this.save.vars.caller ?? 0;
+      case "VAR_BLUECARDBALANCE": return this.save.vars.blueCard ?? 0;
+      case "VAR_BUENASPASSWORD": return this.peek(RAM.wBuenasPassword);
+      case "VAR_KENJI_BREAK": return this.save.vars.kenji ?? 0;
+    }
+    return 0;
+  }
+  writeVar(v: number, value: number) {
+    const name = constName("VAR_", v) ?? "";
+    if (name === "VAR_STRINGBUFFER2") this.poke(RAM.wStringBuffer2, value);
+    else if (name === "VAR_BATTLETYPE") this.save.vars.battleType = value;
+    else if (name === "VAR_MOVEMENT") this.setPlayerState(value);
+    else if (name === "VAR_CALLERID") this.save.vars.caller = value;
+    else if (name === "VAR_BLUECARDBALANCE") this.save.vars.blueCard = value;
+    else if (name === "VAR_BUENASPASSWORD") this.poke(RAM.wBuenasPassword, value);
+    else if (name === "VAR_KURT_APRICORNS") this.poke(RAM.wKurtApricornQuantity, value);
+    else if (name === "VAR_KENJI_BREAK") this.save.vars.kenji = value;
+    else if (name === "VAR_SPECIALPHONECALL") this.save.specialCall = value;
+  }
+  playerStateValue() {
+    return this.save.state === "bike" ? C("PLAYER_BIKE") : this.save.state === "surf" ? C("PLAYER_SURF") : C("PLAYER_NORMAL");
+  }
+  setPlayerState(v: number) {
+    this.save.state = v === C("PLAYER_BIKE") ? "bike" : v === C("PLAYER_SURF") || v === CONST.PLAYER_SURF_PIKA ? "surf" : "normal";
+    this.ctx.sound?.refreshMusic();
+  }
+
+  // ------------------------------------------------------------ time
+  now() { return this.ctx.now?.() ?? new Date(); }
+  /** MORN_F, DAY_F or NITE_F, from the real clock as Crystal's own clock would show. */
+  timeOfDay(): TimeOfDay {
+    const h = this.now().getHours();
+    if (h >= C("NITE_HOUR") || h < C("MORN_HOUR")) return 2;
+    if (h >= C("DAY_HOUR")) return 1;
+    return 0;
+  }
+  timeOfDayFlag() { return [C("MORN"), C("DAY"), C("NITE")][this.timeOfDay()]; }
+  /** Daily events reset at midnight (fruit trees, Buena, the lucky number, phone rematches…). */
+  dailyReset() {
+    const d = this.now();
+    const day = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+    if (this.save.day === day) return;
+    const first = !this.save.day;
+    this.save.day = day;
+    if (first) return;
+    for (const name of Object.keys(CONST)) {
+      if (/^ENGINE_DAILY_|^ENGINE_.*_TODAY$|^ENGINE_ALL_FRUIT_TREES|^ENGINE_TIME_CAPSULE$|^ENGINE_MT_MOON_SQUARE_CLEFAIRY$|^ENGINE_UNION_CAVE_LAPRAS$|^ENGINE_GOLDENROD_UNDERGROUND_|^ENGINE_DAISYS_GROOMING$|^ENGINE_KURT_MAKING_BALLS$|^ENGINE_DRAGONS_DEN_B1F_ROCKET|^ENGINE_BUG_CONTEST_TIMER$|^ENGINE_SEEN_SHUCKLE|^ENGINE_DUNSPARCE_SWARM$|^ENGINE_YANMA_SWARM$|^ENGINE_TEA_IN_BLUES_HOUSE$|^ENGINE_FISH_SWARM|^ENGINE_GOT_.*_TODAY|^ENGINE_.*_REMATCH|^ENGINE_DAILY/.test(name)) {
+        if (/REMATCH|SWARM|KURT|DAISYS|UNION_CAVE|MT_MOON/.test(name) && !/DAILY|TODAY/.test(name)) continue;
+        this.flags.delete(CONST[name]);
+      }
+    }
+    this.save.vars.fruitTrees = 0;
+    delete this.save.vars.luckyDay;
+  }
+
+  // ------------------------------------------------------------ party and bag
+  isEgg(m: CrystalMon) { return !!m.egg; }
+  monName(species: number) { return this.engine.species(species).name.toUpperCase(); }
+  /** ITEM_FROM_MEM ($ff) means the item in the script variable. */
+  itemArg(item: number) { return item === 0xff ? this.scriptVar : item; }
+  itemCount(item: number) { return this.save.items[item] ?? 0; }
+  giveItem(item: number, count = 1) {
+    if (!item) return false;
+    const have = this.save.items[item] ?? 0;
+    if (have + count > 99) return false;
+    const pocket = this.rom.itemPocket(item);
+    const kinds = Object.keys(this.save.items).filter(k => this.save.items[k] > 0 && this.rom.itemPocket(+k) === pocket).length;
+    const room = pocket === C("ITEM") ? 20 : pocket === C("BALL") ? 12 : pocket === C("KEY_ITEM") ? 25 : 99;
+    if (!have && kinds >= room) return false;
+    this.save.items[item] = have + count;
+    this.lastItem = item;
+    return true;
+  }
+  takeItem(item: number, count = 1) {
+    const have = this.save.items[item] ?? 0;
+    if (have < count) return false;
+    if (have === count) delete this.save.items[item];
+    else this.save.items[item] = have - count;
+    return true;
+  }
+  money(account: number) { return account ? this.save.momMoney : this.save.money; }
+  addMoney(account: number, delta: number) {
+    const v = Math.max(0, Math.min(999999, this.money(account) + delta));
+    if (account) this.save.momMoney = v;
+    else this.save.money = v;
+  }
+  makeMon(species: number, level: number): CrystalMon {
+    const mon = this.engine.makePokemon(species, level);
+    return { ...mon, ot_id: this.save.playerId, ot_name: this.save.name };
+  }
+  register(species: number, caught: boolean) {
+    if (!this.save.seen.includes(species)) this.save.seen.push(species);
+    if (caught && !this.save.caught.includes(species)) this.save.caught.push(species);
+  }
+  /** Adds a Pokémon to the party or the current box. */
+  addMon(mon: CrystalMon) {
+    if (this.save.party.length < 6) {
+      this.save.party.push(mon);
+      return "party";
+    }
+    const box = this.save.boxes[this.save.box];
+    if (box.length >= 20) return undefined;
+    box.push(mon);
+    return "box";
+  }
+  async givePoke(species: number, level: number, item: number, ot?: { name: number; nickname: number }) {
+    const mon = this.makeMon(species, level);
+    mon.item = item;
+    if (ot) {
+      mon.nickname = this.rom.string(ot.nickname, 11);
+      mon.ot_name = this.rom.string(ot.name, 8);
+      mon.ot_id = Math.floor(Math.random() * 65536);
+    }
+    const where = this.addMon(mon);
+    if (!where) return false;
+    this.register(species, true);
+    this.setBuffer(0, this.monName(species));
+    if (!ot) await this.offerNickname(mon);
+    return true;
+  }
+  /** Crystal asks whether to give a nickname to a Pokémon received from a script. */
+  async offerNickname(mon: CrystalMon) {
+    const { askNickname } = await import("./menu");
+    await askNickname(this, mon);
+  }
+  giveEgg(species: number, level: number) {
+    const mon = this.makeMon(species, level);
+    mon.egg = true;
+    mon.eggCycles = this.engine.breedingData(species).cycles || 20;
+    mon.nickname = "EGG";
+    return !!this.addMon(mon);
+  }
+  async givePokeMail(at: number) { void at; }
+  checkPokeMail(at: number) { void at; return 0; }
+  heal() {
+    this.save.party = this.save.party.map(m => m.egg ? m : { ...this.engine.healPokemon(m), egg: undefined } as CrystalMon);
+  }
+  trainerName(klass: number, id: number) {
+    if (this.legacy) return this.rom.trainerClassName(klass);
+    return this.rom.trainerParty(klass, id).name;
+  }
+  nameOf(type: number, index: number) {
+    const name = constName("", type);
+    void name;
+    if (type === C("MON_NAME")) return this.monName(index);
+    if (type === C("ITEM_NAME")) return this.rom.itemName(index);
+    if (type === C("MOVE_NAME")) return this.engine.move(index).name.toUpperCase();
+    if (type === C("TRAINER_NAME")) return this.rom.trainerClassName(index);
+    return "";
+  }
+  setBuffer(index: number, value: string) {
+    const base = RAM.wStringBuffer3 + Math.min(index, C("NUM_STRING_BUFFERS") - 1) * C("STRING_BUFFER_LENGTH");
+    this.strings.set(base, value);
+    this.strings.set(RAM.wStringBuffer1, value);
+  }
+  landmark() {
+    if (this.map.landmark === C("LANDMARK_SPECIAL")) {
+      const [g, n] = this.save.lastOutdoor;
+      return g ? this.rom.mapHeader(g, n).landmark : this.map.landmark;
+    }
+    return this.map.landmark;
+  }
+
+  // ------------------------------------------------------------ text
+  private textString(ops: TextOp[]): { pages: string[]; prompt: boolean } {
+    let s = "", prompt = false;
+    const pointers = ["wStringBuffer3", "wStringBuffer4", "wStringBuffer5", "wStringBuffer2", "wStringBuffer1", "wEnemyMonNickname", "wBattleMonNickname"];
+    for (const op of ops) {
+      if (op.op === "text") s += op.s;
+      else if (op.op === "ram") s += this.ramString(op.addr);
+      else if (op.op === "buffer") s += this.ramString(RAM[pointers[op.index]] ?? 0);
+      else if (op.op === "decimal") {
+        let n = 0;
+        for (let i = 0; i < (op.bytes & 0xf); i++) n = n * 256 + this.peek(op.addr + i);
+        s += String(n);
+      } else if (op.op === "bcd") {
+        let n = "";
+        for (let i = 0; i < (op.flags & 0x1f); i++) n += this.peek(op.addr + i).toString(16).padStart(2, "0");
+        s += String(+n || 0);
+      } else if (op.op === "dots") s += "…".repeat(Math.max(1, Math.min(op.n, 4)));
+      else if (op.op === "wait") s += "\f";
+      else if (op.op === "today") s += ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"][this.now().getDay()];
+      else if (op.op === "sound") this.sfx(op.kind === "item" ? "SFX_ITEM" : op.kind === "caught" ? "SFX_CAUGHT_MON" : "SFX_DEX_FANFARE_50_79");
+      else if (op.op === "end") prompt = op.prompt;
+    }
+    s = s.replaceAll("{PLAYER}", this.save.name).replaceAll("{RIVAL}", this.save.rival).replaceAll("{MOM}", this.save.mom);
+    return { pages: paginate(s), prompt };
+  }
+  ramString(addr: number): string {
+    if (addr === RAM.wPlayerName) return this.save.name;
+    if (addr === RAM.wRivalName) return this.save.rival;
+    if (addr === RAM.wMomsName) return this.save.mom;
+    if (addr === RAM.wRedsName) return "RED";
+    if (addr === RAM.wGreensName) return "GREEN";
+    const s = this.strings.get(addr);
+    if (s !== undefined) return s;
+    const name = ramName(addr);
+    if (name && /Nickname|Name/.test(name)) return this.strings.get(addr) ?? "";
+    return "";
+  }
+  /** Shows a cartridge text. The box stays open on its last page until closed. */
+  async writeText(at: number) {
+    const ops = this.rom.text(at);
+    const asm = ops.find(op => op.op === "asm");
+    const { pages, prompt } = this.textString(ops);
+    this.textOpen = true;
+    if (pages.length) await this.ui.text(pages, prompt);
+    if (asm && asm.op === "asm") {
+      const { runTextAsm } = await import("./specials");
+      await runTextAsm(this, asm.at);
+    }
+  }
+  /** Shows a literal message, waiting for A. */
+  async say(text: string, wait = true) {
+    const pages = paginate(text.replaceAll("{PLAYER}", this.save.name).replaceAll("{RIVAL}", this.save.rival));
+    this.textOpen = true;
+    await this.ui.text(pages, wait);
+  }
+  async waitButton() { await this.ui.waitButton(); }
+  closeText() {
+    this.textOpen = false;
+    this.ui.closeText();
+  }
+  yesNo() { return this.ui.yesNo(); }
+  choose(options: string[], o?: { title?: string; cancel?: boolean; columns?: number }) { return this.ui.choose(options, o); }
+  /** A script's `loadmenu` header: its choices, read from the cartridge. Returns the 1-based pick, or 0. */
+  async scriptMenu(twoD: boolean) {
+    const header = this.menuHeader;
+    if (header === undefined) return 0;
+    const { readMenuHeader } = await import("./services");
+    const menu = readMenuHeader(this, header);
+    const pick = await this.choose(menu.items, { cancel: menu.cancel, columns: twoD ? menu.columns : 1 });
+    this.menuHeader = undefined;
+    return pick === undefined ? 0 : pick + 1;
+  }
+  async pokepic(species: number) {
+    const { showPokepic } = await import("./services");
+    showPokepic(this, species);
+  }
+  closePokepic() { this.layer?.querySelector?.(".crystal-pokepic")?.remove(); }
+  async describeDecoration(kind: number) {
+    const { describeDecoration } = await import("./services");
+    await describeDecoration(this, kind);
+  }
+
+  // ------------------------------------------------------------ sound
+  musicId(name: string) { return C(name); }
+  playMusic(id: number | undefined) {
+    this.musicOverride = id;
+    this.ctx.sound?.refreshMusic();
+  }
+  encounterMusic() {
+    const klass = this.battleSetup?.kind === "trainer" ? this.battleSetup.klass : undefined;
+    void klass;
+  }
+  sfx(name: string) {
+    const id = CONST[name];
+    if (id !== undefined) this.sfxId(id);
+  }
+  sfxId(id: number) {
+    try {
+      this.ctx.sound?.soundEffect?.(id);
+    } catch { /* sound is optional */ }
+  }
+  cry(species: number) { if (species) this.ctx.cry?.(species); }
+  get scene() { return this.mode === "battle" ? "battle" : "world"; }
+  musicScene(): MusicScene | number {
+    if (this.mode === "battle") return this.battleCue as MusicScene ?? 0;
+    return this.musicTrack() ?? 0;
+  }
+  musicTrack(): number | undefined {
+    if (this.musicOverride !== undefined) return this.musicOverride || undefined;
+    if (this.save.state === "surf") return C("MUSIC_SURF");
+    if (this.save.state === "bike") return C("MUSIC_BICYCLE");
+    if (this.save.contest && this.map.name.startsWith("NATIONAL_PARK")) return C("MUSIC_BUG_CATCHING_CONTEST");
+    return this.mapMusic(this.map);
+  }
+  private mapMusic(map: CrystalMap) {
+    // MUSIC_MAHOGANY_MART and MUSIC_RADIO_TOWER play Team Rocket's song while Rockets hold them.
+    if (map.music === CONST.MUSIC_RADIO_TOWER && !this.ev("EVENT_GOLDENROD_CITY_ROCKET_TAKEOVER")) return C("MUSIC_GOLDENROD_CITY");
+    return map.music || undefined;
+  }
+
+  // ------------------------------------------------------------ waiting
+  delay(frames: number) {
+    if (this.ctx.ui && !this.ctx.canvas) return Promise.resolve();
+    return new Promise<void>(resolve => this.waiters.push({ until: this.clock + frames / 60, resolve }));
+  }
+  fadeTo(level: number) {
+    if (!this.ctx.canvas) { this.fade = level; return Promise.resolve(); }
+    this.fadeTarget = level;
+    return new Promise<void>(resolve => { this.fadeResolve = resolve; });
+  }
+  async fadeAround(during: () => void | Promise<void>) {
+    await this.fadeTo(1);
+    await during();
+    await this.fadeTo(0);
+  }
+
+  // ------------------------------------------------------------ maps
+  private loaded = new Map<string, CrystalMap>();
+  header(group: number, number: number) {
+    return this.rom.mapHeader(group, number);
+  }
+  /**
+   * Loads a map: blocks, objects (with their flags and hours) and the
+   * variable sprites. Callbacks run afterwards, in `mapCallbacks`.
+   */
+  enterMap(group: number, number: number, options: { arrival: "warp" | "connection" | "continue" }) {
+    const header = this.header(group, number);
+    this.map = this.world.live(header);
+    this.save.map = [group, number];
+    const env = header.environment;
+    if (env === C("TOWN") || env === C("ROUTE")) this.save.lastOutdoor = [group, number];
+    if (options.arrival !== "continue") this.flash = false;
+    this.objects = header.objects.map((event, i) => ({
+      slot: i + 1, event, x: event.x, y: event.y, facing: this.defaultFacing(event), walkFrame: 0,
+      visible: this.objectVisible(event), home: { x: event.x, y: event.y }, wait: 1 + Math.random() * 2,
+      fn: this.rom.u8(SYM.SpriteMovementData + event.movement * 6), fixedFacing: false,
+    }));
+    this.encounterCooldown = options.arrival === "connection" ? 0 : 2;
+    if (!this.keepMusic) this.musicOverride = undefined;
+    this.keepMusic = false;
+    this.following = undefined;
+    // Biking indoors and surfing onto land end when the map changes.
+    if (this.save.state === "bike" && (env === C("INDOOR") || env === C("DUNGEON") || env === C("ENVIRONMENT_5")) && !this.ev("EVENT_GOT_BICYCLE")) this.save.state = "normal";
+    if (this.save.state === "surf" && options.arrival === "warp") this.save.state = "normal";
+    this.ctx.sound?.refreshMusic();
+  }
+  private defaultFacing(event: ObjectEvent): Facing {
+    const f = this.rom.u8(SYM.SpriteMovementData + event.movement * 6 + 1);
+    return FACINGS[(f >> 2) & 3] ?? "down";
+  }
+  objectTime(e: ObjectEvent) {
+    if (e.h1 === -1) {
+      if (e.h2 === -1) return true;
+      return !!(e.h2 & this.timeOfDayFlag());
+    }
+    const h = this.now().getHours();
+    if (e.h1 === e.h2) return true;
+    if (e.h1 > e.h2) return h >= e.h1 || h <= e.h2;
+    return h >= e.h1 && h <= e.h2;
+  }
+  private objectVisible(e: ObjectEvent) {
+    if (e.flag >= 0 && this.event(e.flag)) return false;
+    return this.objectTime(e);
+  }
+  /** Runs the map's callbacks of `type`, in order. */
+  async callbacks(type: number) {
+    for (const cb of this.map.callbacks.filter(c => c.type === type)) await runScript(this, cb.script, { callback: true });
+  }
+  /** The callbacks a map runs as it loads. */
+  async mapCallbacks() {
+    await this.callbacks(C("MAPCALLBACK_NEWMAP"));
+    await this.callbacks(C("MAPCALLBACK_TILES"));
+    await this.callbacks(C("MAPCALLBACK_OBJECTS"));
+    await this.callbacks(C("MAPCALLBACK_SPRITES"));
+    await this.callbacks(C("MAPCALLBACK_CMDQUEUE"));
+  }
+  defer(at: number) { this.deferred.push(at); }
+  /** Runs the scene script for the map's scene and anything it defers. */
+  async sceneScript() {
+    for (let guard = 0; guard < 4; guard++) {
+      const scene = this.sceneOf(this.map.group, this.map.number);
+      const at = this.map.scenes[scene];
+      if (at !== undefined) await runScript(this, at);
+      if (!this.deferred.length) return;
+      await this.runDeferred();
+      if (this.sceneOf(this.map.group, this.map.number) === scene) return;
+    }
+  }
+  async runDeferred() {
+    while (this.deferred.length) await runScript(this, this.deferred.shift()!);
+  }
+  changeBlock(x: number, y: number, block: number) {
+    const bx = x >> 1, by = y >> 1;
+    if (bx < 0 || by < 0 || bx >= this.map.width || by >= this.map.height) return;
+    this.map.live[by * this.map.width + bx] = block;
+    this.map.version++;
+  }
+  changeMapBlocks(at: number) {
+    this.map.live = this.rom.bytes.slice(at, at + this.map.width * this.map.height);
+    this.map.version++;
+  }
+  redraw() { this.map.version++; }
+  /** Warps to a map square (`warp` in scripts, Fly, Escape Rope…). */
+  async warpTo(group: number, number: number, x: number, y: number, facing?: Facing) {
+    if (!group) return this.blackoutWarp();
+    await this.fadeAround(async () => {
+      this.place(0, x, y, facing);
+      this.enterMap(group, number, { arrival: "warp" });
+      await this.mapCallbacks();
+    });
+  }
+  async reloadMap() {
+    this.enterMap(this.map.group, this.map.number, { arrival: "continue" });
+    await this.mapCallbacks();
+  }
+  async warpCheck() {
+    const i = this.world.warpAt(this.map, this.me.x, this.me.y);
+    if (i >= 0) await this.useWarp(i);
+  }
+  /** Takes warp event `index` of the current map. */
+  async useWarp(index: number) {
+    const warp = this.map.warps[index];
+    let { group, number } = warp;
+    let dest = warp.warp;
+    if (group === 0xff) {
+      const back = this.save.backupWarp;
+      if (!back) return;
+      ({ group, number } = back);
+      dest = back.warp;
+    }
+    const target = this.header(group, number);
+    const arrival = target.warps[dest - 1];
+    if (!arrival) return;
+    // Pokémon Center 2Fs and other shared rooms lead back to where the player came from.
+    this.save.backupWarp = { warp: index + 1, group: this.map.group, number: this.map.number };
+    const coll = this.world.collision(this.map, this.me.x, this.me.y);
+    this.sfx(this.world.isDoor(coll) ? "SFX_ENTER_DOOR" : coll === C("COLL_WARP_PANEL") ? "SFX_WARP_TO" : "SFX_EXIT_BUILDING");
+    await this.fadeAround(async () => {
+      this.place(0, arrival.x, arrival.y);
+      this.enterMap(group, number, { arrival: "warp" });
+      await this.mapCallbacks();
+    });
+    // Leaving through a door steps out onto the street.
+    const here = this.world.collision(this.map, this.me.x, this.me.y);
+    if (this.world.isDoor(here) && (this.map.environment === C("TOWN") || this.map.environment === C("ROUTE"))) {
+      this.me.facing = "down";
+      await this.walk(0, ["down"]);
+    }
+    this.persist();
+    await this.afterArrival(true);
+  }
+  async blackoutWarp() {
+    const { blackoutSpot } = await import("./services");
+    const spot = blackoutSpot(this);
+    await this.warpTo(spot.group, spot.number, spot.x, spot.y, "down");
+  }
+  /** Crosses into a connected map. */
+  private crossEdge() {
+    if (this.world.inside(this.map, this.me.x, this.me.y)) return false;
+    const across = this.world.across(this.map, this.me.x, this.me.y);
+    if (!across) return false;
+    const dx = across.x - this.me.x, dy = across.y - this.me.y;
+    this.me.x = across.x;
+    this.me.y = across.y;
+    for (const p of [this.me.from, this.me.free]) if (p) { p.x += dx; p.y += dy; }
+    this.enterMap(across.group, across.number, { arrival: "connection" });
+    void this.runScript(async () => {
+      await this.mapCallbacks();
+      await this.afterArrival(false);
+    });
+    return true;
+  }
+
+  // ------------------------------------------------------------ objects
+  obj(slot: number): Obj | undefined { return slot > 0 ? this.objects[slot - 1] : undefined; }
+  mover(slot: number): Mover | undefined { return slot === 0 ? this.me : this.obj(slot); }
+  spriteOf(o: Obj) {
+    const s = o.event.sprite, vars = CONST.SPRITE_VARS ?? 0xf0;
+    return s >= vars ? this.save.variableSprites[s - vars] ?? 0 : s;
+  }
+  setVariableSprite(index: number, sprite: number) { this.save.variableSprites[index] = sprite; }
+  facePlayer() {
+    const o = this.obj(this.lastTalked);
+    if (o) o.facing = towards(o, this.me);
+  }
+  faceObject(a: number, b: number) {
+    const m = this.mover(a), t = this.mover(b);
+    if (m && t) m.facing = towards(m, t);
+  }
+  turn(slot: number, facing: Facing) {
+    const m = this.mover(slot);
+    if (m && !m.fixedFacing) m.facing = facing;
+  }
+  appear(slot: number, on: boolean) {
+    const o = this.obj(slot);
+    if (!o) return;
+    if (o.event.flag >= 0) {
+      if (on) this.events.delete(o.event.flag);
+      else this.events.add(o.event.flag);
+    }
+    if (on && !o.visible) Object.assign(o, { x: o.event.x, y: o.event.y, from: undefined, free: undefined, invisible: false });
+    o.visible = on;
+  }
+  moveObject(slot: number, x: number, y: number) {
+    const o = this.obj(slot);
+    if (!o) return;
+    Object.assign(o, { x, y, from: undefined, free: undefined, home: { x, y } });
+  }
+  /** Makes an object's current square its home (after a movement script). */
+  writeObjectXY(slot: number) {
+    const o = this.obj(slot);
+    if (o) o.home = { x: o.x, y: o.y };
+  }
+  place(slot: number, x: number, y: number, facing?: Facing) {
+    const m = this.mover(slot);
+    if (!m) return;
+    Object.assign(m, { x, y, from: undefined, free: undefined });
+    if (facing) m.facing = facing;
+  }
+  follow(leader: number, follower: number) { this.following = { leader, follower }; }
+  stopFollow() { this.following = undefined; }
+  async showEmote(kind: number, slot: number, frames: number) {
+    const m = this.mover(slot);
+    if (!m) return;
+    m.emote = { kind, until: this.clock + Math.max(frames, 20) / 60 };
+    await this.delay(Math.max(frames, 20));
+    m.emote = undefined;
+  }
+  async earthquake(frames: number) {
+    this.shake = frames / 60;
+    await this.delay(frames);
+    this.shake = 0;
+  }
+  async applyMovement(slot: number, at: number) {
+    const { applyMovement } = await import("./movement");
+    await applyMovement(this, slot, at);
+  }
+  /** Walks steps, square by square, as scripts do. */
+  async walk(slot: number, steps: Facing[], options: { speed?: number; hop?: boolean; turn?: boolean; slide?: boolean } = {}) {
+    const m = this.mover(slot);
+    if (!m) return;
+    if (slot === 0) await this.settle();
+    for (const dir of steps) {
+      if (!options.slide && !m.fixedFacing) m.facing = dir;
+      const [dx, dy] = STEP[dir], dist = options.hop ? 2 : 1;
+      const fx = m.free?.x ?? m.x, fy = m.free?.y ?? m.y;
+      m.free = undefined;
+      const prior = { x: m.x, y: m.y };
+      m.x += dx * dist;
+      m.y += dy * dist;
+      if (this.following && this.following.leader === slot) this.followStep(prior);
+      if (!this.ctx.canvas) {
+        if (slot === 0) this.crossEdge();
+        continue;
+      }
+      await new Promise<void>(resolve => {
+        m.from = { x: fx, y: fy, t: 0, duration: WALK_SECONDS * dist / (options.speed ?? 1), hop: options.hop };
+        m.onPath = resolve;
+      });
+      if (slot === 0) this.crossEdge();
+    }
+  }
+  private followStep(prior: { x: number; y: number }) {
+    const f = this.mover(this.following!.follower);
+    if (!f) return;
+    const dir = (["down", "up", "left", "right"] as Facing[]).find(d => f.x + STEP[d][0] === prior.x && f.y + STEP[d][1] === prior.y);
+    if (!dir) { Object.assign(f, prior); return; }
+    f.facing = dir;
+    if (this.ctx.canvas) f.from = { x: f.x, y: f.y, t: 0, duration: WALK_SECONDS };
+    f.x = prior.x;
+    f.y = prior.y;
+  }
+
+  // ------------------------------------------------------------ scripts
+  /** Runs an interaction or cutscene with the player locked. */
+  async runScript(action: () => Promise<void> | void) {
+    if (this.mode !== "world") return action();
+    this.mode = "script";
+    try {
+      await action();
+      await this.runDeferred();
+    } catch (error) {
+      console.error(error);
+      if (this.ctx.ui && !this.ctx.canvas) throw error;
+      await this.say(`Something went wrong: ${error instanceof UnsupportedScript || error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      this.closeText();
+      this.mode = "world";
+      this.persist();
+    }
+  }
+  /** The scene script, trainers and wild Pokémon after the player arrives somewhere. */
+  async afterArrival(entering: boolean) {
+    await this.sceneScript();
+    if (this.mode !== "world" && this.mode !== "script") return;
+    if (await this.trainerSighting()) return;
+    if (!entering) await this.encounter();
+  }
+
+  // ------------------------------------------------------------ main loop
+  frame(now: number, dt: number) {
+    if (this.stopped) return;
+    this.clock += dt;
+    this.save.seconds += dt;
+    for (const w of [...this.waiters]) if (this.clock >= w.until) {
+      this.waiters.splice(this.waiters.indexOf(w), 1);
+      w.resolve();
+    }
+    if (this.fade !== this.fadeTarget) {
+      this.fade += Math.sign(this.fadeTarget - this.fade) * Math.min(Math.abs(this.fadeTarget - this.fade), dt * 5);
+      if (this.fade === this.fadeTarget) {
+        const r = this.fadeResolve;
+        this.fadeResolve = undefined;
+        r?.();
+      }
+    }
+    const input = this.ctx.input;
+    if (this.mode === "battle") {
+      if (input.hit("b")) this.battleLaunch?.back();
+      else this.ctx.menuInput?.update(this.layer, input, now, true);
+    } else if (this.ui.busy) this.ui.frame(input, now);
+    else if (this.mode === "menu") {
+      if (input.hit("b")) this.layer.querySelector<HTMLButtonElement>("[data-bag-cancel], #back, #close")?.click();
+      else if (input.hit("menu")) this.layer.querySelector<HTMLButtonElement>("#close")?.click();
+      else this.ctx.menuInput?.update(this.layer, input, now, false);
+    }
+    this.updateMovers(dt);
+    if (this.mode === "world") this.control(dt);
+    if (this.mode !== "battle") this.renderer?.render(now);
+    if (this.mode === "world" && this.save.steps - this.lastSave >= 16) this.persist();
+  }
+  battleLaunch?: { back(): void };
+
+  private moveDuration() {
+    if (this.save.state === "bike") return WALK_SECONDS / 2;
+    return WALK_SECONDS / (this.ctx.input.held("speed") || this.ctx.input.held("b") ? 1.6 : 1);
+  }
+  private control(dt: number) {
+    const input = this.ctx.input;
+    if (this.me.from) {
+      const tapped = (["up", "down", "left", "right"] as const).find(d => input.hit(d));
+      if (tapped) this.queued = tapped;
+      return;
+    }
+    if (input.hit("menu")) return void this.openMenu();
+    if (input.hit("a")) return void this.runScript(() => this.interact());
+    if (this.save.settings.movement !== "grid") return this.controlFree(dt);
+    this.me.free = undefined;
+    const queued = this.queued;
+    this.queued = undefined;
+    const dir = (["up", "down", "left", "right"] as const).find(d => input.held(d) || input.hit(d)) ?? queued;
+    if (!dir) {
+      this.turnHeld = 0;
+      return;
+    }
+    if (dir !== this.me.facing && !this.turnHeld && !input.held(dir)) {
+      this.me.facing = dir;
+      this.turnHeld = 0.0001;
+      return;
+    }
+    this.turnHeld += dt;
+    this.me.facing = dir;
+    this.tryStep(dir);
+  }
+
+  /** Whether a square is blocked for the player (or for `self`). */
+  blocked(x: number, y: number, self?: Mover) {
+    if (self !== this.me && this.playerCovers(x, y)) return true;
+    return this.objects.some(o => o.visible && o !== self && ((o.x === x && o.y === y) || (o.from && Math.round(o.from.x) === x && Math.round(o.from.y) === y)));
+  }
+  private playerCovers(x: number, y: number) {
+    const me = this.me;
+    if (me.x === x && me.y === y) return true;
+    const p = me.free;
+    return !!p && Math.abs(p.x - x) < 0.5 + BODY_RADIUS && Math.abs(p.y - y) < 0.5 + BODY_RADIUS;
+  }
+  /** Whether the player may enter square (x, y), with collision across connections. */
+  passable(x: number, y: number, from?: { x: number; y: number }) {
+    let map: LiveMap = this.map, sx = x, sy = y;
+    if (!this.world.inside(map, x, y)) {
+      const across = this.world.across(map, x, y);
+      if (!across) return false;
+      map = this.neighbour(across.group, across.number);
+      sx = across.x;
+      sy = across.y;
+    }
+    const coll = this.world.collision(map, sx, sy);
+    if (from && map === this.map && this.world.inside(this.map, from.x, from.y)) {
+      const dir = (Object.keys(STEP) as Facing[]).find(d => from.x + STEP[d][0] === x && from.y + STEP[d][1] === y);
+      if (dir && this.world.sideBlocked(this.map, from.x, from.y, dir)) return false;
+    }
+    if (this.save.state === "surf") return this.world.isWater(coll) || this.world.isLand(coll) && !this.world.ledge(coll);
+    return this.world.isLand(coll) && !this.world.ledge(coll);
+  }
+  private neighbours = new Map<string, LiveMap>();
+  neighbour(group: number, number: number): LiveMap {
+    const key = `${group}:${number}`;
+    let m = this.neighbours.get(key);
+    if (!m) {
+      m = this.world.live(this.header(group, number));
+      if (this.neighbours.size > 8) this.neighbours.clear();
+      this.neighbours.set(key, m);
+    }
+    return m;
+  }
+  collisionAt(x: number, y: number) {
+    if (this.world.inside(this.map, x, y)) return this.world.collision(this.map, x, y);
+    const across = this.world.across(this.map, x, y);
+    if (!across) return C("COLL_WALL");
+    return this.world.collision(this.neighbour(across.group, across.number), across.x, across.y);
+  }
+
+  private tryStep(dir: Facing) {
+    const me = this.me, [dx, dy] = STEP[dir], nx = me.x + dx, ny = me.y + dy;
+    const here = this.world.collision(this.map, me.x, me.y);
+    // Warp carpets lead out when walking off them in their direction.
+    if (this.world.carpet(here) === dir) {
+      const warp = this.world.warpAt(this.map, me.x, me.y);
+      if (warp >= 0) return void this.runScript(() => this.useWarp(warp));
+    }
+    const ahead = this.collisionAt(nx, ny);
+    if (this.world.canHop(ahead, dir) && this.save.state !== "surf" && !this.blocked(nx + dx, ny + dy)) {
+      me.from = { x: me.x, y: me.y, t: 0, duration: WALK_SECONDS * 2, hop: true };
+      me.x += dx * 2;
+      me.y += dy * 2;
+      this.sfx("SFX_JUMP_OVER_LEDGE");
+      return;
+    }
+    if (this.blocked(nx, ny) || !this.passable(nx, ny, me)) {
+      if (!this.bumped) this.sfx("SFX_BUMP");
+      this.bumped = true;
+      return;
+    }
+    if (this.save.state === "surf" && this.world.isLand(ahead) && !this.world.isWater(ahead)) this.save.state = "normal";
+    this.bumped = false;
+    me.from = { x: me.x, y: me.y, t: 0, duration: this.moveDuration() };
+    me.x = nx;
+    me.y = ny;
+  }
+
+  private pushing = 0;
+  /** Astra-style movement: any direction, with the map's rules applied as the player's centre enters a square. */
+  private controlFree(dt: number) {
+    const input = this.ctx.input, me = this.me;
+    const heading = heldHeading(input, me.facing);
+    if (!heading) {
+      this.pushing = 0;
+      this.bumped = false;
+      me.moving = false;
+      return;
+    }
+    const { across, along } = heading;
+    me.facing = heading.facing;
+    const here = this.world.collision(this.map, me.x, me.y);
+    for (const dir of [along, across]) if (dir && this.world.carpet(here) === dir) {
+      const warp = this.world.warpAt(this.map, me.x, me.y);
+      if (warp >= 0) {
+        me.facing = dir;
+        me.moving = false;
+        return void this.runScript(() => this.useWarp(warp));
+      }
+    }
+    const from = me.free ?? { x: me.x, y: me.y };
+    const centre = { x: from.x + 0.5, y: from.y + 0.5 };
+    const moved = walkFreely(centre, heading, walkSpeed(input, { bike: this.save.state === "bike" }) * Math.min(dt, 0.05),
+      (x, y) => this.freeBlocked(x, y), p => Math.floor(p.x) !== me.x || Math.floor(p.y) !== me.y);
+    const pos = { x: centre.x - 0.5, y: centre.y - 0.5 };
+    me.free = pos;
+    me.moving = moved > 0;
+    me.stride = (me.stride ?? 0) + moved;
+    const [fx, fy] = STEP[me.facing];
+    const forward = (pos.x - from.x) * fx + (pos.y - from.y) * fy;
+    if (forward > 1e-4 || (across && along && moved > 0)) {
+      this.pushing = 0;
+      this.bumped = false;
+    } else if (this.pushAgainst(me.facing, pos)) return;
+    const tx = Math.floor(centre.x), ty = Math.floor(centre.y);
+    if (tx === me.x && ty === me.y) return;
+    const coll = this.collisionAt(tx, ty);
+    if (this.save.state === "surf" && this.world.isLand(coll) && !this.world.isWater(coll)) {
+      this.save.state = "normal";
+      this.ctx.sound?.refreshMusic();
+    }
+    me.x = tx;
+    me.y = ty;
+    void this.runScript(() => this.arrived());
+  }
+  private pushAgainst(dir: Facing, pos: { x: number; y: number }) {
+    const me = this.me, [dx, dy] = STEP[dir];
+    const lateral = dx ? Math.abs(pos.y - me.y) : Math.abs(pos.x - me.x);
+    const ahead = this.collisionAt(me.x + dx, me.y + dy);
+    if (lateral < 0.35 && this.save.state !== "surf" && this.world.canHop(ahead, dir) && !this.blocked(me.x + dx * 2, me.y + dy * 2)) {
+      me.from = { x: pos.x, y: pos.y, t: 0, duration: WALK_SECONDS * 2, hop: true };
+      me.free = undefined;
+      me.x += dx * 2;
+      me.y += dy * 2;
+      this.sfx("SFX_JUMP_OVER_LEDGE");
+      return true;
+    }
+    if (!this.bumped) this.sfx("SFX_BUMP");
+    this.bumped = true;
+    return false;
+  }
+  private freeBlocked(x: number, y: number) {
+    const me = this.me;
+    return bodyTouches(x, y, (px, py) => {
+      const tx = Math.floor(px), ty = Math.floor(py);
+      if (tx === me.x && ty === me.y) return false;
+      if (this.objects.some(o => o.visible && o.x === tx && o.y === ty)) return true;
+      return !this.passable(tx, ty, Math.abs(tx - me.x) + Math.abs(ty - me.y) === 1 ? me : undefined);
+    });
+  }
+  /** Finishes the square the player is crossing, so a scene starts from its centre. */
+  settle(): Promise<void> {
+    const me = this.me, free = me.free;
+    me.free = undefined;
+    me.moving = false;
+    if (!free || me.from || !this.ctx.canvas) return Promise.resolve();
+    const distance = Math.hypot(free.x - me.x, free.y - me.y);
+    if (distance < 0.02) return Promise.resolve();
+    return new Promise(resolve => {
+      me.from = { x: free.x, y: free.y, t: 0, duration: Math.max(0.03, distance * WALK_SECONDS) };
+      me.onPath = resolve;
+    });
+  }
+
+  private updateMovers(dt: number) {
+    const advance = (m: Mover) => {
+      if (!m.from) return false;
+      m.from.t += dt / m.from.duration;
+      m.walkFrame += dt;
+      if (m.from.t < 1) return false;
+      m.from = undefined;
+      return true;
+    };
+    if (advance(this.me)) {
+      const scripted = this.me.onPath;
+      this.me.onPath = undefined;
+      if (scripted) scripted();
+      else void this.runScript(() => this.arrived());
+    }
+    for (const o of this.objects) {
+      if (!o.visible) continue;
+      if (advance(o)) {
+        const cb = o.onPath;
+        o.onPath = undefined;
+        cb?.();
+        continue;
+      }
+      if (o.from || this.mode !== "world") continue;
+      this.idle(o, dt);
+    }
+  }
+  /** People's own movement: wandering, pacing and looking around. */
+  private idle(o: Obj, dt: number) {
+    o.wait -= dt;
+    if (o.wait > 0) return;
+    o.wait = 1 + Math.random() * 3;
+    const fn = constName("SPRITEMOVEFN_", o.fn) ?? "";
+    const spin = () => { o.facing = FACINGS[Math.floor(Math.random() * 4)]; };
+    let options: Facing[] = [];
+    if (fn === "SPRITEMOVEFN_RANDOM_WALK_XY") options = ["up", "down", "left", "right"];
+    else if (fn === "SPRITEMOVEFN_RANDOM_WALK_Y") options = ["up", "down"];
+    else if (fn === "SPRITEMOVEFN_RANDOM_WALK_X") options = ["left", "right"];
+    else if (fn === "SPRITEMOVEFN_SLOW_RANDOM_SPIN" || fn === "SPRITEMOVEFN_FAST_RANDOM_SPIN") return spin();
+    else if (fn === "SPRITEMOVEFN_SPIN_CLOCKWISE") { o.facing = ({ down: "left", left: "up", up: "right", right: "down" } as const)[o.facing]; return; }
+    else if (fn === "SPRITEMOVEFN_SPIN_COUNTERCLOCKWISE") { o.facing = ({ down: "right", right: "up", up: "left", left: "down" } as const)[o.facing]; return; }
+    if (!options.length) return;
+    const dir = options[Math.floor(Math.random() * options.length)];
+    o.facing = dir;
+    const [dx, dy] = STEP[dir], x = o.x + dx, y = o.y + dy;
+    const rx = o.event.radiusX || 1, ry = o.event.radiusY || 1;
+    if (Math.abs(x - o.home.x) > rx || Math.abs(y - o.home.y) > ry) return;
+    if (!this.world.inside(this.map, x, y) || this.blocked(x, y, o)) return;
+    const coll = this.world.collision(this.map, x, y);
+    if (!this.world.isLand(coll) || this.world.isWarp(coll) || this.world.ledge(coll)) return;
+    if (this.map.warps.some(w => w.x === x && w.y === y)) return;
+    o.from = { x: o.x, y: o.y, t: 0, duration: WALK_SECONDS * 1.4 };
+    o.x = x;
+    o.y = y;
+  }
+
+  /** The player finished a step: warps, coord events, step counters and encounters. */
+  async arrived(): Promise<void> {
+    if (this.crossEdge()) return;
+    this.save.x = this.me.x;
+    this.save.y = this.me.y;
+    this.save.facing = this.me.facing;
+    this.save.steps++;
+    const coll = this.world.collision(this.map, this.me.x, this.me.y);
+    const warp = this.world.warpAt(this.map, this.me.x, this.me.y);
+    if (warp >= 0 && this.world.isWarp(coll) && !this.world.carpet(coll)) return this.useWarp(warp);
+    const coord = this.map.coords.find(c => c.x === this.me.x && c.y === this.me.y && c.scene === this.sceneOf(this.map.group, this.map.number));
+    if (coord) {
+      await runScript(this, coord.script);
+      return;
+    }
+    const { countStep } = await import("./steps");
+    if (await countStep(this)) return;
+    // Ice, currents and spinners keep the player moving.
+    const push = this.world.isIce(coll) ? this.me.facing : this.world.current(coll);
+    if (push && !this.world.isBrake(coll)) {
+      const [dx, dy] = STEP[push];
+      if (this.passable(this.me.x + dx, this.me.y + dy, this.me) && !this.blocked(this.me.x + dx, this.me.y + dy)) {
+        await this.walk(0, [push], { speed: 2, slide: this.world.isIce(coll) });
+        return this.arrived();
+      }
+    }
+    await this.afterArrival(false);
+  }
+
+  // ------------------------------------------------------------ trainers and encounters
+  /** A trainer who can see the player walks up and challenges them. */
+  private async trainerSighting() {
+    for (const o of this.objects) {
+      if (!o.visible || o.event.type !== C("OBJECTTYPE_TRAINER") || !o.event.sight || o.event.script < 0x4000) continue;
+      const header = readTrainerHeader(this, o.event.script);
+      if (this.event(header.flag)) continue;
+      const [dx, dy] = STEP[o.facing];
+      let seen = false;
+      for (let d = 1; d <= o.event.sight; d++) {
+        const x = o.x + dx * d, y = o.y + dy * d;
+        if (x === this.me.x && y === this.me.y) { seen = true; break; }
+        if (this.blocked(x, y, o) || !this.world.isLand(this.collisionAt(x, y))) break;
+      }
+      if (!seen) continue;
+      await this.trainerBattle(o, header, true);
+      return true;
+    }
+    return false;
+  }
+  async trainerBattle(o: Obj, header: TrainerHeader, seen: boolean) {
+    this.lastTalked = o.slot;
+    const { trainerScript } = await import("./battle");
+    await trainerScript(this, o, header, seen);
+  }
+  private async encounter() {
+    if (this.encounterCooldown > 0) {
+      this.encounterCooldown--;
+      return;
+    }
+    const { tryWildEncounter } = await import("./battle");
+    await tryWildEncounter(this);
+  }
+  startBattle(): Promise<number> {
+    return import("./battle").then(m => m.startBattle(this));
+  }
+  async afterBattle() {
+    const { afterBattle } = await import("./battle");
+    await afterBattle(this);
+  }
+  async catchTutorial() {
+    const { catchTutorial } = await import("./battle");
+    await catchTutorial(this);
+  }
+
+  // ------------------------------------------------------------ interaction
+  front() {
+    const [dx, dy] = STEP[this.me.facing];
+    return { x: this.me.x + dx, y: this.me.y + dy };
+  }
+  async interact() {
+    await this.settle();
+    let { x, y } = this.front();
+    let o = this.objects.find(o => o.visible && o.x === x && o.y === y);
+    if (!o && this.world.isCounter(this.collisionAt(x, y))) {
+      const [dx, dy] = STEP[this.me.facing];
+      x += dx;
+      y += dy;
+      o = this.objects.find(o => o.visible && o.x === x && o.y === y);
+    }
+    if (o) return this.talkTo(o);
+    ({ x, y } = this.front());
+    const bg = this.map.bgs.find(b => b.x === x && b.y === y);
+    if (bg && await this.bgEvent(bg)) return;
+    const { tileCollisionScript } = await import("./services");
+    if (await tileCollisionScript(this, this.collisionAt(x, y))) return;
+    const { fieldPrompt } = await import("./field");
+    await fieldPrompt(this);
+  }
+  async talkTo(o: Obj) {
+    this.lastTalked = o.slot;
+    this.sfx("SFX_READ_TEXT_2");
+    const type = o.event.type;
+    if (type === C("OBJECTTYPE_TRAINER") && o.event.script >= 0x4000) {
+      if (!o.fixedFacing) o.facing = towards(o, this.me);
+      return this.trainerBattle(o, readTrainerHeader(this, o.event.script), false);
+    }
+    if (type === C("OBJECTTYPE_ITEMBALL")) {
+      const { pickUpItemBall } = await import("./services");
+      return pickUpItemBall(this, o);
+    }
+    await runScript(this, o.event.script);
+  }
+  private async bgEvent(bg: BgEvent) {
+    const kind = constName("BGEVENT_", bg.kind) ?? "";
+    const facing: Record<string, Facing> = { BGEVENT_UP: "up", BGEVENT_DOWN: "down", BGEVENT_LEFT: "left", BGEVENT_RIGHT: "right" };
+    if (facing[kind] && facing[kind] !== this.me.facing) return false;
+    if (kind === "BGEVENT_ITEM") {
+      const { hiddenItem } = await import("./services");
+      return hiddenItem(this, bg);
+    }
+    if (kind === "BGEVENT_IFSET" || kind === "BGEVENT_IFNOTSET") {
+      const flag = this.rom.u16(bg.script), at = this.rom.at(this.map.bank, this.rom.u16(bg.script + 2));
+      if (this.event(flag) !== (kind === "BGEVENT_IFSET")) return false;
+      await runScript(this, at);
+      return true;
+    }
+    if (kind === "BGEVENT_COPY") return false;
+    await runScript(this, bg.script);
+    return true;
+  }
+
+  // ------------------------------------------------------------ services the commands use
+  async receivedItem(item: number, count: number, ok: boolean) {
+    const { receivedItem } = await import("./services");
+    await receivedItem(this, item, count, ok);
+  }
+  async itemNotify() {
+    const { itemNotify } = await import("./services");
+    await itemNotify(this);
+  }
+  async pocketIsFull() {
+    const { pocketIsFull } = await import("./services");
+    await pocketIsFull(this);
+  }
+  async pokemart(kind: number, id: number) {
+    const { pokemart } = await import("./services");
+    await this.modal(() => pokemart(this, kind, id));
+  }
+  async elevator(at: number) {
+    const { elevator } = await import("./services");
+    return elevator(this, at);
+  }
+  async npcTrade(index: number) {
+    const { npcTrade } = await import("./services");
+    await npcTrade(this, index);
+  }
+  swarm(kind: number, group: number, number: number) { this.save.swarm = { kind, group, number }; }
+  async hallOfFame() {
+    const { hallOfFame } = await import("./services");
+    await this.modal(() => hallOfFame(this));
+  }
+  async credits() {
+    await this.say("Congratulations! Your adventure continues…");
+  }
+  addPhoneNumber(contact: number) {
+    if (this.save.phone.includes(contact)) return true;
+    if (this.save.phone.length >= 10) return false;
+    this.save.phone.push(contact);
+    return true;
+  }
+  deletePhoneNumber(contact: number) {
+    const had = this.save.phone.includes(contact);
+    this.save.phone = this.save.phone.filter(c => c !== contact);
+    return had;
+  }
+  async phoneCallText(at: number) {
+    await this.writeText(at);
+  }
+  async hangUp() {
+    this.sfx("SFX_HANG_UP");
+    this.closeText();
+  }
+  contestMinutes() {
+    const c = this.save.contest;
+    if (!c) return 0;
+    return Math.max(0, Math.ceil(c.minutes - (this.save.seconds - c.started) / 60));
+  }
+  writeCmdQueue(at: number) { this.save.vars.cmdQueue = at; }
+  delCmdQueue(index: number) { void index; const had = !!this.save.vars.cmdQueue; delete this.save.vars.cmdQueue; return had; }
+
+  /** Runs a screen over the map (menus, marts, the PC) with the player locked. */
+  async modal<T>(run: () => Promise<T>): Promise<T> {
+    const previous = this.mode;
+    this.mode = "menu";
+    try {
+      return await run();
+    } finally {
+      this.mode = previous === "menu" ? "script" : previous;
+    }
+  }
+  private async openMenu() {
+    this.mode = "menu";
+    this.sfx("SFX_MENU");
+    const { openCrystalMenu } = await import("./menu");
+    const after = await openCrystalMenu(this);
+    this.layer.replaceChildren();
+    this.mode = "world";
+    if (after) await this.runScript(after);
+  }
+
+  // ------------------------------------------------------------ saving
+  persist(force = false) {
+    this.lastSave = this.save.steps;
+    this.save.events = [...this.events];
+    this.save.flags = [...this.flags];
+    this.save.x = Math.round(this.me.from ? this.me.from.x : this.me.x);
+    this.save.y = Math.round(this.me.from ? this.me.from.y : this.me.y);
+    this.save.facing = this.me.facing;
+    this.save.vars.badgeCount = this.badges().count;
+    if (!this.ctx.store) return Promise.resolve();
+    return this.ctx.store.write(this.save, !force).then(() => {
+      if (this.saveIssue && this.ctx.saveWarning) this.ctx.saveWarning.hidden = true;
+      this.saveIssue = false;
+    }, error => {
+      this.saveIssue = true;
+      if (!this.ctx.saveWarning) return;
+      this.ctx.saveWarning.hidden = false;
+      this.ctx.saveWarning.textContent = error instanceof JourneyConflict ? "Newer save in another window" : "Unsaved progress · Menu → Save";
+    });
+  }
+  summary() {
+    return crystalSummary(this.save, titleCase(this.rom.landmarkName(this.landmark()) || mapName(this.map.group, this.map.number) || "Johto"));
+  }
+}
+
+export function towards(from: { x: number; y: number }, to: { x: number; y: number }): Facing {
+  const dx = to.x - from.x, dy = to.y - from.y;
+  if (Math.abs(dx) > Math.abs(dy)) return dx > 0 ? "right" : "left";
+  return dy > 0 ? "down" : "up";
+}
+export function titleCase(s: string) {
+  return s.toLowerCase().replace(/(^|[\s.'-])([a-zé])/g, (_, a, b) => a + b.toUpperCase()).replace(/\bPokémon\b/i, "Pokémon");
+}
+function popcount(n: number) {
+  let c = 0;
+  for (; n; n &= n - 1) c++;
+  return c;
+}
+function setByte(value: number, byte: number, v: number) {
+  return (value & ~(0xff << (8 * byte))) | (v << (8 * byte));
+}
+void ITEM;
+void MON;
+void opposite;
+export type { Pokemon };

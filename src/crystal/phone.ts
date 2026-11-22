@@ -1,0 +1,80 @@
+/**
+ * The Pokégear phone (engine/phone): contacts' own call scripts from the
+ * cartridge, special calls scripts queue, and the occasional random call.
+ */
+import { C, CONST, SYM } from "./symbols";
+import type { CrystalGame } from "./runtime";
+import { runScript } from "./script";
+
+export interface Contact { index: number; klass: number; id: number; group: number; number: number; callee: number; caller: number; calleeTime: number; callerTime: number }
+
+export function contact(game: CrystalGame, index: number): Contact {
+  const r = game.rom, o = SYM.PhoneContacts + index * 12;
+  return {
+    index, klass: r.u8(o), id: r.u8(o + 1), group: r.u8(o + 2), number: r.u8(o + 3),
+    calleeTime: r.u8(o + 4), callee: r.far(o + 5), callerTime: r.u8(o + 8), caller: r.far(o + 9),
+  };
+}
+export function contactName(game: CrystalGame, c: Contact) {
+  if (c.klass) return `${game.trainerName(c.klass, c.id)} (${game.rom.trainerClassName(c.klass)})`;
+  const names: Record<string, string> = { PHONECONTACT_MOM: game.save.mom, PHONECONTACT_BIKESHOP: "BIKE SHOP", PHONECONTACT_BILL: "BILL", PHONECONTACT_ELM: "PROF.ELM", PHONECONTACT_BUENA: "BUENA" };
+  const name = Object.keys(names).find(n => CONST[n] === c.index);
+  return name ? names[name] : "?";
+}
+
+async function ring(game: CrystalGame, c: Contact) {
+  game.sfx("SFX_CALL");
+  await game.say(`Ring! Ring! It's ${contactName(game, c)}.`);
+}
+
+/** A call a script queued with `specialphonecall`. */
+export async function specialCall(game: CrystalGame) {
+  const id = game.save.specialCall;
+  const o = SYM.SpecialPhoneCallList + (id - 1) * 6;
+  const condition = game.rom.near(o);
+  const outsideOnly = SYM.SpecialCallOnlyWhenOutside !== undefined ? condition === SYM.SpecialCallOnlyWhenOutside : true;
+  const env = game.map.environment;
+  if (outsideOnly && env !== C("TOWN") && env !== C("ROUTE")) return false;
+  const c = contact(game, game.rom.u8(o + 2));
+  game.save.specialCall = 0;
+  game.save.vars.caller = c.index;
+  await ring(game, c);
+  await runScript(game, game.rom.far(o + 3));
+  await hangUp(game);
+  return true;
+}
+
+/** A contact calls now and then, from their own caller script. */
+export async function randomCall(game: CrystalGame) {
+  const callers = game.save.phone.map(i => contact(game, i)).filter(c => c.klass && c.callerTime);
+  if (!callers.length) return false;
+  const c = callers[Math.floor(Math.random() * callers.length)];
+  if (c.group === game.map.group && c.number === game.map.number) return false;
+  game.save.vars.caller = c.index;
+  await ring(game, c);
+  await runScript(game, c.caller);
+  await hangUp(game);
+  return true;
+}
+
+/** The player calls a contact from the Pokégear. */
+export async function call(game: CrystalGame, index: number) {
+  const c = contact(game, index);
+  game.save.vars.caller = c.index;
+  if (game.map.phoneService) {
+    await game.say("You're out of the service area.");
+    return;
+  }
+  if (c.group === game.map.group && c.number === game.map.number) {
+    await game.say("That number is right here!");
+    return;
+  }
+  game.sfx("SFX_CALL");
+  await runScript(game, c.callee);
+  await hangUp(game);
+}
+
+async function hangUp(game: CrystalGame) {
+  game.sfx("SFX_HANG_UP");
+  game.closeText();
+}
