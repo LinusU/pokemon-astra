@@ -53,6 +53,13 @@ Choose **New journey → Yellow** to play Pokémon Yellow's Kanto on Astra's eng
 
 Not included: link-cable features, the Game Boy Printer, the Surfing Pikachu minigame and Pikachu's animated emotion pictures. Talking to Pikachu shows a short line instead.
 
+### Yellow Legacy
+
+Choose **New journey → Yellow Legacy** to play [Yellow Legacy](https://github.com/cRz-Shadows/Pokemon_Yellow_Legacy), TheSmithPlays' rebalance of Yellow. It needs Yellow Legacy **V1.0.10** on the English Yellow: choose the patched ROM (SHA-1 `2ac87de42afc70ef6016805acb3b206644417f97`), or your Yellow cartridge and the release's official `.bps` patch, which is applied in the browser (`src/yellow/bps.ts`). If Astra already has your Yellow cartridge, the patch alone is enough. The patched cartridge is kept under its own key, and Yellow Legacy journeys are separate from Yellow's.
+
+- **From Legacy's cartridge:** everything the Yellow adventure reads from Yellow, so Legacy's trainer parties and boss movesets, wild Pokémon, marts, its new trainers and overworld sprites, TM04 Flamethrower and its dialogue. Its cartridge offsets come from a build of the V1.0.10 tag (`src/yellow/generated/symbols-legacy.ts`).
+- **Not yet ported:** Legacy's own map logic. The story runs on Yellow's ports, so Legacy's new text routines only print their text: offering Strength at a boulder, the move relearner and deleter, its Cinnabar Gym quiz, prize corner, Fuchsia nurse, post-game Oak and the Seafoam fight. `npx vite-node scripts/yellow-coverage.ts pokeyellow.gbc yellow-legacy.bps` lists them.
+
 ## Controls and saves
 
 | Input | Move | Confirm | Back / menu |
@@ -102,9 +109,10 @@ npm run build
 npm run test:native      # Rust tests + local-ROM WASM integration smoke test
 npm run test:campaign    # repeatable local-ROM battle run for all three starters
 npx vite-node scripts/yellow-coverage.ts   # Yellow map logic that still lacks a port (expects ./pokeyellow.gbc)
+npx vite-node scripts/yellow-coverage.ts pokeyellow.gbc yellow-legacy.bps   # the same for Yellow Legacy
 ```
 
-Yellow's cartridge offsets and constant names are generated from a local pret/pokeyellow checkout with `node scripts/yellow-symbols.mjs ../pokeyellow`. The Crystal offsets the Yellow renderer reads (tilesets, palettes, overworld sprites) come from a pret/pokecrystal checkout built as the supported cartridge, with `node scripts/crystal-symbols.mjs ../pokecrystal`. Both generated tables hold addresses and identifiers only. Yellow tests run when `pokeyellow.gbc` is present in the project root.
+Yellow's cartridge offsets and constant names are generated from a local pret/pokeyellow checkout with `node scripts/yellow-symbols.mjs ../pokeyellow`, and Yellow Legacy's from a build of its V1.0.10 tag (rgbds 0.6.1) with `node scripts/yellow-symbols.mjs ../Pokemon_Yellow_Legacy --out symbols-legacy.ts --source "Yellow Legacy V1.0.10 (github.com/cRz-Shadows/Pokemon_Yellow_Legacy)"`. The Crystal offsets the Yellow renderer reads (tilesets, palettes, overworld sprites) come from a pret/pokecrystal checkout built as the supported cartridge, with `node scripts/crystal-symbols.mjs ../pokecrystal`. Both generated tables hold addresses and identifiers only. Yellow tests run when `pokeyellow.gbc` is present in the project root, and the Yellow Legacy tests when the official V1.0.10 patch is there too as `yellow-legacy.bps`.
 
 The native smoke check verifies wild/trainer battle results, PP and healing, forced switching, full-party capture into storage, 502 front/back pictures, music continuity, and cries. ROM-dependent tests are skipped when the local cartridge or built WASM is absent; the smoke command requires both. Browser QA covers ROM import/cache, starter selection, movement and map transitions, and actual trainer battles. See [docs/VERIFICATION.md](docs/VERIFICATION.md) for the final recorded checks.
 
