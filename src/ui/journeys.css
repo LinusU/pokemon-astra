@@ -43,6 +43,7 @@
 }
 .adventure-tag.tag-astra { background: #2f6f58; color: #fff9dc; }
 .adventure-tag.tag-yellow { background: #f2c94c; color: #3b2f0c; }
+.adventure-tag.tag-yellow-legacy { background: #e07a2e; color: #2e1606; }
 .adventure-choices { display: grid; gap: .35em; margin: .3em 0 .45em; }
 .panel button.adventure-choice {
   display: flex;
@@ -61,4 +62,6 @@
 .panel button.adventure-choice.tag-astra { border-left-color: #8fc9a4; }
 .panel button.adventure-choice.tag-yellow { border-left-color: #f2c94c; background: #7a6418; border-color: #5e4c12; }
 .panel button.adventure-choice.tag-yellow:is(:hover, :focus-visible) { background: #5e4c12; }
+.panel button.adventure-choice.tag-yellow-legacy { border-left-color: #e07a2e; background: #7a3c14; border-color: #5c2c0e; }
+.panel button.adventure-choice.tag-yellow-legacy:is(:hover, :focus-visible) { background: #5c2c0e; }
 .panel button.secondary.danger { color: #9b2f2f; border-color: #9b2f2f; }

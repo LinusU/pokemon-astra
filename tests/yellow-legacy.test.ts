@@ -1,5 +1,9 @@
+import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { applyBps, BpsError, crc32, isBps } from "../src/yellow/bps";
+import { YELLOW_SHA1 as LEGACY_TABLE_SHA1 } from "../src/yellow/generated/symbols-legacy";
+import { identifyYellow, LEGACY_SHA1, YellowRom } from "../src/yellow/rom";
+import { TRAINER, useCartridge } from "../src/yellow/symbols";
 
 /** A BPS patch from its actions: source reads, target reads, then the CRCs. */
 function bps(source: Uint8Array, target: Uint8Array, actions: number[]) {
@@ -29,5 +33,35 @@ describe("BPS patches", () => {
     expect(isBps(patch)).toBe(true);
     expect([...applyBps(source, patch)]).toEqual([...target]);
     expect(() => applyBps(new Uint8Array([1, 2, 3, 5]), patch)).toThrow(BpsError);
+  });
+});
+
+describe("Yellow Legacy's table", () => {
+  it("is for the cartridge the official patch makes", () => {
+    expect(LEGACY_TABLE_SHA1).toBe(LEGACY_SHA1);
+  });
+});
+
+const available = existsSync("pokeyellow.gbc") && existsSync("yellow-legacy.bps");
+describe.skipIf(!available)("The official Yellow Legacy V1.0.10 patch", () => {
+  it("patches the local Yellow cartridge into Yellow Legacy", async () => {
+    const yellow = new Uint8Array(readFileSync("pokeyellow.gbc"));
+    const legacy = applyBps(yellow, new Uint8Array(readFileSync("yellow-legacy.bps")));
+    expect(await identifyYellow(yellow)).toBe("yellow");
+    expect(await identifyYellow(legacy)).toBe("legacy");
+  });
+  it("reads Yellow Legacy's cartridge through its own table", async () => {
+    const legacy = applyBps(new Uint8Array(readFileSync("pokeyellow.gbc")), new Uint8Array(readFileSync("yellow-legacy.bps")));
+    await useCartridge("legacy");
+    try {
+      const rom = new YellowRom(legacy);
+      expect(rom.trainerClassName(TRAINER.JANINE)).toBe("JANINE");
+      const { freshYellowSave, isYellowSave } = await import("../src/yellow/save");
+      const save = freshYellowSave(rom, "yellow-legacy", "RED", "BLUE");
+      expect(isYellowSave(JSON.parse(JSON.stringify(save)), "yellow-legacy")).toBe(true);
+      expect(isYellowSave(save, "yellow")).toBe(false);
+    } finally {
+      await useCartridge("yellow");
+    }
   });
 });

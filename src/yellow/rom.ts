@@ -4,17 +4,43 @@
  * (see scripts/yellow-symbols.mjs); the data itself is never bundled.
  */
 import { YELLOW_SHA1 } from "./generated/symbols";
-import { MAP_LABELS, SYM } from "./symbols";
+import { MAP_LABELS, SYM, type Cartridge } from "./symbols";
 
 export class UnsupportedYellowCartridge extends Error {}
 
-export async function verifyYellow(bytes: Uint8Array) {
-  if (bytes.length !== 0x100000)
-    throw new UnsupportedYellowCartridge("Please choose an English Pokémon Yellow ROM (.gbc).");
+/**
+ * Yellow Legacy V1.0.10 (github.com/cRz-Shadows/Pokemon_Yellow_Legacy): the
+ * official patch applied to the English Pokémon Yellow. Its symbol table is
+ * generated from a build of the tag, the same ROM.
+ */
+export const LEGACY_SHA1 = "2ac87de42afc70ef6016805acb3b206644417f97";
+const CARTRIDGES: Record<Cartridge, { sha1: string; size: number }> = {
+  yellow: { sha1: YELLOW_SHA1, size: 0x100000 },
+  legacy: { sha1: LEGACY_SHA1, size: 0x200000 },
+};
+
+async function sha1(bytes: Uint8Array) {
   const digest = await crypto.subtle.digest("SHA-1", new Uint8Array(bytes).buffer);
-  const hash = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, "0")).join("");
-  if (hash !== YELLOW_SHA1)
-    throw new UnsupportedYellowCartridge("Unsupported ROM: the English release of Pokémon Yellow is required.");
+  return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** Which supported cartridge `bytes` is, if any. */
+export async function identifyYellow(bytes: Uint8Array): Promise<Cartridge | undefined> {
+  const known = Object.entries(CARTRIDGES).filter(([, c]) => c.size === bytes.length);
+  if (!known.length) return undefined;
+  const hash = await sha1(bytes);
+  return known.find(([, c]) => c.sha1 === hash)?.[0] as Cartridge | undefined;
+}
+
+export async function verifyYellow(bytes: Uint8Array, cartridge: Cartridge = "yellow") {
+  if (bytes.length !== CARTRIDGES[cartridge].size)
+    throw new UnsupportedYellowCartridge(cartridge === "legacy"
+      ? "Please choose Pokémon Yellow patched with Yellow Legacy V1.0.10, or the patch itself."
+      : "Please choose an English Pokémon Yellow ROM (.gbc).");
+  if (await sha1(bytes) !== CARTRIDGES[cartridge].sha1)
+    throw new UnsupportedYellowCartridge(cartridge === "legacy"
+      ? "Unsupported ROM: Yellow Legacy V1.0.10, patched onto the English Pokémon Yellow, is required."
+      : "Unsupported ROM: the English release of Pokémon Yellow is required.");
 }
 
 export type Direction = "north" | "south" | "west" | "east";

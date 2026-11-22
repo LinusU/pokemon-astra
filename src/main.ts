@@ -49,7 +49,7 @@ import { BattleLaunch, type FinishedBattle } from "./ui/battle-launch";
 import { playEvolution } from "./ui/evolution";
 import { createJourney, deleteJourney, download, JourneyConflict, JourneyStore, listJourneys, peekJourney, type AdventureId, type JourneyEntry, type JourneySummary } from "./game/storage";
 import { mountJourneyList, type AdventureInfo } from "./ui/journeys";
-import { continueYellowJourney, hasYellowCartridge, newYellowJourney, type YellowHost, type YellowRunner } from "./yellow/launch";
+import { continueYellowJourney, hasYellowCartridge, isYellowAdventure, newYellowJourney, readYellowBackup, type YellowHost, type YellowRunner } from "./yellow/launch";
 import {
   freshSave,
   isValidSave,
@@ -218,6 +218,7 @@ function summarize(adventure: AdventureId, data: unknown) {
 const ADVENTURE_LIST: AdventureInfo[] = [
   { id: "astra", name: "Astra", blurb: "Survey the eight beacons of the Astra region with Professor Alder." },
   { id: "yellow", name: "Yellow", blurb: "Kanto with Pikachu, read from your own Pokémon Yellow cartridge." },
+  { id: "yellow-legacy", name: "Yellow Legacy", blurb: "Kanto rebalanced by Yellow Legacy, patched onto your own Pokémon Yellow cartridge." },
 ];
 function yellowHost(): YellowHost {
   return {
@@ -246,16 +247,21 @@ async function journeys(error?: string) {
     return;
   }
   sound.attach(engine, true);
-  const yellowReady = await hasYellowCartridge();
+  const missing = new Set<AdventureId>();
+  for (const a of ADVENTURE_LIST) if (isYellowAdventure(a.id) && !await hasYellowCartridge(a.id)) missing.add(a.id);
+  const notes: Partial<Record<AdventureId, string>> = {
+    yellow: "You'll be asked for your Yellow cartridge.",
+    "yellow-legacy": `You'll be asked for ${missing.has("yellow") ? "your Yellow cartridge and " : ""}the Yellow Legacy patch.`,
+  };
   mountJourneyList(layer, {
-    entries, adventures: ADVENTURE_LIST.map(a => a.id === "yellow" && !yellowReady ? { ...a, note: "You'll be asked for your Yellow cartridge." } : a),
+    entries, adventures: ADVENTURE_LIST.map(a => missing.has(a.id) ? { ...a, note: notes[a.id] } : a),
     sprite, cursor: journeyCursor, error,
     onContinue: entry => {
-      if (entry.adventure === "yellow") return void continueYellowJourney(yellowHost(), entry);
+      if (isYellowAdventure(entry.adventure)) return void continueYellowJourney(yellowHost(), { ...entry, adventure: entry.adventure });
       journeyStore = new JourneyStore(entry.id, astraSummary);
       void readJourney();
     },
-    onNew: adventure => adventure === "yellow" ? void newYellowJourney(yellowHost(), () => void journeys()) : intro(() => void journeys()),
+    onNew: adventure => isYellowAdventure(adventure) ? void newYellowJourney(yellowHost(), adventure, () => void journeys()) : intro(() => void journeys()),
     onExport: async entry => {
       try {
         download(`pokemon-${entry.adventure}-save.json`, await peekJourney(entry.id));
@@ -272,10 +278,9 @@ async function journeys(error?: string) {
       let next: Save;
       try {
         const data = JSON.parse(await file.text());
-        if (data?.adventure === "yellow") {
-          const { isYellowSave } = await import("./yellow/save");
-          if (!isYellowSave(data)) return "Choose a valid Yellow backup.";
-          await createJourney("yellow", data);
+        if (isYellowAdventure(data?.adventure)) {
+          if (!await readYellowBackup(data)) return "Choose a valid Yellow backup.";
+          await createJourney(data.adventure, data);
           void journeys();
           return;
         }

@@ -4,8 +4,11 @@ import { HS, MAP } from "./symbols";
 import type { YellowRom } from "./rom";
 import type { Facing } from "./world";
 
+/** Yellow, or Yellow patched with Yellow Legacy: their saves hold different flags and objects. */
+export type YellowAdventure = "yellow" | "yellow-legacy";
+
 export interface YellowSave {
-  adventure: "yellow";
+  adventure: YellowAdventure;
   version: 1;
   name: string;
   rival: string;
@@ -57,10 +60,10 @@ export interface YellowSave {
   };
 }
 
-export function freshYellowSave(rom: YellowRom, name: string, rival: string): YellowSave {
+export function freshYellowSave(rom: YellowRom, adventure: YellowAdventure, name: string, rival: string): YellowSave {
   const hidden = rom.missables().flatMap((m, i) => m.shown ? [] : [i]);
   return {
-    adventure: "yellow",
+    adventure,
     version: 1,
     name,
     rival,
@@ -96,9 +99,10 @@ const ints = (v: unknown, min: number, max: number) => Array.isArray(v) && v.eve
 const counts = (v: unknown) => !!v && typeof v === "object" &&
   Object.entries(v as Record<string, unknown>).every(([k, n]) => /^\d{1,3}$/.test(k) && +k <= 255 && int(n, 0, 999));
 
-export function isYellowSave(data: unknown): data is YellowSave {
+/** Whether `data` is a save of `adventure`, read against that cartridge's symbol table (which must be in use). */
+export function isYellowSave(data: unknown, adventure: YellowAdventure): data is YellowSave {
   const s = data as YellowSave;
-  return !!s && typeof s === "object" && s.adventure === "yellow" && s.version === 1 &&
+  return !!s && typeof s === "object" && s.adventure === adventure && s.version === 1 &&
     typeof s.name === "string" && s.name.length <= 10 && typeof s.rival === "string" && s.rival.length <= 10 &&
     int(s.map, 0, 255) && int(s.x, -1, 255) && int(s.y, -1, 255) && ["down", "up", "left", "right"].includes(s.facing) &&
     int(s.lastMap, 0, 255) && int(s.blackout, 0, 255) && ints(s.events, 0, 4095) && ints(s.hidden, 0, Object.keys(HS).length) &&
