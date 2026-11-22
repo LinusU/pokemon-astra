@@ -9,7 +9,7 @@ export function openCartridge(layer: HTMLElement, onReady: (engine: Engine) => v
 
   function choose(error = "") {
     const p = panel(layer, "Pokémon Astra",
-      `<p>Open your English Pokémon Crystal 1.1 cartridge (.gbc).</p><div class="drop" id="drop"><button id="choose-rom">Choose ROM</button><input hidden id="rom" type="file" accept=".gbc,application/octet-stream"><span class="drop-hint">or drop it onto the screen</span></div>${error ? `<p role="alert" class="error">${escapeHtml(error)}</p>` : ""}<p class="cartridge-note">Your cartridge and save stay in this browser.</p>`, "rom-import arrival-card");
+      `<p>Open your English Pokémon Crystal 1.0 cartridge (.gbc).</p><div class="drop" id="drop"><button id="choose-rom">Choose ROM</button><input hidden id="rom" type="file" accept=".gbc,application/octet-stream"><span class="drop-hint">or drop it onto the screen</span></div>${error ? `<p role="alert" class="error">${escapeHtml(error)}</p>` : ""}<p class="cartridge-note">Your cartridge and save stay in this browser.</p>`, "rom-import arrival-card");
     const input = p.querySelector<HTMLInputElement>("#rom")!;
     p.querySelector<HTMLButtonElement>("#choose-rom")!.onclick = () => input.click();
     input.onchange = () => { if (input.files?.[0]) void loadFile(input.files[0]); };

@@ -196,7 +196,7 @@ export class Engine {
     }
     return { text, next: cursor };
   }
-  /** Crystal 1.1 stores two pages per species across four Pokédex banks. */
+  /** Crystal 1.0 stores two pages per species across four Pokédex banks. */
   dexEntry(id: number) {
     if (!Number.isInteger(id) || id < 1 || id > 251) throw Error("Invalid species");
     const index = id - 1;
@@ -215,7 +215,7 @@ export class Engine {
       id,
       dvs: id === 237 && dvs !== undefined ? dvWord(dvs) : undefined,
     });
-    const pointer = 0x2cb52 + (id - 1) * 2; // MoveDescriptions, bank 0x0b in Crystal 1.1.
+    const pointer = 0x2cb52 + (id - 1) * 2; // MoveDescriptions, bank 0x0b in Crystal 1.0.
     const description = this.cartridgeText(0x2c000 + ((this.rom[pointer] | (this.rom[pointer + 1] << 8)) & 0x3fff));
     return { ...move, description: flowingText(description.text.replace("\n2nd turn", " · 2nd turn")) };
   }
@@ -691,7 +691,7 @@ export class Engine {
   musicAddress(id: number): [number, number] {
     if (!Number.isInteger(id) || id < 0 || id >= 0x67)
       throw Error("Unsupported music track");
-    // Crystal 1.1's Music table at 3a:506e.
+    // Crystal 1.0's Music table at 3a:506e.
     const offset = 0x3a * 0x4000 + 0x106e + id * 3;
     return [this.rom[offset], this.rom[offset + 1] | (this.rom[offset + 2] << 8)];
   }
@@ -740,7 +740,7 @@ export class UnsupportedCartridge extends Error {}
 
 export async function initEngine(rom: Uint8Array): Promise<Engine> {
   if (rom.length !== 2097152)
-    throw new UnsupportedCartridge("Please choose an English Pokémon Crystal 1.1 ROM.");
+    throw new UnsupportedCartridge("Please choose an English Pokémon Crystal 1.0 ROM.");
   const hash = Array.from(
     new Uint8Array(
       await crypto.subtle.digest("SHA-1", new Uint8Array(rom).buffer),
@@ -750,7 +750,7 @@ export async function initEngine(rom: Uint8Array): Promise<Engine> {
     .join("");
   if (hash !== "f4cd194bdee0d04ca4eac29e09b8e4e9d818c133")
     throw new UnsupportedCartridge(
-      "Unsupported ROM: Pokémon Crystal (English) version 1.1 is required.",
+      "Unsupported ROM: Pokémon Crystal (English) version 1.0 is required.",
     );
   const response = await fetch("./astra_native.wasm");
   if (!response.ok) throw Error("Native engine unavailable");

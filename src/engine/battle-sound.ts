@@ -1,4 +1,4 @@
-// Crystal 1.1's BattleAnimations pointer table (bank $32, address $506f).
+// Crystal 1.0's BattleAnimations pointer table (bank $32, address $506f).
 // Only audio commands and script flow are interpreted. Astra draws its own effects.
 const BANK_START = 0x32 * 0x4000;
 const TABLE = BANK_START + 0x106f;

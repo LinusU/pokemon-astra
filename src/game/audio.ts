@@ -5,7 +5,7 @@ const MUSIC_VOLUME = 0.28;
 const MUSIC_RATE = 48000;
 const JINGLE_LEAD_IN = 0.02;
 const JINGLE_MUSIC_GAIN = 0.2;
-// Crystal 1.1's MUSIC_HEAL, used by HealMachineAnim.
+// Crystal 1.0's MUSIC_HEAL, used by HealMachineAnim.
 export const HEAL_TRACK = [0x3c, 0x4697] as const;
 // Crystal's sfx_constants.asm, for the corresponding field actions and rewards.
 export const OVERWORLD_SOUNDS = {

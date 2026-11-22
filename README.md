@@ -14,7 +14,7 @@ npm ci
 npm run dev
 ```
 
-Open the URL Vite prints. On first launch, choose or drop **Pokémon Crystal (English), revision 1.1**. The file name is not important; the supported ROM's SHA-1 is `f4cd194bdee0d04ca4eac29e09b8e4e9d818c133`. The ROM is read in the browser and stored in IndexedDB. It is never uploaded, included in the app bundle, or required by the production server. The supplied workspace ROM is used only for local verification.
+Open the URL Vite prints. On first launch, choose or drop **Pokémon Crystal (English), version 1.0**. The file name is not important; the supported ROM's SHA-1 is `f4cd194bdee0d04ca4eac29e09b8e4e9d818c133`. The ROM is read in the browser and stored in IndexedDB. It is never uploaded, included in the app bundle, or required by the production server. The supplied workspace ROM is used only for local verification.
 
 ```sh
 npm run build
