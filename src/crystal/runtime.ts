@@ -11,7 +11,7 @@ import type { MusicScene } from "../game/music";
 import type { MenuInput } from "../ui/menu-input";
 import { BODY_RADIUS, bodyTouches, heldHeading, walkFreely, walkSpeed } from "../game/free-movement";
 import { JourneyConflict, type JourneyStore } from "../game/storage";
-import { C, CONST, ENGINE_RAM, ITEM, MON, RAM, SYM, cartridgeInUse, constName, mapName, ramName } from "./symbols";
+import { C, CONST, ENGINE_RAM, ITEM, MON, RAM, SYM, TEXT, cartridgeInUse, constName, mapName, ramName } from "./symbols";
 import { CrystalRom, type BgEvent, type CrystalMap, type ObjectEvent, type TextOp } from "./rom";
 import { CrystalWorld, FACINGS, STEP, opposite, type Facing, type LiveMap } from "./world";
 import { crystalSummary, type CrystalMon, type CrystalSave } from "./save";
@@ -388,6 +388,13 @@ export class CrystalGame {
     this.register(species, true);
     this.setBuffer(0, this.monName(species));
     if (!ot) await this.offerNickname(mon, "CaughtAskNicknameText");
+    if (where === "box") {
+      // GivePoke: "<MON> was sent to BILL's PC."
+      this.strings.set(RAM.wStringBuffer1, mon.nickname || this.monName(species));
+      const text = TEXT._WasSentToBillsPCText;
+      if (text !== undefined) await this.engineText(text);
+      else await this.say(`${mon.nickname || this.monName(species)} was sent to BILL's PC.`);
+    }
     return true;
   }
   /** Crystal asks whether to give a nickname to a Pokémon that joins the player. */
