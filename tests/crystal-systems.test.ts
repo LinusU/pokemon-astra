@@ -76,6 +76,19 @@ describe.skipIf(!hasEngine || !CARTRIDGES.length).each(CARTRIDGES)("Crystal's sy
     expect(g.save.party[0].hp).toBe(g.save.party[0].stats[0]);
   }, 60000);
 
+  it("goes up to a Pokémon Center's 2F and back down", async () => {
+    const h = await headlessGame(adventure);
+    const g = h.game;
+    g.save.party = [g.makeMon(MON.CYNDAQUIL, 10)];
+    const [group, number] = MAP.CHERRYGROVE_POKECENTER_1F;
+    await g.warpTo(group, number, 3, 4);
+    const stairs = g.map.warps.findIndex(w => w.group === MAP.POKECENTER_2F[0] && w.number === MAP.POKECENTER_2F[1]);
+    await g.runScript(() => g.useWarp(stairs));
+    expect(g.map.name).toBe("POKECENTER_2F");
+    await g.runScript(() => g.useWarp(0));
+    expect(g.map.name).toBe("CHERRYGROVE_POKECENTER_1F");
+  }, 60000);
+
   it("buys from a Mart", async () => {
     const h = await headlessGame(adventure);
     const g = h.game;

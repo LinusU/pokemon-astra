@@ -731,7 +731,8 @@ export class CrystalGame {
     const warp = this.map.warps[index];
     let { group, number } = warp;
     let dest = warp.warp;
-    if (group === 0xff) {
+    // CopyWarpData: a warp to -1 (Pokémon Center 2F's stairs, elevators) leads back where the player came from.
+    if (dest === 0xff) {
       const back = this.save.backupWarp;
       if (!back) return;
       ({ group, number } = back);
@@ -740,8 +741,8 @@ export class CrystalGame {
     const target = this.header(group, number);
     const arrival = target.warps[dest - 1];
     if (!arrival) return;
-    // Pokémon Center 2Fs and other shared rooms lead back to where the player came from.
-    this.save.backupWarp = { warp: index + 1, group: this.map.group, number: this.map.number };
+    // EnterMapSpawnPoint: arriving on a warp that leads to -1 remembers the warp just taken.
+    if (arrival.warp === 0xff) this.save.backupWarp = { warp: index + 1, group: this.map.group, number: this.map.number };
     const coll = this.world.collision(this.map, this.me.x, this.me.y);
     this.sfx(this.world.isDoor(coll) ? "SFX_ENTER_DOOR" : coll === C("COLL_WARP_PANEL") ? "SFX_WARP_TO" : "SFX_EXIT_BUILDING");
     const outdoors = (m: CrystalMap) => m.environment === C("TOWN") || m.environment === C("ROUTE");
