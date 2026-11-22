@@ -295,16 +295,23 @@ export async function npcTrade(game: CrystalGame, index: number) {
 }
 
 // ------------------------------------------------------------------ PCs
-/** The Pokémon Center PC (and the player's own). */
+/**
+ * The Pokémon Center PC (engine/events/pokecenter_pc.asm): Bill's PC and the
+ * player's, Prof. Oak's once the Pokédex is in hand, and the Hall of Fame
+ * after the credits. The player's own PC at home opens the item PC directly.
+ */
 export async function pokemonCenterPC(game: CrystalGame, home = false) {
   game.sfx("SFX_BOOT_PC");
   await engineText(game, home ? "PlayersPCTurnOnText" : "PokecenterPCTurnOnText", `${game.save.name} turned on the PC.`, false);
-  for (;;) {
-    const options = home ? [`${game.save.name}'s PC`, "LOG OFF"] : ["BILL's PC", `${game.save.name}'s PC`, "PROF.OAK's PC", "LOG OFF"];
+  if (home) await game.modal(() => itemPc(game));
+  else for (;;) {
+    const dex = game.hasFlag("ENGINE_POKEDEX"), fame = dex && game.save.hallOfFame.length > 0;
+    const options = ["BILL's PC", `${game.save.name}'s PC`, ...(dex ? ["PROF.OAK's PC"] : []), ...(fame ? ["HALL OF FAME"] : []), "TURN OFF"];
     const pick = await game.choose(options, { cancel: true });
-    const choice = pick === undefined ? "LOG OFF" : options[pick];
+    const choice = pick === undefined ? "TURN OFF" : options[pick];
     if (choice === "BILL's PC") await game.modal(() => storage(game));
     else if (choice === "PROF.OAK's PC") await profOaksPC(game);
+    else if (choice === "HALL OF FAME") await game.modal(() => hallOfFameList(game));
     else if (choice.endsWith("'s PC")) await game.modal(() => itemPc(game));
     else break;
   }
@@ -389,6 +396,18 @@ async function itemPc(game: CrystalGame) {
 }
 
 // ------------------------------------------------------------------ the Hall of Fame
+/** The PC's HALL OF FAME: every induction, the latest first. */
+function hallOfFameList(game: CrystalGame) {
+  if (!game.ctx.layer || !game.ctx.sprite) return Promise.resolve();
+  const entries = game.save.hallOfFame.map((e, i) => ({ ...e, n: i + 1 })).reverse();
+  const p = panel(game.layer, "Hall of Fame", entries.map(e => `<h3>No. ${e.n}</h3><ul class="crystal-hof">${e.party.map(m =>
+    `<li><img alt="" src="${game.ctx.sprite!(m)}"><span>${escapeHtml(m.nickname || game.monName(m.species))} Lv${m.level}</span></li>`).join("")}</ul>`).join("") +
+    `<div class="buttons"><button id="back">Back</button></div>`, "crystal-hof-panel");
+  return new Promise<void>(resolve => {
+    p.querySelector<HTMLButtonElement>("#back")!.onclick = () => { p.remove(); resolve(); };
+  });
+}
+
 export async function hallOfFame(game: CrystalGame) {
   game.save.hallOfFame.push({
     party: game.save.party.filter(m => !m.egg).map(m => ({ species: m.species, level: m.level, nickname: m.nickname, dvs: [...m.dvs] })),
