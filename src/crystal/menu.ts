@@ -65,15 +65,21 @@ export async function rename(game: CrystalGame, mon: CrystalMon) {
   mon.nickname = name;
   return true;
 }
-/** "Give a nickname to the <MON> you received?" */
-export async function askNickname(game: CrystalGame, mon: CrystalMon) {
-  const at = (await import("./symbols")).TEXT.AskGiveNicknameText;
+/**
+ * Asks whether to nickname a Pokémon, in the cartridge's words for how it
+ * arrived: caught in battle ("Give a nickname to <MON>?"), received from a
+ * script or the contest ("…the <MON> you received?"), or hatched.
+ */
+export async function askNickname(game: CrystalGame, mon: CrystalMon, label: NicknameText = "AskGiveNicknameText") {
+  const at = (await import("./symbols")).TEXT[label];
   game.strings.set((await import("./symbols")).RAM.wStringBuffer1, game.monName(mon.species));
   if (at !== undefined) await game.writeText(at);
   else await game.say(`Give a nickname to ${game.monName(mon.species)}?`, false);
   if (await game.yesNo()) await rename(game, mon);
   game.closeText();
 }
+
+export type NicknameText = "AskGiveNicknameText" | "CaughtAskNicknameText" | "_BreedAskNicknameText";
 
 export async function showDexEntry(game: CrystalGame, species: number) {
   if (!game.ctx.layer || !game.ctx.sprite) return;

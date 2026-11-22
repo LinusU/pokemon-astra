@@ -232,5 +232,5 @@ async function hatch(game: CrystalGame, slot: number) {
   game.save.party[slot] = hatched;
   game.register(mon.species, true);
   await game.say(`${name} came out of its EGG!`);
-  await game.offerNickname(hatched);
+  await game.offerNickname(hatched, "_BreedAskNicknameText");
 }

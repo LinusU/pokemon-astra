@@ -18,6 +18,7 @@ import { crystalSummary, type CrystalMon, type CrystalSave } from "./save";
 import { readTrainerHeader, runScript, UnsupportedScript, type TrainerHeader } from "./script";
 import { DomUi, paginate, type CrystalUi } from "./ui";
 import type { TimeOfDay } from "./gfx";
+import type { NicknameText } from "./menu";
 
 export interface CrystalContext {
   engine: Engine;
@@ -378,13 +379,13 @@ export class CrystalGame {
     if (!where) return false;
     this.register(species, true);
     this.setBuffer(0, this.monName(species));
-    if (!ot) await this.offerNickname(mon);
+    if (!ot) await this.offerNickname(mon, "CaughtAskNicknameText");
     return true;
   }
-  /** Crystal asks whether to give a nickname to a Pokémon received from a script. */
-  async offerNickname(mon: CrystalMon) {
+  /** Crystal asks whether to give a nickname to a Pokémon that joins the player. */
+  async offerNickname(mon: CrystalMon, label?: NicknameText) {
     const { askNickname } = await import("./menu");
-    await askNickname(this, mon);
+    await askNickname(this, mon, label);
   }
   giveEgg(species: number, level: number) {
     const mon = this.makeMon(species, level);

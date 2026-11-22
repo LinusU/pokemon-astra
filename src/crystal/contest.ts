@@ -119,5 +119,5 @@ export async function checkPartyFullAfterContest(game: CrystalGame) {
   game.register(caught.species, true);
   const where = game.addMon({ ...caught, ot_name: game.save.name, ot_id: game.save.playerId });
   game.scriptVar = where === "party" ? 0 : 1;
-  await game.offerNickname(caught);
+  await game.offerNickname(caught, "CaughtAskNicknameText");
 }
