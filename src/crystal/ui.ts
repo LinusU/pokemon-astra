@@ -24,7 +24,13 @@ export interface CrystalUi {
 export function paginate(text: string, limit = 110): string[] {
   const out: string[] = [];
   for (const para of text.split("\f")) {
-    const t = para.replace(/-\n(?=[a-z])/g, "").replace(/[\n\v]/g, " ").replace(/\s+/g, " ").trim();
+    // A hyphen at a line's end: a word split in two joins up ("some-/thing", "GOLDEN-/ROD", "#-/MON"),
+    // while a hyphenated word keeps its hyphen ("BUG-/type").
+    const t = para
+      .replace(/(POKé|[A-Z])-[\n\v](?=[A-Z])/g, "$1")
+      .replace(/([A-Z])-[\n\v](?=[a-z])/g, "$1-")
+      .replace(/([a-zé])-[\n\v](?=[a-z])/g, "$1")
+      .replace(/[\n\v]/g, " ").replace(/\s+/g, " ").trim();
     if (!t) continue;
     if (t.length <= limit) { out.push(t); continue; }
     let page = "";
