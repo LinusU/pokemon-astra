@@ -20,6 +20,8 @@ type Options = {
   sprite: (mon: Pokemon) => string;
   saveTransfer: (roster: Collection) => Promise<void>;
   onClose: () => void;
+  /** Party slots the PC doesn't list but that count towards six, such as Eggs. */
+  reserved?: number;
 };
 
 const controllers = new WeakMap<Element, { input: (action: PcControl) => void }>();
@@ -45,10 +47,12 @@ export function mountStoragePc(host: HTMLElement, options: Options) {
   const index = () => Math.max(0, Math.min(state[tab] ?? 0, list().length - 1));
   const name = (mon: Pokemon) => mon.nickname || engine.species(mon.species).name;
   const condition = (mon: Pokemon) => mon.hp === 0 ? "FNT" : battleStatus(mon.status)?.[0] ?? "";
-  const action = () => tab === "party" ? "Deposit" : save.party.length < 6 ? "Withdraw" : "Swap";
+  const reserved = options.reserved ?? 0;
+  const full = () => save.party.length + reserved >= 6;
+  const action = () => tab === "party" ? "Deposit" : !full() ? "Withdraw" : "Swap";
   const canFind = () => tab === "storage" && mode === "tabs" && save.storage.length > pageSize;
   const eligible = () => tab === "party" ? canDeposit(save.party, index())
-    : save.party.length < 6 || save.party.some((_, i) => canDeposit(save.party, i, list()[index()]));
+    : !full() || save.party.some((_, i) => canDeposit(save.party, i, list()[index()]));
 
   function profile(mon: Pokemon) {
     const species = engine.species(mon.species);
@@ -99,7 +103,7 @@ export function mountStoragePc(host: HTMLElement, options: Options) {
     root.innerHTML = `<header class="pc-head"><h1><i class="pc-terminal" aria-hidden="true"></i>Pokémon Storage</h1><span>Center PC</span></header>
       <nav class="pc-tabs" aria-label="Pokémon lists">
       <button data-tab="storage" aria-pressed="${tab === "storage"}">Stored <b>${save.storage.length}</b></button>
-      <button data-tab="party" aria-pressed="${tab === "party"}">Party <b>${save.party.length}/6</b></button></nav>
+      <button data-tab="party" aria-pressed="${tab === "party"}">Party <b>${save.party.length + reserved}/6</b></button></nav>
       ${roster()}<p class="pc-tip" role="status">${html(receipt || tip)}</p>
       <footer class="pc-foot">${primary}
       ${canFind() ? '<button data-find><kbd>↑</kbd> Find species</button>' : ""}
@@ -178,7 +182,7 @@ export function mountStoragePc(host: HTMLElement, options: Options) {
     } else if (eligible()) {
       if (tab === "party") {
         void transfer(roster => depositPokemon(roster, index()), `${name(mon)} was deposited.`);
-      } else if (save.party.length === 6) swap(mon);
+      } else if (full()) swap(mon);
       else void transfer(roster => withdrawPokemon(roster, mon), `${name(mon)} joined your party.`);
     } else summary();
   }

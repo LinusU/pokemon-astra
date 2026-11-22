@@ -325,11 +325,15 @@ function storage(game: CrystalGame) {
     game.closeText();
     // Astra's PC shows Bill's boxes as one collection.
     const roster = { party: game.save.party.filter(m => !m.egg), storage: game.save.boxes.flat() };
+    // Eggs stay in the party, in their places, and take up room in it.
+    const eggs = game.save.party.map((m, i) => [i, m] as const).filter(([, m]) => m.egg);
     mountStoragePc(game.layer, {
       save: roster as unknown as Save, state, engine: game.engine, sprite: game.ctx.sprite!, itemName: key => itemTitle(key.replace(/_/g, " ")),
+      reserved: eggs.length,
       saveTransfer: async next => {
-        const eggs = game.save.party.filter(m => m.egg);
-        game.save.party = [...(next.party as CrystalMon[]), ...eggs].slice(0, 6);
+        const party = [...(next.party as CrystalMon[])];
+        for (const [i, egg] of eggs) party.splice(Math.min(i, party.length), 0, egg);
+        game.save.party = party.slice(0, 6);
         const all = next.storage as CrystalMon[];
         game.save.boxes = Array.from({ length: 14 }, (_, i) => all.slice(i * 20, i * 20 + 20));
         Object.assign(roster, next);
