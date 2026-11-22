@@ -150,8 +150,8 @@ export class CrystalGame {
     if (i === 0xffff || i < 0) return;
     if (on) this.events.add(i);
     else this.events.delete(i);
-    // Objects tied to the flag appear or disappear with it.
-    for (const o of this.objects) if (o.event.flag === i) o.visible = !on && this.objectTime(o.event);
+    // As on the cartridge, objects tied to the flag only follow it when the map
+    // loads again; scripts use appear and disappear to change them at once.
   }
   ev(name: string) { return this.event(C(name)); }
   flag(i: number) {
