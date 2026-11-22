@@ -425,7 +425,7 @@ const SPECIAL: Record<string, Routine> = {
     g.strings.set(RAM.wStringBuffer3, g.monName(m.species));
   },
   PokeSeer: pokeSeer, Diploma: diploma, PrintDiploma: diploma, PhotoStudio: async g => { await g.say("Smile!"); },
-  ProfOaksPCBoot: async g => { await g.say(`POKéDEX: ${g.save.seen.length} seen, ${g.save.caught.length} owned.`); },
+  ProfOaksPCBoot: async g => { const { profOaksPCBoot } = await import("./services"); await profOaksPCBoot(g); },
   MagnetTrain: async g => { await g.delay(90); },
   CheckMagikarpLength: checkMagikarpLength, MagikarpHouseSign: magikarpHouseSign,
   CheckForLuckyNumberWinners: checkForLuckyNumberWinners,

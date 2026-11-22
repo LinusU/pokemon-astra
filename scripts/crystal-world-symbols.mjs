@@ -65,7 +65,7 @@ const OPTIONAL = [
   "EnvironmentColorsPointers.OutdoorColors", "EnvironmentColorsPointers.IndoorColors", "EnvironmentColorsPointers.DungeonColors",
   "BerryNames", "ApricornBalls", "PokeBallMenuTMHM", "UnownWords", "SlotsTilemap", "BargainShopData", "RooftopSaleMart1",
   "RooftopSaleMart2", "DefaultMart", "ItemPocketNames", "MenuHeader_BuySell", "PokemonPicPointers", "BugContestantPointers",
-  "BugCatchingContestOverScript", "BugCatchingContestBattleScript", "RepelWoreOffScript", "UseAnotherRepelScript", "CutTreeBlockPointers", "WhirlpoolBlockPointers", "HealingHPAmounts", "StatusHealingActions", "EvolutionStones", "SpecialCallOnlyWhenOutside", "SpecialCallWhereverYouAre", "HiddenItemScript",
+  "BugCatchingContestOverScript", "BugCatchingContestBattleScript", "RepelWoreOffScript", "UseAnotherRepelScript", "CutTreeBlockPointers", "WhirlpoolBlockPointers", "HealingHPAmounts", "StatusHealingActions", "EvolutionStones", "SpecialCallOnlyWhenOutside", "SpecialCallWhereverYouAre", "HiddenItemScript", "OakRatings",
 ];
 const SYM = {};
 // An entry may list the names older sources use; the table keeps the first.

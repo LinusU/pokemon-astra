@@ -304,8 +304,8 @@ export async function pokemonCenterPC(game: CrystalGame, home = false) {
     const pick = await game.choose(options, { cancel: true });
     const choice = pick === undefined ? "LOG OFF" : options[pick];
     if (choice === "BILL's PC") await game.modal(() => storage(game));
+    else if (choice === "PROF.OAK's PC") await profOaksPC(game);
     else if (choice.endsWith("'s PC")) await game.modal(() => itemPc(game));
-    else if (choice === "PROF.OAK's PC") await game.say(`POKéDEX: ${game.save.seen.length} seen, ${game.save.caught.length} owned.`);
     else break;
   }
   game.sfx("SFX_SHUT_DOWN_PC");
@@ -332,6 +332,34 @@ function storage(game: CrystalGame) {
     });
   });
 }
+/** Prof. Oak's PC (engine/events/prof_oaks_pc.asm): rates the Pokédex on request. */
+async function profOaksPC(game: CrystalGame) {
+  await engineText(game, "OakPCText1", "Want to get your POKéDEX rated?", false);
+  if (await game.yesNo()) await profOaksPCBoot(game);
+  await engineText(game, "OakPCText4", "The link to PROF.OAK's PC closed.");
+}
+/** ProfOaksPCBoot: "Current POKéDEX completion level:", then the rating. */
+export async function profOaksPCBoot(game: CrystalGame) {
+  await engineText(game, "OakPCText2", "Current POKéDEX completion level:");
+  await profOaksPCRating(game);
+}
+/** Rate: the counts, then Oak's words and sound for the number owned (OakRatings). */
+export async function profOaksPCRating(game: CrystalGame) {
+  const seen = game.save.seen.length, owned = game.save.caught.length;
+  game.strings.set(RAM.wStringBuffer3, String(seen));
+  game.strings.set(RAM.wStringBuffer4, String(owned));
+  await engineText(game, "OakPCText3", `${seen} POKéMON seen, ${owned} POKéMON owned.\fPROF.OAK's Rating:`);
+  const table = SYM.OakRatings;
+  if (table === undefined) return;
+  // FindOakRating: the first entry whose count is at least the number owned.
+  let o = table;
+  for (let i = 0; i < 32 && game.rom.u8(o) < owned; i++) o += 5;
+  const sfx = constName("SFX_", game.rom.u16(o + 1));
+  await game.writeText(game.rom.near(o + 3));
+  if (sfx) game.sfx(sfx);
+  await game.waitButton();
+}
+
 async function itemPc(game: CrystalGame) {
   const save = game.save;
   for (;;) {
