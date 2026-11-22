@@ -28,14 +28,14 @@ function walker(h: Harness) {
   return {
     log, flush, where,
     /** Teleports onto a map square, running its callbacks and scene script as an arrival would. */
-    async warp(map: string, x: number, y: number, facing: Facing = "down") {
+    async warp(map: string, x: number, y: number, facing: Facing = "down", options: { stay?: boolean } = {}) {
       const [group, number] = MAP[map];
       await g.runScript(async () => {
         await g.warpTo(group, number, x, y, facing);
         await g.afterArrival(true);
       });
       await h.settle();
-      expect(g.map.name).toBe(map);
+      if (options.stay !== false) expect(g.map.name).toBe(map);
     },
     /** Walks to a square on the current map. */
     async to(x: number, y: number) {
@@ -358,6 +358,69 @@ describe.skipIf(!run || !hasEngine || !hasLegacy)("Crystal Legacy's story", () =
       await w.talk("SUDOWOODO");
       w.flush("Sudowoodo");
       expect(w.ev("EVENT_FOUGHT_SUDOWOODO")).toBe(true);
+
+      // ------------------------------------------------------------ Ecruteak City: the Burned Tower
+      w.strengthen(50);
+      await w.warp("ECRUTEAK_CITY", 23, 28, "down");
+      w.flush("Ecruteak City");
+      await w.warp("ECRUTEAK_GYM", 4, 15, "up", { stay: false });
+      w.flush("Ecruteak Gym closed");
+      expect(g.map.name).toBe("ECRUTEAK_CITY");
+      await w.warp("BURNED_TOWER_1F", 9, 14, "up");
+      w.flush("Eusine");
+      await w.to(11, 9);
+      w.flush("Rival in the Burned Tower");
+      expect(w.ev("EVENT_RIVAL_BURNED_TOWER")).toBe(true);
+      // The floor gives way into the basement, where the beasts wake.
+      await h.settle();
+      if (g.map.name === "BURNED_TOWER_1F") await w.to(10, 9);
+      expect(g.map.name).toBe("BURNED_TOWER_B1F");
+      await w.to(10, 6);
+      w.flush("The legendary beasts");
+      expect(w.ev("EVENT_RELEASED_THE_BEASTS")).toBe(true);
+      expect(g.save.roamers?.length).toBe(2);
+
+      // ------------------------------------------------------------ Morty and Surf
+      await w.warp("ECRUTEAK_GYM", 5, 2, "up");
+      await w.talk("MORTY");
+      w.flush("Morty");
+      expect(g.hasFlag("ENGINE_FOGBADGE")).toBe(true);
+      await w.warp("DANCE_THEATRE", 5, 12, "up");
+      await w.beatTrainers();
+      await w.talk("GENTLEMAN");
+      w.flush("Kimono Girls and HM03");
+      expect(w.has("HM_SURF")).toBe(true);
+
+      // ------------------------------------------------------------ Olivine and Cianwood
+      w.strengthen(55);
+      await w.warp("OLIVINE_CITY", 13, 10, "down");
+      await w.to(13, 12);
+      w.flush("Rival in Olivine");
+      await w.warp("OLIVINE_LIGHTHOUSE_6F", 9, 14, "up");
+      await w.talk("JASMINE");
+      w.flush("Jasmine and Amphy");
+      expect(w.ev("EVENT_JASMINE_EXPLAINED_AMPHYS_SICKNESS")).toBe(true);
+      await w.warp("CIANWOOD_PHARMACY", 2, 6, "up");
+      await w.talk("PHARMACIST");
+      w.flush("SecretPotion");
+      expect(w.has("SECRETPOTION")).toBe(true);
+      // Chuck waits behind the gym's boulders; Strength's puzzle is skipped here.
+      await w.warp("CIANWOOD_GYM", 4, 2, "up");
+      await w.talk("CHUCK");
+      w.flush("Chuck");
+      expect(g.hasFlag("ENGINE_STORMBADGE")).toBe(true);
+      await w.warp("CIANWOOD_CITY", 10, 45, "down");
+      await w.talk("POKEFAN_F");
+      w.flush("Chuck's wife");
+      expect(w.has("HM_FLY")).toBe(true);
+      await w.warp("OLIVINE_LIGHTHOUSE_6F", 9, 14, "up");
+      await w.talk("JASMINE");
+      w.flush("Amphy's medicine");
+      expect(w.ev("EVENT_JASMINE_RETURNED_TO_GYM")).toBe(true);
+      await w.warp("OLIVINE_GYM", 4, 13, "up");
+      await w.talk("JASMINE");
+      w.flush("Jasmine");
+      expect(g.hasFlag("ENGINE_MINERALBADGE")).toBe(true);
     } finally {
       w.flush("end");
       if (process.env.CRYSTAL_WALKTHROUGH_LOG) writeFileSync(process.env.CRYSTAL_WALKTHROUGH_LOG, w.log.join("\n"));
