@@ -438,8 +438,8 @@ async function blaineReward(g: Game) {
   updateGates(g);
 }
 
-// The Super Nerds' text entries have no label of their own in the cartridge's symbols.
-const NERD_ENTRIES = ["@75145", "@7517a", "@751c0", "@75206", "@7524c", "@75292", "@752d8"];
+// The disassembly labels the Super Nerds' entries CinnabarGymSuperNerd1 and so on; the generator publishes them with a Text suffix.
+const NERD_ENTRIES = [1, 2, 3, 4, 5, 6, 7].map(n => `CinnabarGymSuperNerd${n}Text`);
 
 defineMap("CinnabarGym", {
   onEnter(g) {

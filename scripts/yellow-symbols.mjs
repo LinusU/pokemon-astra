@@ -31,8 +31,12 @@ for (const line of read("pokeyellow.sym").split("\n")) {
   if (bank === 0 && addr >= 0x4000) continue;
   sym.set(m[3], bank === 0 ? addr : bank * 0x4000 + (addr - 0x4000));
 }
-// Labels pret has since renamed, by their current and earlier names.
-for (const [current, earlier] of [["CGBBasePalettes", "GBCBasePalettes"]])
+// Labels pret has since renamed, by their current and earlier names. The Cinnabar Gym
+// quiz trainers' entries lack the Text suffix every other text entry has.
+for (const [current, earlier] of [
+  ["CGBBasePalettes", "GBCBasePalettes"],
+  ...[1, 2, 3, 4, 5, 6, 7].map(n => [`CinnabarGymSuperNerd${n}Text`, `CinnabarGymSuperNerd${n}`]),
+])
   if (!sym.has(current) && sym.has(earlier)) sym.set(current, sym.get(earlier));
 const offset = name => {
   const v = sym.get(name);
