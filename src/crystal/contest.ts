@@ -69,11 +69,27 @@ export async function contestBattle(game: CrystalGame, species: number, level: n
     game.closeText();
   }
   await game.afterBattle();
-  if (!contest.balls && SYM.BugCatchingContestOverScript !== undefined) await runScript(game, SYM.BugCatchingContestOverScript);
+  if (!contest.balls) {
+    const out = contestScript(game, "outOfBalls");
+    if (out !== undefined) await runScript(game, out);
+  }
+}
+
+/**
+ * The contest's engine scripts (engine/events/bug_contest/contest.asm), which
+ * follow BugCatchingContestOverScript: the time-up one, the out-of-balls one
+ * after it, and the walk back to the gate they both end with.
+ */
+function contestScript(game: CrystalGame, which: "timeUp" | "outOfBalls" | "returnToGate") {
+  const over = SYM.BugCatchingContestOverScript;
+  if (over === undefined) return undefined;
+  const r = game.rom, gate = r.at(r.bankOf(over), r.u16(over + 9));
+  return which === "timeUp" ? over : which === "returnToGate" ? gate : over + 11;
 }
 
 export async function contestTimeUp(game: CrystalGame) {
-  if (SYM.BugCatchingContestOverScript !== undefined) await runScript(game, SYM.BugCatchingContestOverScript);
+  const at = contestScript(game, "timeUp");
+  if (at !== undefined) await runScript(game, at);
   else await game.say("The contest is over!");
 }
 
