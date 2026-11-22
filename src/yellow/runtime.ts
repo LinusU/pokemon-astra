@@ -1053,7 +1053,10 @@ export class YellowGame implements Game {
       this.save.safari.steps = Math.max(0, this.save.safari.steps - 1);
       if (!this.save.safari.steps) return safariGameOver(this);
     }
-    if (this.save.repel) this.save.repel = Math.max(0, this.save.repel - 1);
+    if (this.save.repel && !--this.save.repel) {
+      const { repelWoreOff } = await import("./items");
+      await repelWoreOff(this);
+    }
     if (this.save.steps % 256 === 0) this.save.party = this.save.party.map(m => ({ ...m, happiness: Math.min(255, m.happiness + 1) }));
     const map = this.header;
     const warp = this.world.warpAt(map, this.me.x, this.me.y);

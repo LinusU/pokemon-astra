@@ -40,6 +40,11 @@ const MEDICINE_KEYS: Record<string, keyof typeof MEDICINE> = {
 };
 const HEALS: Record<string, number> = { MAX_POTION: 9999, FRESH_WATER: 50, SODA_POP: 60, LEMONADE: 80 };
 
+/** A step ran the Repel out. */
+export async function repelWoreOff(game: YellowGame) {
+  await game.text("RepelWoreOffText");
+}
+
 export function itemDescription(game: YellowGame, id: number): string | undefined {
   const n = name(id);
   if (MEDICINE_KEYS[n]) return MEDICINE[MEDICINE_KEYS[n]].description;
