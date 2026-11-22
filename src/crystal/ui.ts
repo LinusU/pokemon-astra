@@ -30,6 +30,8 @@ export function paginate(text: string, limit = 110): string[] {
       .replace(/(POKé|[A-Z])-[\n\v](?=[A-Z])/g, "$1")
       .replace(/([A-Z])-[\n\v](?=[a-z])/g, "$1-")
       .replace(/([a-zé])-[\n\v](?=[a-z])/g, "$1")
+      // A dash that starts a line belongs to the word before it ("worry--take it").
+      .replace(/[\n\v](?=--)/g, "")
       .replace(/[\n\v]/g, " ").replace(/\s+/g, " ").trim();
     if (!t) continue;
     if (t.length <= limit) { out.push(t); continue; }

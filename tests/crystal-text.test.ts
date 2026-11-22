@@ -7,5 +7,6 @@ describe("Crystal dialogue pages", () => {
     expect(paginate("here, but GOLDEN-\nROD has the best")).toEqual(["here, but GOLDENROD has the best"]);
     expect(paginate("We discovered some-\nthing")).toEqual(["We discovered something"]);
     expect(paginate("actually a BUG-\vtype move?")).toEqual(["actually a BUG-type move?"]);
+    expect(paginate("Don't worry\n--take it!")).toEqual(["Don't worry--take it!"]);
   });
 });
