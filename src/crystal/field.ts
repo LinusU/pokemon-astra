@@ -180,8 +180,14 @@ export async function useFly(game: CrystalGame) {
   const { spawnPoint } = await import("./services");
   const spot = spawnPoint(game, points[pick].spawn);
   game.sfx("SFX_FLY");
-  game.save.state = game.save.state === "surf" ? "normal" : game.save.state;
+  // FlyFunction: loadvar VAR_MOVEMENT, PLAYER_NORMAL.
+  game.setPlayerState(C("PLAYER_NORMAL"));
   await game.warpTo(spot.group, spot.number, spot.x, spot.y, "down");
+}
+/** Whether Dig and the Escape Rope have a way out (CheckCanDig): in a cave, with a door to go back to. */
+export function canDig(game: CrystalGame) {
+  const env = game.map.environment;
+  return (env === C("CAVE") || env === C("DUNGEON")) && !!game.save.vars.digGroup;
 }
 /** Dig, Teleport and the Escape Rope lead back outside or to the last Pokémon Center. */
 export async function useEscape(game: CrystalGame, kind: "dig" | "teleport" | "rope") {
@@ -190,12 +196,15 @@ export async function useEscape(game: CrystalGame, kind: "dig" | "teleport" | "r
   if (kind === "teleport") {
     if (env !== C("TOWN") && env !== C("ROUTE")) return game.say("You can't TELEPORT here.");
     const spot = blackoutSpot(game);
+    game.setPlayerState(C("PLAYER_NORMAL"));
     return game.warpTo(spot.group, spot.number, spot.x, spot.y, "down");
   }
-  if (env !== C("CAVE") && env !== C("DUNGEON")) return game.say("You can't use that here.");
-  const dig = game.save.vars.digGroup ? { group: game.save.vars.digGroup, number: game.save.vars.digNumber, x: game.save.vars.digX, y: game.save.vars.digY } : undefined;
-  const spot = dig ?? blackoutSpot(game);
-  await game.warpTo(spot.group, spot.number, spot.x, spot.y, "down");
+  if (!canDig(game)) return game.say("You can't use that here.");
+  const v = game.save.vars;
+  game.setPlayerState(C("PLAYER_NORMAL"));
+  await game.warpTo(v.digGroup, v.digNumber, v.digX, v.digY, "down");
+  // Out at the cave's mouth or the door, and a step down off it.
+  await game.walkOffEntrance();
 }
 
 export async function useFieldMove(game: CrystalGame, slot: number, move: FieldMove) {

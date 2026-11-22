@@ -783,16 +783,18 @@ export class CrystalGame {
     this.persist();
     const map = this.map;
     await this.afterArrival(true);
-    // Doors, staircases and cave mouths walk the player down off them: an ordinary step, with its events.
     if (this.map !== map || this.mode === "battle") return;
+    await this.walkOffEntrance();
+  }
+  /** Doors, staircases and cave mouths walk the player down off them: an ordinary step, with its events. */
+  async walkOffEntrance() {
     const here = this.world.collision(this.map, this.me.x, this.me.y);
-    if ([C("COLL_DOOR"), CONST.COLL_DOOR_79, C("COLL_STAIRCASE"), C("COLL_CAVE")].includes(here)) {
-      this.me.facing = "down";
-      const { x, y } = this.front();
-      if (this.blocked(x, y) || !this.passable(x, y, this.me)) return;
-      await this.walk(0, ["down"]);
-      await this.arrived();
-    }
+    if (![C("COLL_DOOR"), CONST.COLL_DOOR_79, C("COLL_STAIRCASE"), C("COLL_CAVE")].includes(here)) return;
+    this.me.facing = "down";
+    const { x, y } = this.front();
+    if (this.blocked(x, y) || !this.passable(x, y, this.me)) return;
+    await this.walk(0, ["down"]);
+    await this.arrived();
   }
   async blackoutWarp() {
     const { blackoutSpot } = await import("./services");

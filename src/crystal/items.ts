@@ -62,10 +62,9 @@ export async function useItem(game: CrystalGame, item: number): Promise<ItemResu
     await fish(game, is(item, "OLD_ROD") ? 0 : is(item, "GOOD_ROD") ? 1 : 2);
   };
   if (is(item, "ESCAPE_ROPE")) return async () => {
-    const env = game.map.environment;
-    if (env !== C("CAVE") && env !== C("DUNGEON")) return game.say("You can't use that here.");
+    const { canDig, useEscape } = await import("./field");
+    if (!canDig(game)) return game.say("You can't use that here.");
     game.takeItem(item);
-    const { useEscape } = await import("./field");
     await useEscape(game, "rope");
   };
   if (is(item, "ITEMFINDER")) return () => itemfinder(game);
