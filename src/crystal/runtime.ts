@@ -813,7 +813,8 @@ export class CrystalGame {
       if (on) this.events.delete(o.event.flag);
       else this.events.add(o.event.flag);
     }
-    if (on && !o.visible) Object.assign(o, { x: o.event.x, y: o.event.y, from: undefined, free: undefined, invisible: false });
+    // An object appears where its map object says: `moveobject` and `writeobjectxy` change that square.
+    if (on && !o.visible) Object.assign(o, { x: o.home.x, y: o.home.y, from: undefined, free: undefined, invisible: false });
     o.visible = on;
   }
   moveObject(slot: number, x: number, y: number) {
