@@ -15,7 +15,8 @@ async function engine(game: CrystalGame, label: string, wait = true) {
 }
 
 export function giveParkBalls(game: CrystalGame) {
-  game.save.contest = { balls: CONST.BUG_CONTEST_BALLS ?? 20, minutes: CONST.BUG_CONTEST_MINUTES ?? 20, started: game.save.seconds };
+  // The Pokémon left with the officer stay with the contest.
+  game.save.contest = { ...game.save.contest, balls: CONST.BUG_CONTEST_BALLS ?? 20, minutes: CONST.BUG_CONTEST_MINUTES ?? 20, started: game.save.seconds };
   game.poke(RAM.wParkBallsRemaining, game.save.contest.balls);
   game.setFlag(C("ENGINE_BUG_CONTEST_TIMER"), true);
 }
