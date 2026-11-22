@@ -87,6 +87,8 @@ export class CrystalGame {
   lastTalked = 0;
   lastText?: number;
   lastItem = 0;
+  /** wCurPartySpecies: the Pokémon a party menu last chose, for PlayCurMonCry. */
+  curPartySpecies = 0;
   textOpen = false;
   menuHeader?: number;
   battleSetup?: BattleSetup;

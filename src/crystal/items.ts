@@ -76,6 +76,26 @@ export async function useItem(game: CrystalGame, item: number): Promise<ItemResu
   return "OAK: This isn't the time to use that!";
 }
 
+/** HappinessChanges (data/events/happiness_changes.asm): the change below 100 happiness, below 200, and above. */
+const HAPPINESS_CRYSTAL = {
+  levelUp: [5, 3, 2], vitamin: [5, 3, 2], bitterPowder: [-5, -5, -10], energyRoot: [-10, -10, -15], revivalHerb: [-15, -15, -20],
+  olderCut: [[1, 1, 1], [3, 3, 1], [5, 5, 2]], youngerCut: [[1, 1, 1], [3, 3, 1], [10, 10, 4]], grooming: [3, 3, 1],
+};
+/** Crystal Legacy raises the level-up and haircut changes. */
+const HAPPINESS_LEGACY: typeof HAPPINESS_CRYSTAL = {
+  ...HAPPINESS_CRYSTAL, levelUp: [10, 6, 4],
+  olderCut: [[5, 5, 5], [5, 5, 5], [5, 5, 5]], youngerCut: [[5, 5, 5], [7, 7, 7], [10, 10, 9]],
+};
+export function happinessChanges(game: CrystalGame) {
+  return game.legacy ? HAPPINESS_LEGACY : HAPPINESS_CRYSTAL;
+}
+/** ChangeHappiness: a happiness action on a Pokémon (Eggs aren't changed). */
+export function changeHappiness(m: { happiness: number; egg?: boolean }, change: readonly number[]) {
+  if (m.egg) return;
+  const delta = change[m.happiness < 100 ? 0 : m.happiness < 200 ? 1 : 2];
+  m.happiness = Math.max(0, Math.min(255, m.happiness + delta));
+}
+
 async function medicine(game: CrystalGame, item: number, heal: number, cure: number, revive: boolean): Promise<ItemResult> {
   const slot = await pickMon(game, "Use on which POKéMON?");
   if (slot === undefined) return;
@@ -85,6 +105,7 @@ async function medicine(game: CrystalGame, item: number, heal: number, cure: num
   if (revive) {
     if (m.hp) return "It won't have any effect.";
     m.hp = is(item, "REVIVE") ? Math.floor(max / 2) : max;
+    if (is(item, "REVIVAL_HERB")) changeHappiness(m, happinessChanges(game).revivalHerb);
     game.takeItem(item);
     return `${m.nickname || game.monName(m.species)} is revitalized!`;
   }
@@ -94,7 +115,8 @@ async function medicine(game: CrystalGame, item: number, heal: number, cure: num
   if (healsHp) m.hp = Math.min(max, m.hp + heal);
   if (curesStatus || is(item, "FULL_RESTORE")) m.status = 0;
   game.takeItem(item);
-  if (is(item, "ENERGYPOWDER", "ENERGY_ROOT", "HEAL_POWDER", "REVIVAL_HERB")) m.happiness = Math.max(0, m.happiness - 5);
+  if (is(item, "ENERGYPOWDER", "HEAL_POWDER")) changeHappiness(m, happinessChanges(game).bitterPowder);
+  if (is(item, "ENERGY_ROOT")) changeHappiness(m, happinessChanges(game).energyRoot);
   game.ctx.sound?.heal();
   return healsHp ? `${m.nickname || game.monName(m.species)}'s HP was restored.` : `${m.nickname || game.monName(m.species)} was cured.`;
 }
@@ -152,7 +174,8 @@ async function vitamin(game: CrystalGame, item: number): Promise<ItemResult> {
   const exp = [...m.stat_exp];
   if (exp[stat] >= 25600) return "It won't have any effect.";
   exp[stat] = Math.min(65535, exp[stat] + 2560);
-  const next = { ...m, stat_exp: exp, happiness: Math.min(255, m.happiness + 2) };
+  const next = { ...m, stat_exp: exp };
+  changeHappiness(next, happinessChanges(game).vitamin);
   next.stats = game.engine.statsFor(next);
   next.hp = m.hp + (next.stats[0] - m.stats[0]);
   game.save.party[slot] = next;

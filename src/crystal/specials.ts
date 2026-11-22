@@ -276,18 +276,26 @@ async function returnShuckie(g: CrystalGame) {
   g.scriptVar = C("SHUCKIE_RETURNED");
 }
 
-async function haircut(g: CrystalGame, table: number[]) {
+/**
+ * HaircutOrGrooming: a Pokémon chosen, a happiness change drawn from the
+ * brother's (or Daisy's) chances, and the result the script branches on
+ * (happiness_probabilities.asm: Crystal Legacy uses other result values).
+ */
+async function haircut(g: CrystalGame, who: "older" | "younger" | "daisy") {
   const slot = await selectMon(g);
   if (slot === undefined) { g.scriptVar = 0; return; }
   const mon = g.save.party[slot];
   if (mon.egg) { g.scriptVar = 1; return; }
+  g.curPartySpecies = mon.species;
   g.strings.set(RAM.wStringBuffer3, nickname(g, mon));
-  const roll = Math.random() * 100;
-  let i = 0, acc = 0;
-  for (; i < table.length - 1; i += 2) if (roll < (acc += table[i])) break;
-  const boost = table[i + 1] ?? 1;
-  mon.happiness = Math.min(255, mon.happiness + boost);
-  g.scriptVar = i / 2 + 2;
+  const { changeHappiness, happinessChanges } = await import("./items");
+  const changes = happinessChanges(g);
+  const chances = who === "older" ? [30, 50, 20] : who === "younger" ? [60, 30, 10] : [100];
+  const results = who === "daisy" ? [2] : g.legacy ? (who === "older" ? [10, 12, 15] : [10, 11, 12]) : [2, 3, 4];
+  let roll = Math.random() * 100, i = 0;
+  while (i < chances.length - 1 && (roll -= chances[i]) >= 0) i++;
+  changeHappiness(mon, who === "daisy" ? changes.grooming : (who === "older" ? changes.olderCut : changes.youngerCut)[i]);
+  g.scriptVar = results[i];
 }
 
 /** Magikarp's length, from its DVs and ID, as the fishing guru measures it. */
@@ -522,7 +530,7 @@ const SPECIAL: Record<string, Routine> = {
   HealMachineAnim: healMachineAnim,
   // sound
   WaitSFX: async g => { await g.delay(20); }, PlayMapMusic: g => g.playMusic(undefined), RestartMapMusic: g => g.playMusic(undefined),
-  FadeOutMusic: g => g.playMusic(0), PlaySlowCry: g => g.cry(g.scriptVar), PlayCurMonCry: g => g.cry(g.scriptVar),
+  FadeOutMusic: g => g.playMusic(0), PlaySlowCry: g => g.cry(g.scriptVar), PlayCurMonCry: g => g.cry(g.curPartySpecies || g.scriptVar),
   // services
   HealParty: healParty, PokemonCenterPC: async g => { const { pokemonCenterPC } = await import("./services"); await pokemonCenterPC(g); },
   PlayersHousePC: playersHousePC, BankOfMom: bankOfMom, MoveDeletion: moveDeletion, MoveTutor: moveTutor, NameRater: nameRater,
@@ -531,9 +539,9 @@ const SPECIAL: Record<string, Routine> = {
   DayCareLady: async g => { const d = await import("./daycare"); await d.dayCareLady(g); },
   DayCareManOutside: async g => { const d = await import("./daycare"); await d.dayCareManOutside(g); },
   DayCareMon1: g => dayCareMon(g, 0), DayCareMon2: g => dayCareMon(g, 1),
-  OlderHaircutBrother: g => haircut(g, [30, 1, 50, 5, 20, 10]),
-  YoungerHaircutBrother: g => haircut(g, [60, 1, 30, 5, 10, 10]),
-  DaisysGrooming: g => haircut(g, [100, 3]),
+  OlderHaircutBrother: g => haircut(g, "older"),
+  YoungerHaircutBrother: g => haircut(g, "younger"),
+  DaisysGrooming: g => haircut(g, "daisy"),
   BillsGrandfather: async g => {
     const slot = await selectMon(g);
     if (slot === undefined) { g.scriptVar = 0; return; }

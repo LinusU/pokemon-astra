@@ -67,6 +67,9 @@ export async function gainLevel(game: CrystalGame, slot: number) {
   const mon = game.save.party[slot];
   const rate = game.engine.growthRate(mon.species), level = mon.level + 1;
   const next = { ...mon, level, exp: Math.max(mon.exp, expForLevel(rate, level)) };
+  // LevelUpHappinessMod.
+  const { changeHappiness, happinessChanges } = await import("./items");
+  changeHappiness(next, happinessChanges(game).levelUp);
   next.stats = game.engine.statsFor(next);
   next.hp = mon.hp + (next.stats[0] - mon.stats[0]);
   game.save.party[slot] = next;
