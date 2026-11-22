@@ -46,6 +46,20 @@ describe.skipIf(!hasEngine || !CARTRIDGES.length).each(CARTRIDGES)("Crystal's sy
     expect(g.save.party.some(m => m.species === MON.PIDGEY)).toBe(true);
   }, 60000);
 
+  it("rates a Day-Care pair as the cartridge does", async () => {
+    const h = await headlessGame(adventure);
+    const g = h.game;
+    const { compatibility } = await import("../src/crystal/daycare");
+    const ditto = { ...g.makeMon(MON.DITTO, 20), dvs: [0x12, 0x34] };
+    const pidgey = { ...g.makeMon(MON.PIDGEY, 20), dvs: [0x56, 0x78] };
+    // Different species, same trainer: 128 - 77.
+    expect(compatibility(g, ditto, pidgey)).toBe(51);
+    expect(compatibility(g, ditto, { ...pidgey, ot_id: pidgey.ot_id ^ 1 })).toBe(128);
+    // Matching Defense and low Special DVs: they won't breed.
+    expect(compatibility(g, ditto, { ...pidgey, dvs: [0x52, 0x7c] })).toBe(0xff);
+    expect(compatibility(g, ditto, { ...ditto })).toBe(0);
+  }, 60000);
+
   it("hatches an Egg from the Day-Care", async () => {
     const h = await headlessGame(adventure);
     const g = h.game;

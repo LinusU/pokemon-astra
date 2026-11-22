@@ -31,13 +31,19 @@ export function dayCareStep(game: CrystalGame) {
     d.mons[i] = grow(game, mon, 1);
   }
   if (!d.mons[0] || !d.mons[1] || d.egg) return;
-  d.steps = (d.steps + 1) % 256;
-  if (d.steps) return;
-  const chance = compatibility(game, d.mons[0], d.mons[1]);
-  if (chance && Math.random() * 256 < chance) {
-    d.egg = true;
-    game.setFlag(C("ENGINE_DAY_CARE_MAN_HAS_EGG"), true);
-  }
+  // DAYCAREMAN_MONS_COMPATIBLE: a pair that can breed (not 0, nor $ff for matching DVs).
+  const compatible = compatibility(game, d.mons[0], d.mons[1]);
+  if (!compatible || compatible === 0xff) return;
+  // wStepsToEgg: 150–255 steps after the pair is left, then a random byte each time.
+  if (!d.steps) d.steps = 150 + Math.floor(Math.random() * 106);
+  if (--d.steps > 0) return;
+  d.steps = Math.floor(Math.random() * 256) || 256;
+  const chance = compatible >= 230 ? 80 : compatible >= 170 ? 41 : compatible >= 110 ? 30 : 10;
+  if (Math.random() * 256 >= chance) return;
+  d.egg = true;
+  // The Egg is made now, from the parents left (DayCare_InitBreeding fills wEggMon).
+  d.eggMon = makeEgg(game, d.mons[0], d.mons[1]);
+  game.setFlag(C("ENGINE_DAY_CARE_MAN_HAS_EGG"), true);
 }
 
 function grow(game: CrystalGame, mon: CrystalMon, exp: number): CrystalMon {
@@ -59,7 +65,11 @@ function grow(game: CrystalGame, mon: CrystalMon, exp: number): CrystalMon {
   return next;
 }
 
-/** Crystal's breeding chance per 256 steps: 0 when the pair can't breed. */
+/**
+ * CheckBreedmonCompatibility: 0 when the pair can't breed, $ff when their
+ * Defense and low Special DVs match (they won't breed either), otherwise 254
+ * for one species or 128 for two, less 77 when they share a trainer.
+ */
 export function compatibility(game: CrystalGame, a: Pokemon, b: Pokemon) {
   const e = game.engine, ditto = CONST.DITTO ?? 132;
   const ga = e.breedingData(a.species).groups, gb = e.breedingData(b.species).groups;
@@ -70,9 +80,9 @@ export function compatibility(game: CrystalGame, a: Pokemon, b: Pokemon) {
     const sa = gender(a, e), sb = gender(b, e);
     if (sa === "—" || sb === "—" || sa === sb) return 0;
   }
-  const sameSpecies = a.species === b.species, sameOt = a.ot_id === b.ot_id;
-  if (sameSpecies) return sameOt ? 0x7f : 0xfe;
-  return sameOt ? 0x0a : 0x7f;
+  if ((a.dvs[0] & 15) === (b.dvs[0] & 15) && (a.dvs[1] & 7) === (b.dvs[1] & 7)) return 0xff;
+  const base = a.species === b.species ? 254 : 128;
+  return a.ot_id === b.ot_id ? base - 77 : base;
 }
 
 async function choosePartyMon(game: CrystalGame) {
@@ -92,7 +102,9 @@ async function deposit(game: CrystalGame, slot: 0 | 1) {
   game.strings.set(RAM.wStringBuffer1, mon.nickname || game.monName(mon.species));
   game.save.party.splice(pick, 1);
   d.mons[slot] = { ...mon, vars: undefined } as CrystalMon;
-  d.mons[slot]!.caught = [mon.level, 0];
+  // The level it was left at, for the price; the Pokémon's own caught data stays as it is.
+  (d.levels ??= [])[slot] = mon.level;
+  d.steps = 0;
   await say(game, 5);
   game.cry(mon.species);
   await say(game, 9);
@@ -100,7 +112,7 @@ async function deposit(game: CrystalGame, slot: 0 | 1) {
 
 async function withdraw(game: CrystalGame, slot: 0 | 1) {
   const d = game.save.daycare, mon = d.mons[slot]!;
-  const deposited = mon.caught?.[0] ?? mon.level;
+  const deposited = d.levels?.[slot] ?? mon.caught?.[0] ?? mon.level;
   const grown = Math.max(0, mon.level - deposited);
   const price = 100 + 100 * grown;
   game.strings.set(RAM.wStringBuffer1, mon.nickname || game.monName(mon.species));
@@ -121,7 +133,7 @@ async function withdraw(game: CrystalGame, slot: 0 | 1) {
   if (game.save.party.length >= 6) return say(game, 16);
   game.save.money -= price;
   d.mons[slot] = undefined;
-  mon.caught = [0, 0];
+  if (d.levels) d.levels[slot] = undefined;
   game.save.party.push(mon);
   await say(game, 13);
   game.cry(mon.species);
@@ -163,6 +175,7 @@ export async function dayCareManOutside(game: CrystalGame) {
   if (!(await game.yesNo())) {
     await text("IllKeepItThanksText");
     d.egg = false;
+    delete d.eggMon;
     game.setFlag(C("ENGINE_DAY_CARE_MAN_HAS_EGG"), false);
     game.scriptVar = 1;
     return;
@@ -172,9 +185,10 @@ export async function dayCareManOutside(game: CrystalGame) {
     game.scriptVar = 1;
     return;
   }
-  const egg = makeEgg(game, d.mons[0]!, d.mons[1]!);
+  const egg = d.eggMon ?? (d.mons[0] && d.mons[1] ? makeEgg(game, d.mons[0], d.mons[1]) : undefined);
   if (egg) game.save.party.push(egg);
   d.egg = false;
+  delete d.eggMon;
   game.setFlag(C("ENGINE_DAY_CARE_MAN_HAS_EGG"), false);
   await text("ReceivedEggText");
   game.sfx("SFX_GET_EGG");

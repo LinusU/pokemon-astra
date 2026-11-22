@@ -44,7 +44,8 @@ export interface CrystalSave {
   caught: number[];
   unownDex: number[];
   unlockedUnowns: number;
-  daycare: { mons: (CrystalMon | undefined)[]; egg: boolean; steps: number; lady?: boolean };
+  /** The Day-Care: its two Pokémon, the levels they were left at, the steps to the next Egg roll and a waiting Egg. */
+  daycare: { mons: (CrystalMon | undefined)[]; egg: boolean; steps: number; lady?: boolean; levels?: (number | undefined)[]; eggMon?: CrystalMon };
   phone: number[];
   specialCall: number;
   repel: number;

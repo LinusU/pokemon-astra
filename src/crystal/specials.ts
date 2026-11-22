@@ -466,9 +466,9 @@ async function dayCareMon(g: CrystalGame, index: 0 | 1) {
   if (!other) return;
   g.strings.set(RAM.wStringBuffer1, nickname(g, other));
   const { compatibility } = await import("./daycare");
-  // CheckBreedmonCompatibility's chance picks the line ("brimming with energy" is for $ff, which it never returns).
+  // CheckBreedmonCompatibility's value picks the line ($ff, matching DVs: "brimming with energy").
   const c: number = compatibility(g, mons[0]!, mons[1]!);
-  const label = c === 0 ? "BreedNoInterestText" : c >= 230 ? "BreedAppearsToCareForText" : c >= 70 ? "BreedFriendlyText" : "BreedShowsInterestText";
+  const label = c === 0xff ? "BreedBrimmingWithEnergyText" : c === 0 ? "BreedNoInterestText" : c >= 230 ? "BreedAppearsToCareForText" : c >= 70 ? "BreedFriendlyText" : "BreedShowsInterestText";
   await engineText(g, `DayCareMonCompatibilityText.${label}`, "", false);
 }
 
