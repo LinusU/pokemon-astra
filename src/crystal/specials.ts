@@ -251,23 +251,29 @@ function giveOddEgg(g: CrystalGame) {
   if (!g.addMon(mon)) g.scriptVar = 0;
 }
 
+/** Kirk's Shuckie, lent by the Cianwood Pokémaniac (engine/events/shuckle.asm). */
+const MANIA_OT_ID = 518;
 function giveShuckle(g: CrystalGame) {
   if (g.save.party.length >= 6) { g.scriptVar = 0; return; }
   const mon = g.makeMon(MON.SHUCKLE, 15);
-  Object.assign(mon, { item: ITEM.BERRY, nickname: "SHUCKIE", ot_name: "KIRK", ot_id: 518 });
+  Object.assign(mon, { item: ITEM.BERRY, nickname: "SHUCKIE", ot_name: "MANIA", ot_id: MANIA_OT_ID });
   g.save.party.push(mon);
   g.register(MON.SHUCKLE, true);
   g.setEvent(C("EVENT_GOT_SHUCKIE"), true);
+  // He won't take Shuckie back the same day.
+  g.setFlag(C("ENGINE_GOT_SHUCKIE_TODAY"), true);
   g.scriptVar = 1;
 }
+/** ReturnShuckie: SHUCKIE_WRONG_MON, _REFUSED, _RETURNED, _HAPPY (it stays) or _FAINTED (the only one standing). */
 async function returnShuckie(g: CrystalGame) {
   const slot = await selectMon(g);
-  if (slot === undefined) { g.scriptVar = 2; return; }
+  if (slot === undefined) { g.scriptVar = C("SHUCKIE_REFUSED"); return; }
   const m = g.save.party[slot];
-  if (m.species !== MON.SHUCKLE || m.ot_id !== 518) { g.scriptVar = 0; return; }
-  if (!g.save.party.some((x, i) => i !== slot && !x.egg && x.hp > 0)) { g.scriptVar = 3; return; }
+  if (m.egg || m.species !== MON.SHUCKLE || m.ot_id !== MANIA_OT_ID || !["MANIA", "KIRK"].includes(m.ot_name)) { g.scriptVar = C("SHUCKIE_WRONG_MON"); return; }
+  if (!g.save.party.some((x, i) => i !== slot && !x.egg && x.hp > 0)) { g.scriptVar = C("SHUCKIE_FAINTED"); return; }
+  if (m.happiness >= 150) { g.scriptVar = C("SHUCKIE_HAPPY"); return; }
   g.save.party.splice(slot, 1);
-  g.scriptVar = m.happiness >= 150 ? 4 : 1;
+  g.scriptVar = C("SHUCKIE_RETURNED");
 }
 
 async function haircut(g: CrystalGame, table: number[]) {
