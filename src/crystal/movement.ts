@@ -17,7 +17,8 @@ function reader(game: CrystalGame, at: number) {
 
 export async function applyMovement(game: CrystalGame, slot: number, at: number) {
   const m = game.mover(slot);
-  if (!m) return;
+  // GetMovementData finds no object for a person who isn't out on the map: nothing moves, and the script goes on.
+  if (!m || (slot > 0 && !game.obj(slot)!.visible)) return;
   const next = reader(game, at);
   const start = at;
   for (let guard = 0; guard < 400; guard++) {

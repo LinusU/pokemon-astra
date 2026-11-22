@@ -620,6 +620,8 @@ export class CrystalGame {
       // HandleNewMap → ResetMapBufferEventFlags: EVENT_TEMPORARY_UNTIL_MAP_RELOAD_1–8 clear.
       for (let i = 1; i <= 8; i++) { const e = CONST[`EVENT_TEMPORARY_UNTIL_MAP_RELOAD_${i}`]; if (e !== undefined) this.events.delete(e); }
     }
+    // Walks still under way on the map being left finish at once.
+    for (const o of this.objects) if (o.onPath) { const cb = o.onPath; o.onPath = undefined; cb(); }
     this.objects = header.objects.map((event, i) => ({
       slot: i + 1, event, x: event.x, y: event.y, facing: this.defaultFacing(event), walkFrame: 0,
       visible: this.objectVisible(event), home: { x: event.x, y: event.y }, wait: 1 + Math.random() * 2,
@@ -1199,7 +1201,11 @@ export class CrystalGame {
       else void this.runScript(() => this.arrived());
     }
     for (const o of this.objects) {
-      if (!o.visible) continue;
+      if (!o.visible) {
+        // A person hidden mid-walk has arrived, so a script waiting on the walk goes on.
+        if (o.onPath) { const cb = o.onPath; Object.assign(o, { onPath: undefined, from: undefined }); cb(); }
+        continue;
+      }
       if (advance(o)) {
         const cb = o.onPath;
         o.onPath = undefined;
