@@ -136,6 +136,24 @@ describe.skipIf(!hasEngine || !CARTRIDGES.length).each(CARTRIDGES)("Crystal's sy
     expect(g.ev("EVENT_BOULDER_IN_ICE_PATH_1A")).toBe(false);
   }, 60000);
 
+  it("is spotted by a swimmer across the water", async () => {
+    const h = await headlessGame(adventure);
+    const g = h.game;
+    g.save.party = [g.makeMon(MON.TYRANITAR, 70)];
+    const [group, number] = MAP.ROUTE_41;
+    await g.warpTo(group, number, 0, 0);
+    const { readTrainerHeader } = await import("../src/crystal/script");
+    const { STEP } = await import("../src/crystal/world");
+    const swimmer = g.objects.find(o => o.visible && o.event.type === C("OBJECTTYPE_TRAINER") && o.event.sight >= 3)!;
+    const [dx, dy] = STEP[swimmer.facing];
+    g.save.state = "surf";
+    g.place(0, swimmer.x + dx * swimmer.event.sight, swimmer.y + dy * swimmer.event.sight, "up");
+    await h.step(swimmer.facing === "left" || swimmer.facing === "right" ? "up" : "left");
+    g.place(0, swimmer.x + dx * swimmer.event.sight, swimmer.y + dy * swimmer.event.sight);
+    for (let i = 0; i < 5; i++) await h.press("none");
+    expect(g.event(readTrainerHeader(g, swimmer.event.script).flag)).toBe(true);
+  }, 60000);
+
   it("buys from a Mart", async () => {
     const h = await headlessGame(adventure);
     const g = h.game;

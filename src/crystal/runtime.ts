@@ -969,6 +969,7 @@ export class CrystalGame {
     }
     this.updateMovers(dt);
     if (this.mode === "world") this.control(dt);
+    if (this.mode === "world") this.lookForTrainers();
     if (this.mode !== "battle") this.renderer?.render(now);
     if (this.mode === "world" && this.save.steps - this.lastSave >= 16) this.persist();
   }
@@ -1268,24 +1269,38 @@ export class CrystalGame {
   }
 
   // ------------------------------------------------------------ trainers and encounters
-  /** A trainer who can see the player walks up and challenges them. */
-  private async trainerSighting() {
+  /**
+   * _CheckTrainerBattle: an unbeaten trainer in the player's row or column,
+   * facing them and within sight range. Water, walls and people in between
+   * don't hide the player, as on the cartridge.
+   */
+  private watchingTrainer() {
     for (const o of this.objects) {
       if (!o.visible || o.event.type !== C("OBJECTTYPE_TRAINER") || !o.event.sight || o.event.script < 0x4000) continue;
+      const [dx, dy] = STEP[o.facing];
+      const ax = this.me.x - o.x, ay = this.me.y - o.y;
+      const d = dx ? ax * dx : ay * dy;
+      if ((dx ? ay : ax) !== 0 || d < 1 || d > o.event.sight) continue;
       const header = readTrainerHeader(this, o.event.script);
       if (this.event(header.flag)) continue;
-      const [dx, dy] = STEP[o.facing];
-      let seen = false;
-      for (let d = 1; d <= o.event.sight; d++) {
-        const x = o.x + dx * d, y = o.y + dy * d;
-        if (x === this.me.x && y === this.me.y) { seen = true; break; }
-        if (this.blocked(x, y, o) || !this.world.isLand(this.collisionAt(x, y))) break;
-      }
-      if (!seen) continue;
-      await this.trainerBattle(o, header, true);
-      return true;
+      return { o, header };
     }
-    return false;
+    return undefined;
+  }
+  /** A trainer who can see the player walks up and challenges them. */
+  private async trainerSighting() {
+    const seen = this.watchingTrainer();
+    if (!seen) return false;
+    await this.trainerBattle(seen.o, seen.header, true);
+    return true;
+  }
+  private lastLook = 0;
+  /** The cartridge looks every frame, so a trainer who turns to face a player standing still sees them too. */
+  private lookForTrainers() {
+    if (this.clock - this.lastLook < 0.1) return;
+    this.lastLook = this.clock;
+    if (this.me.from || this.me.moving || !this.watchingTrainer()) return;
+    void this.runScript(async () => { await this.trainerSighting(); });
   }
   async trainerBattle(o: Obj, header: TrainerHeader, seen: boolean) {
     this.lastTalked = o.slot;
