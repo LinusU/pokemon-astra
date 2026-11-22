@@ -2,7 +2,7 @@
  * The Pokégear phone (engine/phone): contacts' own call scripts from the
  * cartridge, special calls scripts queue, and the occasional random call.
  */
-import { C, CONST, SYM } from "./symbols";
+import { C, CONST, SYM, TEXT } from "./symbols";
 import type { CrystalGame } from "./runtime";
 import { runScript } from "./script";
 
@@ -61,17 +61,22 @@ export async function randomCall(game: CrystalGame) {
 export async function call(game: CrystalGame, index: number) {
   const c = contact(game, index);
   game.save.vars.caller = c.index;
-  if (game.map.phoneService) {
-    await game.say("You're out of the service area.");
-    return;
-  }
-  if (c.group === game.map.group && c.number === game.map.number) {
-    await game.say("That number is right here!");
-    return;
-  }
+  // MakePhoneCallFromPokegear: no service here, or the contact can't take a
+  // call at this time of day, is out of the area; a contact on this map
+  // should just be talked to.
+  const answers = c.calleeTime & (1 << game.timeOfDay());
+  if (game.map.phoneService || !answers) return phoneText(game, "_PhoneOutOfAreaText", "That number is out of the area.");
+  if (c.group === game.map.group && c.number === game.map.number) return phoneText(game, "_PhoneJustTalkToThemText", "Just go talk to that person!");
   game.sfx("SFX_CALL");
   await runScript(game, c.callee);
   await hangUp(game);
+}
+
+async function phoneText(game: CrystalGame, label: string, fallback: string) {
+  const at = TEXT[label];
+  if (at !== undefined) await game.engineText(at);
+  else await game.say(fallback);
+  game.closeText();
 }
 
 async function hangUp(game: CrystalGame) {
