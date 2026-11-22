@@ -87,13 +87,14 @@ export async function moveReminder(game: CrystalGame, egg: boolean) {
     if (wait) await game.waitButton();
   };
   await say(egg ? "Text_EggMoveReminderIntro" : "Text_MoveReminderIntro", "Shall I teach your POKéMON a move it has forgotten?", false);
-  if (!(await game.yesNo())) return say("Text_MoveReminderCancel", "Come back anytime.");
+  // The closing texts don't wait: the map script's own waitbutton does.
+  if (!(await game.yesNo())) return say("Text_MoveReminderCancel", "Come back anytime.", false);
   await say("Text_MoveReminderWhichMon", "Which POKéMON?");
   const { choosePartyMon } = await import("./menu");
   const slot = await choosePartyMon(game, "Which POKéMON?");
-  if (slot === undefined) return say("Text_MoveReminderCancel", "Come back anytime.");
+  if (slot === undefined) return say("Text_MoveReminderCancel", "Come back anytime.", false);
   const mon = game.save.party[slot];
-  if (mon.egg) return say("Text_MoveReminderEgg", "An EGG can't learn moves.");
+  if (mon.egg) return say("Text_MoveReminderEgg", "An EGG can't learn moves.", false);
   let moves: number[];
   if (egg) {
     const first = game.engine.firstStage(mon.species);
@@ -102,13 +103,13 @@ export async function moveReminder(game: CrystalGame, egg: boolean) {
     moves = list;
   } else moves = game.engine.evolutionData(mon.species).learnset.filter(e => e.level <= mon.level).map(e => e.move);
   moves = [...new Set(moves)].filter(m => m && !mon.moves.includes(m));
-  if (!moves.length) return say("Text_MoveReminderNoMoves", "There's no move it can remember.");
+  if (!moves.length) return say("Text_MoveReminderNoMoves", "There's no move it can remember.", false);
   await say("Text_MoveReminderWhichMove", "Which move should it remember?");
   const pick = await game.choose(moves.map(m => game.engine.move(m).name.toUpperCase()), { title: "Which move?", cancel: true });
   if (pick !== undefined) {
     game.strings.set(RAM.wStringBuffer2, game.engine.move(moves[pick]).name.toUpperCase());
     await learnMove(game, slot, moves[pick]);
   }
-  await say("Text_MoveReminderCancel", "Come back anytime.");
+  await say("Text_MoveReminderCancel", "Come back anytime.", false);
   void C;
 }
