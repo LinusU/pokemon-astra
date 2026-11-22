@@ -16,3 +16,17 @@ export async function offerAnotherRepel(game: YellowGame, item: string) {
   await game.text("RepelWoreOffUseAnotherText", { wait: false });
   return game.yesNo();
 }
+
+/**
+ * Once the player has been healed (EVENT_FIRST_POKECENTER), Legacy's nurses
+ * only say "Shall we heal your POKéMON?" and heal. Resolves whether they did.
+ */
+export async function quickNurse(game: YellowGame) {
+  if (!game.legacy || !game.ev("EVENT_FIRST_POKECENTER")) return false;
+  await game.text("ShallWeHealYourPokemonFastText", { wait: false });
+  return true;
+}
+
+export function nurseHealed(game: YellowGame) {
+  if (game.legacy) game.set("EVENT_FIRST_POKECENTER");
+}

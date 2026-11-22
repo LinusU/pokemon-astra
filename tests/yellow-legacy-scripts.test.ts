@@ -124,8 +124,8 @@ describe("Yellow Legacy's services", () => {
   });
 });
 
-describe("Yellow Legacy's Repel", () => {
-  /** The runtime pieces Repels use. */
+describe("Yellow Legacy's Repel and nurses", () => {
+  /** The runtime pieces Repels and nurses use. */
   function game(legacy: boolean, o: { answers?: boolean[]; items?: Record<string, number>; events?: string[] } = {}) {
     const g = fakeGame({ answers: o.answers, events: o.events });
     const player = { facing: "up" };
@@ -154,5 +154,20 @@ describe("Yellow Legacy's Repel", () => {
     yellow.save.repelItem = id;
     await repelWoreOff(yellow as never);
     expect(yellow.log).toEqual(["RepelWoreOffText"]);
+  });
+  it("shorten the nurse's dialogue on Legacy after the first heal", async () => {
+    const { openService } = await import("../src/yellow/services");
+    const first = game(true, { answers: [true] });
+    await openService(first as never, "nurse");
+    expect(first.log).toEqual(["PokemonCenterWelcomeText", "ShallWeHealYourPokemonText", "yes", "NeedYourPokemonText", "heal", "PokemonFightingFitText", "PokemonCenterFarewellText"]);
+    expect(first.ev("EVENT_FIRST_POKECENTER")).toBe(true);
+    const later = game(true, { events: ["EVENT_FIRST_POKECENTER"] });
+    await openService(later as never, "nurse");
+    expect(later.log).toEqual(["ShallWeHealYourPokemonFastText", "heal", "PokemonCenterFarewellText"]);
+    expect(later.player.facing).toBe("down");
+    const yellow = game(false, { answers: [true] });
+    await openService(yellow as never, "nurse");
+    expect(yellow.log).toContain("PokemonFightingFitText");
+    expect(yellow.player.facing).toBe("up");
   });
 });

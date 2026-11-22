@@ -3,7 +3,7 @@ import { mountStoragePc, type PcState } from "../ui/storage-pc";
 import { sortCollection } from "../game/collection";
 import { escapeHtml, panel } from "../ui/shell";
 import { ITEM, MAP, MON, SYM } from "./symbols";
-import { oldRodMons } from "./legacy";
+import { nurseHealed, oldRodMons, quickNurse } from "./legacy";
 import type { YellowGame } from "./runtime";
 import { titleItem } from "./menu";
 import { STEP } from "./world";
@@ -105,20 +105,26 @@ const KEY = ["TOWN_MAP", "BICYCLE", "SURFBOARD", "POKEDEX", "OLD_AMBER", "DOME_F
 const isKeyItem = (id: number) => KEY.some(k => ITEM[k] === id);
 
 async function nurse(game: YellowGame) {
-  await game.text("PokemonCenterWelcomeText");
-  await game.text("ShallWeHealYourPokemonText", { wait: false });
-  if (!(await game.yesNo())) {
-    await game.text("PokemonCenterFarewellText");
-    return;
+  const quick = await quickNurse(game);
+  if (!quick) {
+    await game.text("PokemonCenterWelcomeText");
+    await game.text("ShallWeHealYourPokemonText", { wait: false });
+    if (!(await game.yesNo())) return farewell(game);
+    await game.text("NeedYourPokemonText", { wait: false });
   }
-  await game.text("NeedYourPokemonText", { wait: false });
   game.save.blackout = game.save.lastMap;
   game.heal();
   game.ctx.sound.heal();
   await game.delay(90);
-  await game.text("PokemonFightingFitText");
-  await game.text("PokemonCenterFarewellText");
+  if (!quick) await game.text("PokemonFightingFitText");
+  nurseHealed(game);
+  await farewell(game);
   game.persist();
+}
+async function farewell(game: YellowGame) {
+  await game.text("PokemonCenterFarewellText");
+  // Yellow Legacy turns the player to face the door.
+  if (game.legacy) game.face("player", "down");
 }
 
 function storage(game: YellowGame) {
