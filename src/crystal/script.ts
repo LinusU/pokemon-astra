@@ -283,7 +283,8 @@ const COMMANDS: Record<string, Command> = {
   // ---------------------------------------------------------------- sound
   playmusic: (s, g) => { g.playMusic(s.word()); },
   encountermusic: (_, g) => { g.encounterMusic(); },
-  musicfadeout: (s, g) => { s.word(); s.byte(); g.playMusic(0); },
+  // The song fades out and the given one starts (MUSIC_NONE: silence).
+  musicfadeout: (s, g) => { const music = s.word(); s.byte(); g.playMusic(music); },
   playmapmusic: (_, g) => { g.playMusic(undefined); },
   dontrestartmapmusic: (_, g) => { g.keepMusic = true; },
   cry: (s, g) => { const species = s.word() & 0xff; g.cry(species || g.scriptVar); },
