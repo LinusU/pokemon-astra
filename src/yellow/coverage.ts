@@ -1,5 +1,5 @@
 /** Which parts of the cartridge's map logic still need a hand-written port. */
-import { MAP_TEXT, SYM } from "./symbols";
+import { MAP, MAP_TEXT, SYM } from "./symbols";
 import { asmPlan } from "./asm";
 import type { YellowRom } from "./rom";
 import { MAP_SCRIPTS, SHARED_TEXTS } from "./script";
@@ -27,8 +27,10 @@ export interface Gap { map: string; kind: "script" | "text" | "hidden"; label: s
 
 export function coverageGaps(rom: YellowRom): Gap[] {
   const gaps: Gap[] = [];
+  // Unused map slots are never entered (Yellow Legacy points some of them at other banks' data).
+  const unused = new Set(Object.entries(MAP).flatMap(([name, id]) => name.startsWith("UNUSED_MAP_") ? [id] : []));
   for (let id = 0; id < rom.mapCount; id++) {
-    const map = rom.map(id);
+    const map = !unused.has(id) && rom.map(id);
     if (!map) continue;
     const script = MAP_SCRIPTS[map.label];
     if (!genericMapScript(rom, map.bank, map.script) && !script?.onStep && !script?.onEnter && !script?.generic)
