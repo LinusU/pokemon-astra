@@ -1155,7 +1155,7 @@ export class CrystalGame {
   /** Strength: walking into a boulder pushes it a square. */
   private pushBoulder(o: Obj) {
     if (!this.hasFlag("ENGINE_STRENGTH_ACTIVE")) return false;
-    if (o.event.sprite !== CONST.SPRITE_BOULDER && o.event.movement !== CONST.SPRITEMOVEDATA_STRENGTH_BOULDER) return false;
+    if (o.event.movement !== CONST.SPRITEMOVEDATA_STRENGTH_BOULDER) return false;
     void import("./field").then(f => f.pushBoulder(this, o));
     return true;
   }

@@ -223,8 +223,9 @@ export async function useFieldMove(game: CrystalGame, slot: number, move: FieldM
 function isRock(game: CrystalGame, o: Obj) {
   return o.event.sprite === CONST.SPRITE_ROCK;
 }
+/** Strength moves only boulders with the boulder movement: those imbedded in Ice Path's ice stay put. */
 function isBoulder(game: CrystalGame, o: Obj) {
-  return o.event.sprite === CONST.SPRITE_BOULDER || o.event.movement === CONST.SPRITEMOVEDATA_STRENGTH_BOULDER;
+  return o.event.movement === CONST.SPRITEMOVEDATA_STRENGTH_BOULDER;
 }
 
 /** Inspecting a tree, the water, a whirlpool, a waterfall, a boulder or a rock offers the field move. */
