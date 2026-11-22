@@ -433,6 +433,25 @@ async function pokeSeer(g: CrystalGame) {
   await say(advice.find(([most]) => grown <= most)![1], "");
 }
 
+/**
+ * PhotoStudio (engine/events/print_photo.asm). Astra has no Game Boy Printer,
+ * so the photo is the Pokémon's picture for a moment. The map script's
+ * waitbutton follows the last text.
+ */
+async function photoStudio(g: CrystalGame) {
+  const say = (label: string, fallback: string) => engineText(g, `PhotoStudio.${label}`, fallback, false);
+  await say("WhichMonPhotoText", "Which POKéMON should I photo?");
+  const slot = await selectMon(g);
+  if (slot === undefined) return say("NoPhotoText", "Oh, no picture? Come again, OK?");
+  const m = g.save.party[slot];
+  if (m.egg) return say("EggPhotoText", "An EGG? My talent is worth more…");
+  await say("HoldStillText", "OK! Hold still for a second.");
+  await g.pokepic(m.species);
+  await g.delay(60);
+  g.closePokepic();
+  await say("PrestoAllDoneText", "Presto! All done. Come again, OK?");
+}
+
 async function diploma(g: CrystalGame) {
   await g.say(`GAME FREAK presents ${g.save.name} with this diploma for completing the POKéDEX. Congratulations!`);
 }
@@ -492,7 +511,7 @@ const SPECIAL: Record<string, Routine> = {
     g.scriptVar = m.egg ? 0 : m.species;
     g.strings.set(RAM.wStringBuffer3, g.monName(m.species));
   },
-  PokeSeer: pokeSeer, Diploma: diploma, PrintDiploma: diploma, PhotoStudio: async g => { await g.say("Smile!"); },
+  PokeSeer: pokeSeer, Diploma: diploma, PrintDiploma: diploma, PhotoStudio: photoStudio,
   ProfOaksPCBoot: async g => { const { profOaksPCBoot } = await import("./services"); await profOaksPCBoot(g); },
   MagnetTrain: async g => { await g.delay(90); },
   CheckMagikarpLength: checkMagikarpLength, MagikarpHouseSign: magikarpHouseSign,
