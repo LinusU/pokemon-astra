@@ -165,9 +165,14 @@ export async function useFly(game: CrystalGame) {
   const env = game.map.environment;
   if (env !== C("TOWN") && env !== C("ROUTE")) return game.say("You can't FLY here.");
   const r = game.rom, points: { name: string; spawn: number }[] = [];
+  // FlyMap: the region the player is in; Kanto's towns once the Indigo Plateau is visited.
+  const kantoAt = C("KANTO_LANDMARK"), visited = (spawn: number) => game.flag(C("ENGINE_FLYPOINT_PLAYERS_HOUSE") + spawn);
+  const kanto = game.landmark() >= kantoAt && visited(C("SPAWN_INDIGO"));
   for (let i = 0, o = SYM.Flypoints; r.u8(o) !== 0xff && i < 32; i++, o += 2) {
-    if (!game.flag(C("ENGINE_FLYPOINT_PLAYERS_HOUSE") + i)) continue;
-    points.push({ name: r.landmarkName(r.u8(o)), spawn: r.u8(o + 1) });
+    const landmark = r.u8(o), spawn = r.u8(o + 1);
+    // HasVisitedSpawn checks the flag of the point's spawn, not of its place in the list.
+    if ((landmark >= kantoAt) !== kanto || !visited(spawn)) continue;
+    points.push({ name: r.landmarkName(landmark), spawn });
   }
   if (!points.length) return game.say("There's nowhere to FLY to yet.");
   const pick = await game.choose(points.map(p => p.name), { title: "Where to?", cancel: true });

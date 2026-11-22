@@ -103,6 +103,17 @@ describe.skipIf(!hasEngine || !CARTRIDGES.length).each(CARTRIDGES)("Crystal's sy
     expect(g.ev("EVENT_FOUGHT_SNORLAX")).toBe(true);
   }, 60000);
 
+  it("flies to the towns the player has visited", async () => {
+    const h = await headlessGame(adventure);
+    const g = h.game;
+    g.save.party = [g.makeMon(MON.PIDGEOT, 40)];
+    for (const map of ["NEW_BARK_TOWN", "VIOLET_CITY", "ROUTE_31"] as const) await g.warpTo(MAP[map][0], MAP[map][1], 10, 10);
+    const { useFly } = await import("../src/crystal/field");
+    h.ui.answers = [1];
+    await g.runScript(() => useFly(g));
+    expect(g.map.name).toBe("VIOLET_CITY");
+  }, 60000);
+
   it("buys from a Mart", async () => {
     const h = await headlessGame(adventure);
     const g = h.game;
