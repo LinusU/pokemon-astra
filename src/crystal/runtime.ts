@@ -750,10 +750,13 @@ export class CrystalGame {
     const coll = this.world.collision(this.map, this.me.x, this.me.y);
     this.sfx(this.world.isDoor(coll) ? "SFX_ENTER_DOOR" : coll === C("COLL_WARP_PANEL") ? "SFX_WARP_TO" : "SFX_EXIT_BUILDING");
     const outdoors = (m: CrystalMap) => m.environment === C("TOWN") || m.environment === C("ROUTE");
-    if (outdoors(this.map) && !outdoors(target)) {
-      // EnterMapWarp: a Pokémon Center becomes the blackout spot, and Dig and the Escape Rope lead back to this door.
-      if (target.tileset === CONST.TILESET_POKECENTER) this.save.spawn = { group: this.map.group, number: this.map.number };
-      Object.assign(this.save.vars, { digGroup: this.map.group, digNumber: this.map.number, digX: warp.x, digY: warp.y });
+    const indoors = (m: CrystalMap) => [C("INDOOR"), C("CAVE"), C("DUNGEON"), C("GATE")].includes(m.environment);
+    if (outdoors(this.map) && indoors(target)) {
+      // EnterMapWarp: Dig and the Escape Rope lead back to this door (not from Mt. Moon Square or the Tin Tower roof)…
+      if (!["MOUNT_MOON_SQUARE", "TIN_TOWER_ROOF"].includes(this.map.name))
+        Object.assign(this.save.vars, { digGroup: this.map.group, digNumber: this.map.number, digX: warp.x, digY: warp.y });
+      // …and a Pokémon Center becomes the blackout spot.
+      if (target.tileset === CONST.TILESET_POKECENTER || target.tileset === CONST.TILESET_POKECOM_CENTER) this.save.spawn = { group: this.map.group, number: this.map.number };
     }
     await this.fadeAround(async () => {
       this.place(0, arrival.x, arrival.y);
