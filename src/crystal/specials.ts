@@ -313,8 +313,10 @@ function magikarpHouseSign(g: CrystalGame) {
   g.strings.set(RAM.wStringBuffer3, `${Math.floor(inches / 12)}′${inches % 12}″`);
 }
 
+/** SnorlaxAwake: the radio is on the Poké Flute channel (it keeps playing after the Pokégear closes) and the player stands beside Snorlax. */
 function snorlaxAwake(g: CrystalGame) {
-  g.scriptVar = g.save.vars.pokeFlute && Math.abs(g.me.x - 33) + Math.abs(g.me.y - 8) <= 3 ? 1 : g.save.vars.pokeFlute ? 1 : 0;
+  const next = [[33, 8], [34, 10], [35, 10], [36, 8], [36, 9]].some(([x, y]) => g.me.x === x && g.me.y === y);
+  g.scriptVar = g.musicTrack() === CONST.MUSIC_POKE_FLUTE_CHANNEL && next ? 1 : 0;
 }
 
 function omanyteChamber(g: CrystalGame) {

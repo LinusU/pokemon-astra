@@ -32,7 +32,6 @@ export function openPokegear(game: CrystalGame, start: "clock" | "map" | "phone"
       ["clock", "Clock", true], ["map", "Map", game.hasFlag("ENGINE_MAP_CARD")], ["phone", "Phone", true], ["radio", "Radio", game.hasFlag("ENGINE_RADIO_CARD")],
     ];
     const close = () => {
-      game.save.vars.pokeFlute = 0;
       host.remove();
       resolve();
     };
@@ -56,7 +55,6 @@ export function openPokegear(game: CrystalGame, start: "clock" | "map" | "phone"
       for (const b of p.querySelectorAll<HTMLButtonElement>("[data-station]")) b.onclick = () => {
         const s = stations(game)[+b.dataset.station!];
         game.playMusic(s ? C(s.music) : undefined);
-        game.save.vars.pokeFlute = s?.flute ? 1 : 0;
         // Hearing Buena's show gives the password she asks for at the Radio Tower.
         if (s?.name === "BUENA'S PASSWORD" && game.timeOfDay() === 2) game.poke(RAM.wBuenasPassword, 0x80 | Math.floor(Math.random() * 11));
       };

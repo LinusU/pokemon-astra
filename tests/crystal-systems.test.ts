@@ -89,6 +89,20 @@ describe.skipIf(!hasEngine || !CARTRIDGES.length).each(CARTRIDGES)("Crystal's sy
     expect(g.map.name).toBe("CHERRYGROVE_POKECENTER_1F");
   }, 60000);
 
+  it("wakes Snorlax with the Poké Flute channel", async () => {
+    const h = await headlessGame(adventure);
+    const g = h.game;
+    g.save.party = [g.makeMon(MON.TYRANITAR, 70)];
+    const [group, number] = MAP.VERMILION_CITY;
+    await g.warpTo(group, number, 34, 10, "up");
+    const snorlax = g.objects.find(o => o.visible && o.event.sprite === C("SPRITE_BIG_SNORLAX"))!;
+    await g.runScript(() => g.talkTo(snorlax));
+    expect(g.ev("EVENT_FOUGHT_SNORLAX")).toBe(false);
+    g.playMusic(C("MUSIC_POKE_FLUTE_CHANNEL"));
+    await g.runScript(() => g.talkTo(snorlax));
+    expect(g.ev("EVENT_FOUGHT_SNORLAX")).toBe(true);
+  }, 60000);
+
   it("buys from a Mart", async () => {
     const h = await headlessGame(adventure);
     const g = h.game;
