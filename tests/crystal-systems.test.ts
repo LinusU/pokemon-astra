@@ -114,6 +114,28 @@ describe.skipIf(!hasEngine || !CARTRIDGES.length).each(CARTRIDGES)("Crystal's sy
     expect(g.map.name).toBe("VIOLET_CITY");
   }, 60000);
 
+  it("drops a Strength boulder through Ice Path's floor", async () => {
+    const h = await headlessGame(adventure);
+    const g = h.game;
+    g.save.party = [g.makeMon(MON.TYRANITAR, 70)];
+    g.setEvent(C("EVENT_BOULDER_IN_ICE_PATH_1A"), true);
+    const [group, number] = MAP.ICE_PATH_B1F;
+    await g.warpTo(group, number, 3, 15);
+    g.setFlag(C("ENGINE_STRENGTH_ACTIVE"), true);
+    // Boulder 1 belongs in the hole that is warp 3.
+    const hole = g.map.warps[2];
+    const boulder = g.objects.find(o => o.visible && o.event.movement === C("SPRITEMOVEDATA_STRENGTH_BOULDER"))!;
+    g.moveObject(boulder.slot, hole.x - 1, hole.y);
+    g.place(0, hole.x - 2, hole.y, "right");
+    const { pushBoulder } = await import("../src/crystal/field");
+    expect(pushBoulder(g, boulder)).toBe(true);
+    await h.settle();
+    expect(boulder.visible).toBe(false);
+    expect(g.ev("EVENT_BOULDER_IN_ICE_PATH_1")).toBe(true);
+    // The boulder turns up on the floor below.
+    expect(g.ev("EVENT_BOULDER_IN_ICE_PATH_1A")).toBe(false);
+  }, 60000);
+
   it("buys from a Mart", async () => {
     const h = await headlessGame(adventure);
     const g = h.game;

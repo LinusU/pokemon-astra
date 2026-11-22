@@ -280,13 +280,29 @@ export function pushBoulder(game: CrystalGame, o: Obj) {
   game.sfx("SFX_STRENGTH");
   void game.walk(o.slot, [game.me.facing]).then(async () => {
     o.home = { x: o.x, y: o.y };
-    // A boulder dropped down a hole is gone; its scripts usually notice.
-    if (game.world.isPit(game.collisionAt(o.x, o.y))) {
-      o.visible = false;
-      if (o.event.flag >= 0) game.setEvent(o.event.flag, true);
+    if (!game.world.isPit(game.collisionAt(o.x, o.y))) return;
+    // CmdQueue_StoneTable: a boulder that stops on a hole runs the map's script for that
+    // hole and boulder, which drops it to the floor below (Ice Path, Blackthorn Gym).
+    const script = stoneScript(game, o);
+    if (script !== undefined) {
+      const { runScript } = await import("./script");
+      await game.runScript(() => runScript(game, script));
+      return;
     }
+    o.visible = false;
+    if (o.event.flag >= 0) game.setEvent(o.event.flag, true);
   });
   return true;
+}
+/** The stone table entry (warp number, object, script) for a boulder sitting on a warp, from the map's command queue. */
+function stoneScript(game: CrystalGame, o: Obj) {
+  const queue = game.save.vars.cmdQueue, r = game.rom;
+  if (!queue || r.u8(queue) !== CONST.CMDQUEUE_STONETABLE) return undefined;
+  const bank = r.bankOf(queue), warp = game.map.warps.findIndex(w => w.x === o.x && w.y === o.y) + 1;
+  if (!warp) return undefined;
+  for (let e = r.at(bank, r.u16(queue + 1)), i = 0; r.u8(e) !== 0xff && i < 32; e += 4, i++)
+    if (r.u8(e) === warp && r.u8(e + 1) === o.event.id) return r.at(bank, r.u16(e + 2));
+  return undefined;
 }
 
 // ------------------------------------------------------------------ fishing

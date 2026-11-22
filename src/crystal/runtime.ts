@@ -626,6 +626,8 @@ export class CrystalGame {
       fn: this.rom.u8(SYM.SpriteMovementData + event.movement * 6), fixedFacing: false,
     }));
     this.calmEncounters();
+    // The map's CMDQUEUE callback writes its command queue again.
+    delete this.save.vars.cmdQueue;
     if (options.arrival !== "continue") {
       this.roam();
       // Strength lasts until the player leaves the map.
