@@ -616,7 +616,7 @@ export class CrystalGame {
     this.keepMusic = false;
     this.following = undefined;
     // Biking indoors and surfing onto land end when the map changes.
-    if (this.save.state === "bike" && (env === C("INDOOR") || env === C("DUNGEON") || env === C("ENVIRONMENT_5")) && !this.ev("EVENT_GOT_BICYCLE")) this.save.state = "normal";
+    if (this.save.state === "bike" && (env === C("INDOOR") || env === C("DUNGEON") || env === C("ENVIRONMENT_5"))) this.save.state = "normal";
     if (this.save.state === "surf" && options.arrival === "warp") this.save.state = "normal";
     this.ctx.sound?.refreshMusic();
   }
