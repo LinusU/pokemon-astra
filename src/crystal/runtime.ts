@@ -461,6 +461,10 @@ export class CrystalGame {
     if (name && /Nickname|Name/.test(name)) return this.strings.get(addr) ?? "";
     return "";
   }
+  /** A cartridge text as one string, its pages joined. */
+  textOf(at: number) {
+    return this.textString(this.rom.text(at)).pages.join("\f");
+  }
   /**
    * Shows a cartridge text. The box stays open on its last page until closed.
    * Resolves true when the text ended with `prompt`, already waiting for A.
