@@ -89,18 +89,14 @@ export async function tryWildEncounter(game: CrystalGame) {
     rate = table.rates[time];
     pick = pickSlot(table.slots[time], GRASS_SLOTS);
   }
-  // A Cleanse Tag on the lead lowers the encounter rate.
-  if (game.save.party[0]?.item === CONST.CLEANSE_TAG) rate = Math.floor(rate * 2 / 3);
+  rate = encounterRateEffects(game, rate);
   if (!pick || Math.random() * 256 >= rate) return;
   // A roaming legendary on this route turns up one encounter in four, and flees.
   const roamer = game.save.roamers?.find(r => r.group === game.map.group && r.number === game.map.number);
-  if (roamer && Math.random() < 0.25) {
-    pick = { species: roamer.species, level: roamer.level };
-    game.save.vars.battleType = C("BATTLETYPE_ROAMING");
-  }
-  // A Repel keeps away Pokémon weaker than the first Pokémon in the party.
-  const lead = game.save.party.find(m => !m.egg);
-  if (game.save.repel && lead && pick.level < lead.level) return;
+  const roaming = !!roamer && Math.random() < 0.25;
+  if (roaming) pick = { species: roamer!.species, level: roamer!.level };
+  if (repelled(game, pick.level)) return;
+  if (roaming) game.save.vars.battleType = C("BATTLETYPE_ROAMING");
   game.battleSetup = { kind: "wild", species: pick.species, level: pick.level };
   const result = await startBattle(game);
   // A roamer that was caught or knocked out stops roaming.
@@ -109,12 +105,29 @@ export async function tryWildEncounter(game: CrystalGame) {
   await afterBattle(game);
 }
 
+/** ApplyMusicEffectOnEncounterRate and ApplyCleanseTagEffectOnEncounterRate. */
+function encounterRateEffects(game: CrystalGame, rate: number) {
+  const music = game.musicTrack();
+  if (music === CONST.MUSIC_POKEMON_MARCH || music === CONST.MUSIC_RUINS_OF_ALPH_RADIO) rate = Math.min(255, rate * 2);
+  else if (music === CONST.MUSIC_POKEMON_LULLABY) rate >>= 1;
+  if (game.save.party.some(m => !m.egg && m.item === CONST.CLEANSE_TAG)) rate >>= 1;
+  return rate;
+}
+/** CheckRepelEffect: a Repel keeps away Pokémon weaker than the first Pokémon that can fight. */
+function repelled(game: CrystalGame, level: number) {
+  const lead = game.save.party.find(m => !m.egg && m.hp > 0);
+  return !!game.save.repel && !!lead && level < lead.level;
+}
+
 async function contestEncounter(game: CrystalGame) {
   const mons = game.rom.contestMons();
   let roll = Math.random() * 100;
   const pick = mons.find(m => (roll -= m.chance) < 0) ?? mons[0];
-  if (Math.random() * 256 >= 25) return;
+  // TryWildEncounter_BugContest: 40% in the park's tallest grass, 20% elsewhere.
+  const tall = game.world.collision(game.map, game.me.x, game.me.y) === CONST.COLL_LONG_GRASS;
+  if (Math.random() * 256 >= encounterRateEffects(game, Math.floor((tall ? 40 : 20) * 256 / 100))) return;
   const level = pick.min + Math.floor(Math.random() * (pick.max - pick.min + 1));
+  if (repelled(game, level)) return;
   const { contestBattle } = await import("./contest");
   await contestBattle(game, pick.species, level);
 }
