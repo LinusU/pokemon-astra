@@ -297,6 +297,8 @@ async function applyResult(game: CrystalGame, battle: FinishedBattle, bag: Retur
 
 /** After `startbattle`: a blackout sends the player to their last Pokémon Center. */
 export async function afterBattle(game: CrystalGame) {
+  // reloadmapafterbattle enters the map again.
+  game.calmEncounters();
   if (game.save.vars.whitedOut) {
     delete game.save.vars.whitedOut;
     await blackout(game);

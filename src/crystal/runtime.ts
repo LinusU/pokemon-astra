@@ -606,7 +606,7 @@ export class CrystalGame {
       visible: this.objectVisible(event), home: { x: event.x, y: event.y }, wait: 1 + Math.random() * 2,
       fn: this.rom.u8(SYM.SpriteMovementData + event.movement * 6), fixedFacing: false,
     }));
-    this.encounterCooldown = options.arrival === "connection" ? 0 : 2;
+    this.calmEncounters();
     if (options.arrival !== "continue") {
       this.roam();
       // Strength lasts until the player leaves the map.
@@ -1252,6 +1252,8 @@ export class CrystalGame {
     const { trainerScript } = await import("./battle");
     await trainerScript(this, o, header, seen);
   }
+  /** SetUpFiveStepWildEncounterCooldown: entering a map (or coming back from a battle) keeps wild Pokémon away for four steps. */
+  calmEncounters() { this.encounterCooldown = 4; }
   private async encounter() {
     if (this.encounterCooldown > 0) {
       this.encounterCooldown--;
