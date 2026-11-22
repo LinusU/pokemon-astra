@@ -1,12 +1,16 @@
 /* The Crystal adventures' dialogue, choices and overlays, over the shared Yellow look. */
 @import "../yellow/yellow.css";
-.crystal-text { white-space: normal; }
-.crystal-yesno { z-index: 3; }
+/*
+ * Layers, from the bottom: Astra's menu screens (the Pack is at 12), the text
+ * box, Crystal's own overlays (party choosers, the Pokégear), then choices.
+ */
+.crystal-text { white-space: normal; z-index: 13; }
+.crystal-yesno { z-index: 16; }
 .crystal-choices {
   position: absolute;
   right: 4%;
   bottom: calc(4% + 82px);
-  z-index: 3;
+  z-index: 16;
   display: grid;
   grid-template-columns: 1fr;
   gap: 2px;
@@ -23,7 +27,7 @@
 .crystal-choices button { border: 0; background: none; color: inherit; font: inherit; text-align: left; padding: 0 0 0 1em; position: relative; }
 .crystal-choices button:focus, .crystal-choices button:focus-visible { outline: none; }
 .crystal-choices button:focus::before { content: "▶"; position: absolute; left: 0; }
-.crystal-overlay { position: absolute; inset: 0; z-index: 2; }
+.crystal-overlay { position: absolute; inset: 0; z-index: 15; }
 .crystal-pokepic { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); padding: 8px; border: 4px double #284c3b; background: #f7efd3; z-index: 2; }
 .crystal-pokepic img { width: 112px; height: 112px; image-rendering: pixelated; display: block; }
 .crystal-gear-tabs { display: flex; gap: 4px; margin-bottom: 6px; }
