@@ -108,7 +108,7 @@ export function openCrystalMenu(game: CrystalGame): Promise<(() => Promise<void>
     const main = () => {
       const save = game.save;
       const options: [string, string][] = [
-        ...(game.ev("EVENT_GOT_A_POKEMON_FROM_ELM") || game.hasFlag("ENGINE_POKEDEX") ? [["dex", "Pokédex"] as [string, string]] : []),
+        ...(game.hasFlag("ENGINE_POKEDEX") ? [["dex", "Pokédex"] as [string, string]] : []),
         ...(save.party.length ? [["party", "Pokémon"] as [string, string]] : []),
         ["bag", "Pack"],
         ...(game.hasFlag("ENGINE_POKEGEAR") ? [["gear", "Pokégear"] as [string, string]] : []),
