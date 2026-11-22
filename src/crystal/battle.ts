@@ -206,7 +206,7 @@ export async function startBattle(game: CrystalGame): Promise<number> {
   const canLose = battleType === C("BATTLETYPE_CANLOSE");
   const finished = await runBattle(game, start, trainerName, setup.kind === "trainer" ? setup.klass : undefined, battleType);
   if (!finished) return C("DRAW");
-  const result = await applyResult(game, finished, bag, canLose, battleType);
+  const result = await applyResult(game, finished, bag, canLose, battleType, setup.kind === "trainer");
   // A trainer's parting words.
   if (setup.kind === "trainer" && setup.winLoss) {
     const text = result === C("WIN") ? setup.winLoss[0] : canLose ? setup.winLoss[1] : 0;
@@ -279,7 +279,7 @@ function battleMusic(game: CrystalGame, klass: number | undefined, type: number)
 }
 
 /** Writes a finished battle back into the save. */
-async function applyResult(game: CrystalGame, battle: FinishedBattle, bag: ReturnType<typeof battleBag>, canLose: boolean, battleType: number) {
+async function applyResult(game: CrystalGame, battle: FinishedBattle, bag: ReturnType<typeof battleBag>, canLose: boolean, battleType: number, trainer: boolean) {
   const result = battle.result;
   // The party comes back in the order it went in; Eggs keep their places.
   const eggs = game.save.party.map((m, i) => (m.egg ? [i, m] as const : undefined)).filter(Boolean) as (readonly [number, CrystalMon])[];
@@ -292,7 +292,17 @@ async function applyResult(game: CrystalGame, battle: FinishedBattle, bag: Retur
     stored.set(mon, copy);
     game.addMon(copy);
   }
+  const before = game.save.money;
   game.save.money = result.money;
+  // A trainer's prize: with Mom saving, a quarter of it goes to her (MOM_SAVING_SOME_MONEY).
+  const prize = result.money - before;
+  if (battle.end === "win" && prize > 0 && trainer && game.flag(C("ENGINE_MOM_SAVING_MONEY")) && game.save.momMoney < 999999) {
+    const share = Math.floor(prize / 4);
+    game.save.money -= share;
+    game.save.momMoney = Math.min(999999, game.save.momMoney + share);
+    // The battle screen already said what was won; SentSomeToMomText's last line.
+    await game.say("Sent some to MOM!");
+  }
   for (const [id] of [...bag.balls, ...bag.items]) {
     const left = [...result.bag.balls, ...result.bag.items].find(([x]) => x === id)?.[1] ?? 0;
     if (left) game.save.items[id] = left;

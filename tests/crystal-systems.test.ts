@@ -208,6 +208,25 @@ describe.skipIf(!hasEngine || !CARTRIDGES.length).each(CARTRIDGES)("Crystal's sy
     expect(g.save.state).toBe("normal");
   }, 60000);
 
+  it("has Mom save some of a trainer's prize", async () => {
+    const h = await headlessGame(adventure);
+    const g = h.game;
+    g.setEvent(C("EVENT_GAVE_MYSTERY_EGG_TO_ELM"), true);
+    g.save.party = [g.makeMon(MON.TYRANITAR, 60)];
+    // Mom asks about saving the first time she's spoken to after the errand.
+    const [group, number] = MAP.PLAYERS_HOUSE_1F;
+    g.setScene(group, number, 1);
+    await g.warpTo(group, number, 7, 4);
+    const mom = g.objects.find(o => o.visible && o.event.sprite === C("SPRITE_MOM"))!;
+    await g.runScript(() => g.talkTo(mom));
+    expect(g.hasFlag("ENGINE_MOM_SAVING_MONEY")).toBe(true);
+    const money = g.save.money;
+    g.battleSetup = { kind: "trainer", klass: C("YOUNGSTER"), id: C("JOEY1") };
+    expect(await g.startBattle()).toBe(C("WIN"));
+    expect(g.save.momMoney).toBeGreaterThan(0);
+    expect(g.save.money - money).toBe(g.save.momMoney * 3);
+  }, 60000);
+
   it("buys from a Mart", async () => {
     const h = await headlessGame(adventure);
     const g = h.game;
