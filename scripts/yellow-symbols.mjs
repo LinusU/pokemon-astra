@@ -218,7 +218,7 @@ const wanted = [...sym.keys()].filter(name =>
     "BaseStats", "FlyWarpDataPtr", "NewGameWarps", "BikeRidingTilesets", "DungeonMaps1", "DungeonMaps2",
     "ForcedBikeOrSurfMaps", "SpecialTrainerMoves", "YellowLeaderMoves", "TilePairCollisionsLand", "TilePairCollisionsWater",
     "CeladonPrizeMenu", "PrizeDifferentMenuPtrs", "RedsHouse1FDefaultText", "WaterTilesets", "EvosMovesPointerTable",
-    "MonPartyData", "IndigoPlateauStatues", "FossilsList", "SuperRodData", "FishingSlots", "GoodRodMons",
+    "MonPartyData", "IndigoPlateauStatues", "FossilsList", "SuperRodData", "FishingSlots", "GoodRodMons", "OldRodMons", "PrizeMonLevelDictionary",
     "SpecialWarpData", "BadgeMaps", "BadgeMaps.end", "DungeonWarpList", "DungeonWarpData", "SafariZoneEncounterLevels",
     "Music_PalletTown", "CutTreeBlockSwaps", "SpecialTrainerMoves", "BookshelfTileIDs", "MapBadgeFlags", "PlayPikachuSoundClip", "PrintText", "Bankswitch", "CheckFightingMapTrainers", "DisplayEnemyTrainerTextAndStartBattle", "EndTrainerBattle", "EnableAutoTextBoxDrawing", "ExecuteCurMapScriptInTable", "CallFunctionInTable", "SuperRodFishingSlots", "TechnicalMachines", "FlowerTile1", "FlowerTile2", "FlowerTile3", "TalkToTrainer", "TextScriptEnd", "CGBBasePalettes", "WaterTilesets", "ShoreTiles", "TilePairCollisionsWater", "WarpTileListPointers",
   ].includes(name) || /^(Tileset|Overworld|RedsHouse|Mart|Forest|Dojo|Pokecenter|Gym|House|ForestGate|Museum|Underground|Gate|Ship|ShipPort|Cemetery|Interior|Cavern|Lobby|Mansion|Lab|Club|Facility|Plateau|BeachHouse)_(GFX|Block|Coll)$/.test(name) ||
