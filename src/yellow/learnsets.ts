@@ -9,7 +9,7 @@ import type { YellowRom } from "./rom";
 /** Yellow gives some trainers hand-picked moves (gym leaders' signature moves, for instance). */
 export function specialMoves(rom: YellowRom, klass: number, index: number) {
   const out: { mon: number; slot: number; move: number }[] = [];
-  for (let o = SYM.SpecialTrainerMoves; rom.u8(o) !== 0xff && o < SYM.SpecialTrainerMoves + 400;) {
+  for (let o = SYM.SpecialTrainerMoves; rom.u8(o) !== 0xff && o < SYM.SpecialTrainerMoves + 0x1000;) {
     const match = rom.u8(o) === klass && rom.u8(o + 1) === index;
     for (o += 2; rom.u8(o); o += 3)
       if (match) out.push({ mon: rom.u8(o) - 1, slot: rom.u8(o + 1) - 1, move: rom.u8(o + 2) });
