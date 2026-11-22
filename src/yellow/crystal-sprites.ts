@@ -40,12 +40,25 @@ const SPRITES: Record<string, string | Own> = {
   SPRITE_ODDISH: { palette: [[12, 26, 8], [8, 10, 24]] }, SPRITE_BULBASAUR: { palette: [[16, 28, 18], [6, 16, 10]] },
   SPRITE_JIGGLYPUFF: { palette: [[31, 22, 26], [24, 8, 14]] }, SPRITE_CLEFAIRY: { palette: [[31, 22, 26], [24, 8, 14]] },
   SPRITE_CHANSEY: { palette: [[31, 22, 26], [24, 8, 14]] }, SPRITE_SNORLAX: { palette: [[24, 26, 24], [6, 14, 18]] },
+  // Yellow Legacy's own sprites: its leaders and Kris are Crystal's, its Pokémon keep their sprite.
+  SPRITE_BROCK: "BROCK", SPRITE_MISTY: "MISTY", SPRITE_SURGE: "SURGE", SPRITE_ERIKA: "ERIKA", SPRITE_SABRINA: "SABRINA",
+  SPRITE_BLAINE: "BLAINE", SPRITE_JANINE: "JANINE", SPRITE_KRIS: "KRIS",
+  SPRITE_ARTICUNO: { palette: "BLUE" }, SPRITE_MOLTRES: { palette: "RED" }, SPRITE_ZAPDOS: { palette: [[31, 27, 4], [25, 9, 2]] },
+  SPRITE_MRMIME: { palette: "PINK" }, SPRITE_MEWTWO: { palette: [[26, 24, 28], [16, 10, 20]] }, SPRITE_MEW: { palette: [[31, 22, 26], [24, 8, 14]] },
+  SPRITE_KABUTO: { palette: "BROWN" }, SPRITE_LAPRAS: { palette: "BLUE" }, SPRITE_POLIWRATH: { palette: "BLUE" },
+  SPRITE_MEOWTH: { palette: [[31, 27, 16], [22, 16, 6]] }, SPRITE_CUBONE: { palette: "BROWN" }, SPRITE_PSYDUCK: { palette: [[31, 27, 4], [25, 9, 2]] },
+  SPRITE_NIDORANM: { palette: [[26, 18, 28], [16, 8, 20]] }, SPRITE_NIDORINO: { palette: [[26, 18, 28], [16, 8, 20]] },
+  SPRITE_NIDORANF: { palette: "BLUE" }, SPRITE_MACHOP: { palette: [[20, 24, 26], [10, 12, 18]] }, SPRITE_MACHOKE: { palette: [[20, 24, 26], [10, 12, 18]] },
+  SPRITE_PIDGEY: { palette: "BROWN" }, SPRITE_PIDGEOT: { palette: "BROWN" }, SPRITE_SPEAROW: { palette: "BROWN" },
+  SPRITE_FEAROW: { palette: "BROWN" }, SPRITE_SEEL2: { palette: [[28, 28, 31], [14, 16, 24]] }, SPRITE_KANGASKHAN: { palette: "BROWN" },
+  SPRITE_SLOWPOKE: { palette: "PINK" }, SPRITE_DODUO: { palette: "BROWN" }, SPRITE_VAPOREON: { palette: "BLUE" },
+  SPRITE_JOLTEON: { palette: [[31, 27, 4], [25, 9, 2]] }, SPRITE_FLAREON: { palette: "RED" }, SPRITE_WIGGLYTUFF: { palette: [[31, 22, 26], [24, 8, 14]] },
 };
 
 /** Trainers Crystal draws with their own sprite: the gym leaders and Elite Four it shares with Yellow. */
 const TRAINER_SPRITES: Record<string, string> = {
   BROCK: "BROCK", MISTY: "MISTY", LT_SURGE: "SURGE", ERIKA: "ERIKA", KOGA: "KOGA", SABRINA: "SABRINA",
-  BLAINE: "BLAINE", BRUNO: "BRUNO", LANCE: "LANCE",
+  BLAINE: "BLAINE", BRUNO: "BRUNO", LANCE: "LANCE", JANINE: "JANINE",
 };
 
 const FRAME_OFFSET: Record<Facing, number> = { down: 0, up: 64, left: 128, right: 128 };
