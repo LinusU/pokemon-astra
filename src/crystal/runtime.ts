@@ -254,7 +254,8 @@ export class CrystalGame {
       case "VAR_MAPNUMBER": return this.map.number;
       case "VAR_UNOWNCOUNT": return this.save.unownDex.length;
       case "VAR_ENVIRONMENT": return this.map.environment;
-      case "VAR_BOXSPACE": return 20 - (this.save.boxes[this.save.box]?.length ?? 0);
+      // Astra's PC keeps Bill's boxes as one collection: room in any box counts, up to a box's worth.
+      case "VAR_BOXSPACE": return Math.min(20, this.save.boxes.reduce((n, b) => n + 20 - b.length, 0));
       case "VAR_CONTESTMINUTES": return this.contestMinutes();
       case "VAR_XCOORD": return this.me.x;
       case "VAR_YCOORD": return this.me.y;
@@ -357,17 +358,16 @@ export class CrystalGame {
     return [...this.save.party, ...this.save.boxes.flat()].some(m => !m.egg && m.species === species && m.ot_id === this.save.playerId);
   }
   /**
-   * Adds a Pokémon to the party or the current box. With `anyBox`, a full
-   * current box passes it on to the next box with room: a Pokémon caught in
-   * battle is never lost (the cartridge refuses the throw instead).
+   * Adds a Pokémon to the party, or to Bill's PC when the party is full. The
+   * PC keeps its boxes as one collection, so any box with room takes it.
    */
-  addMon(mon: CrystalMon, options: { anyBox?: boolean } = {}) {
+  addMon(mon: CrystalMon) {
     if (this.save.party.length < 6) {
       this.save.party.push(mon);
       return "party";
     }
     const boxes = this.save.boxes;
-    for (let i = 0; i < (options.anyBox ? boxes.length : 1); i++) {
+    for (let i = 0; i < boxes.length; i++) {
       const box = boxes[(this.save.box + i) % boxes.length];
       if (box.length >= 20) continue;
       box.push(mon);

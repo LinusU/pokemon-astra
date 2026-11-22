@@ -285,7 +285,7 @@ async function applyResult(game: CrystalGame, battle: FinishedBattle, bag: Retur
   for (const mon of [...party.slice(6), ...battle.overflow]) {
     const copy = { ...mon, ot_name: mon.ot_name || game.save.name };
     stored.set(mon, copy);
-    game.addMon(copy, { anyBox: true });
+    game.addMon(copy);
   }
   game.save.money = result.money;
   for (const [id] of [...bag.balls, ...bag.items]) {
