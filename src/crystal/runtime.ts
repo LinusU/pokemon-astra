@@ -110,7 +110,12 @@ export class CrystalGame {
   fade = 0;
   private fadeTarget = 0;
   private fadeResolve?: () => void;
-  flash = false;
+  /** Flash's light in a dark cave (STATUSFLAGS_FLASH), kept with the save. */
+  get flash() { return !!this.save.vars.flash; }
+  set flash(on: boolean) {
+    if (on) this.save.vars.flash = 1;
+    else delete this.save.vars.flash;
+  }
   shake = 0;
   renderer?: { render(now: number): void };
   inBattle?: { trainer: boolean; klass?: number };
@@ -615,8 +620,9 @@ export class CrystalGame {
     this.save.map = [group, number];
     const env = header.environment;
     if (env === C("TOWN") || env === C("ROUTE")) this.save.lastOutdoor = [group, number];
+    // ResetFlashIfOutOfCave: Flash lasts until the player is out in a town or on a route.
+    if (env === C("TOWN") || env === C("ROUTE")) this.flash = false;
     if (options.arrival !== "continue") {
-      this.flash = false;
       // HandleNewMap → ResetMapBufferEventFlags: EVENT_TEMPORARY_UNTIL_MAP_RELOAD_1–8 clear.
       for (let i = 1; i <= 8; i++) { const e = CONST[`EVENT_TEMPORARY_UNTIL_MAP_RELOAD_${i}`]; if (e !== undefined) this.events.delete(e); }
     }
