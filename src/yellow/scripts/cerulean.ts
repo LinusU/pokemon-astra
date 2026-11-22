@@ -360,7 +360,7 @@ defineMap("Route24", {
       if (g.ev("EVENT_54F")) return g.text("Route24Text_515ee");
       await g.text("Route24Text_515de");
       if (!(await g.yesNo())) return g.text("Route24Text_515e9");
-      await g.giveMon("CHARMANDER", 10);
+      await g.giveMon("CHARMANDER", g.legacy ? 13 : 10); // Yellow Legacy: level 13
       await g.text("Route24Text_515e3", { wait: false });
       g.set("EVENT_54F");
     },

@@ -313,7 +313,7 @@ defineMap("SilphCo7F", {
       const T = "SilphCo7FSilphWorkerM1Text.";
       if (g.vars.gotLapras) return g.text(T + (g.ev("EVENT_BEAT_SILPH_CO_GIOVANNI") ? "SavedText" : "IsOurPresidentOkText"));
       await g.text(T + "HaveThisPokemonText");
-      if (!(await g.giveMon("LAPRAS", 15))) return;
+      if (!(await g.giveMon("LAPRAS", g.legacy ? 35 : 15))) return; // Yellow Legacy: level 35
       await g.text(T + "LaprasDescriptionText");
       g.vars.gotLapras = 1;
     },

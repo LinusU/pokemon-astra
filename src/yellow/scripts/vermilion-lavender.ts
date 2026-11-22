@@ -75,7 +75,7 @@ defineMap("VermilionCity", {
       if (!g.hasBadge(2)) return g.text("OfficerJennyText1");
       await g.text("OfficerJennyText2", { wait: false });
       if (!(await g.yesNo())) return g.text("OfficerJennyText4");
-      if (!(await g.giveMon("SQUIRTLE", 10))) return;
+      if (!(await g.giveMon("SQUIRTLE", g.legacy ? 15 : 10))) return; // Yellow Legacy: level 15
       await g.text("OfficerJennyText3");
       g.set("EVENT_GOT_SQUIRTLE_FROM_OFFICER_JENNY");
     },
@@ -590,7 +590,8 @@ defineMap("PokemonTower6F", {
   async onStep(g) {
     if (g.ev("EVENT_BEAT_GHOST_MAROWAK") || !at(g, 10, 16)) return;
     await g.text("TEXT_POKEMONTOWER6F_BEGONE");
-    const result = await g.wildBattle("MAROWAK", 30, { ghost: true });
+    // Yellow Legacy raises the ghost to level 35.
+    const result = await g.wildBattle("MAROWAK", g.legacy ? 35 : 30, { ghost: true });
     if (result === "lose") return;
     if (result === "win" || result === "caught") {
       g.set("EVENT_BEAT_GHOST_MAROWAK");

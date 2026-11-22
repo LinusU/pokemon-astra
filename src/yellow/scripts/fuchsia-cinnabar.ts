@@ -363,7 +363,7 @@ defineMap("CinnabarLabFossilRoom", {
       g.textVar("wStringBuffer", fossil.mon);
       await g.text(t + "FossilIsBackToLifeText");
       g.set("EVENT_LAB_HANDING_OVER_FOSSIL_MON");
-      if (await g.giveMon(fossil.mon, 30)) {
+      if (await g.giveMon(fossil.mon, g.legacy ? 40 : 30)) { // Yellow Legacy: level 40
         g.reset("EVENT_GAVE_FOSSIL_TO_LAB");
         g.reset("EVENT_LAB_STILL_REVIVING_FOSSIL");
         g.reset("EVENT_LAB_HANDING_OVER_FOSSIL_MON");
