@@ -1242,6 +1242,8 @@ export class CrystalGame {
   /** The player finished a step: warps, coord events, step counters and encounters. */
   async arrived(): Promise<void> {
     if (this.crossEdge()) return;
+    // CheckDailyResetTimer runs all the time on the cartridge: midnight passes while playing too.
+    this.dailyReset();
     this.save.x = this.me.x;
     this.save.y = this.me.y;
     this.save.facing = this.me.facing;
@@ -1337,6 +1339,7 @@ export class CrystalGame {
   }
   async interact() {
     await this.settle();
+    this.dailyReset();
     let { x, y } = this.front();
     let o = this.objects.find(o => o.visible && o.x === x && o.y === y);
     if (!o && this.world.isCounter(this.collisionAt(x, y))) {
