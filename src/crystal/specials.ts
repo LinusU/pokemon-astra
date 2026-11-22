@@ -434,6 +434,27 @@ async function pokeSeer(g: CrystalGame) {
 }
 
 /**
+ * DayCareMon1 and DayCareMon2 (engine/pokemon/breeding.asm): a Pokémon in
+ * the Day-Care's yard, its cry, and how it gets on with the other one.
+ */
+async function dayCareMon(g: CrystalGame, index: 0 | 1) {
+  const mons = g.save.daycare.mons, m = mons[index], other = mons[1 - index];
+  if (!m) return;
+  if (mons[0]) g.strings.set(RAM.wBreedMon1Nickname, nickname(g, mons[0]));
+  if (mons[1]) g.strings.set(RAM.wBreedMon2Nickname, nickname(g, mons[1]));
+  await engineText(g, index ? "LeftWithDayCareLadyText" : "LeftWithDayCareManText", `It's ${nickname(g, m)}.`, false);
+  g.cry(m.species);
+  await g.waitButton();
+  if (!other) return;
+  g.strings.set(RAM.wStringBuffer1, nickname(g, other));
+  const { compatibility } = await import("./daycare");
+  // CheckBreedmonCompatibility's chance picks the line ("brimming with energy" is for $ff, which it never returns).
+  const c: number = compatibility(g, mons[0]!, mons[1]!);
+  const label = c === 0 ? "BreedNoInterestText" : c >= 230 ? "BreedAppearsToCareForText" : c >= 70 ? "BreedFriendlyText" : "BreedShowsInterestText";
+  await engineText(g, `DayCareMonCompatibilityText.${label}`, "", false);
+}
+
+/**
  * PhotoStudio (engine/events/print_photo.asm). Astra has no Game Boy Printer,
  * so the photo is the Pokémon's picture for a moment. The map script's
  * waitbutton follows the last text.
@@ -499,8 +520,7 @@ const SPECIAL: Record<string, Routine> = {
   DayCareMan: async g => { const d = await import("./daycare"); await d.dayCareMan(g); },
   DayCareLady: async g => { const d = await import("./daycare"); await d.dayCareLady(g); },
   DayCareManOutside: async g => { const d = await import("./daycare"); await d.dayCareManOutside(g); },
-  DayCareMon1: async g => { const m = g.save.daycare.mons[0]; if (m) { g.cry(m.species); await g.say(`It's ${nickname(g, m)}.`); } },
-  DayCareMon2: async g => { const m = g.save.daycare.mons[1]; if (m) { g.cry(m.species); await g.say(`It's ${nickname(g, m)}.`); } },
+  DayCareMon1: g => dayCareMon(g, 0), DayCareMon2: g => dayCareMon(g, 1),
   OlderHaircutBrother: g => haircut(g, [30, 1, 50, 5, 20, 10]),
   YoungerHaircutBrother: g => haircut(g, [60, 1, 30, 5, 10, 10]),
   DaisysGrooming: g => haircut(g, [100, 3]),
