@@ -494,7 +494,7 @@ async function askClock(g: CrystalGame, label: string) {
   const now = g.now(), h = now.getHours();
   const time = `${h % 12 || 12}:${String(now.getMinutes()).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
   const at = TEXT[label];
-  await g.say(time + (at === undefined ? ", is that OK?" : g.textOf(at)), false);
+  await g.say(time + (at === undefined ? ", is that OK?" : g.rawTextOf(at)), false);
 }
 
 const SPECIAL: Record<string, Routine> = {

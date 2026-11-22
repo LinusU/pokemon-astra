@@ -427,6 +427,11 @@ export class CrystalGame {
 
   // ------------------------------------------------------------ text
   private textString(ops: TextOp[]): { pages: string[]; prompt: boolean } {
+    const { s, prompt } = this.rawText(ops);
+    return { pages: paginate(s), prompt };
+  }
+  /** A text's characters, with buffers and numbers filled in, before it is split into pages. */
+  private rawText(ops: TextOp[]): { s: string; prompt: boolean } {
     let s = "", prompt = false;
     const pointers = ["wStringBuffer3", "wStringBuffer4", "wStringBuffer5", "wStringBuffer2", "wStringBuffer1", "wEnemyMonNickname", "wBattleMonNickname"];
     for (const op of ops) {
@@ -448,7 +453,7 @@ export class CrystalGame {
       else if (op.op === "end") prompt = op.prompt;
     }
     s = s.replaceAll("{PLAYER}", this.save.name).replaceAll("{RIVAL}", this.save.rival).replaceAll("{MOM}", this.save.mom);
-    return { pages: paginate(s), prompt };
+    return { s, prompt };
   }
   ramString(addr: number): string {
     if (addr === RAM.wPlayerName) return this.save.name;
@@ -465,6 +470,10 @@ export class CrystalGame {
   /** A cartridge text as one string, its pages joined. */
   textOf(at: number) {
     return this.textString(this.rom.text(at)).pages.join("\f");
+  }
+  /** A cartridge text as written, leading and trailing spaces included, to join to other words. */
+  rawTextOf(at: number) {
+    return this.rawText(this.rom.text(at)).s;
   }
   /**
    * Shows a cartridge text. The box stays open on its last page until closed.
