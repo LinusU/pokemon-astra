@@ -78,13 +78,22 @@ export async function gainLevel(game: CrystalGame, slot: number) {
   if (target) await evolveTo(game, slot, target);
 }
 
-/** Crystal Legacy's Move Reminder (and Egg Move Reminder): a move the Pokémon could have learned. */
+/** Crystal Legacy's Move Reminder and Egg Move Reminder (engine/events/move_reminder.asm), with its texts. */
 export async function moveReminder(game: CrystalGame, egg: boolean) {
+  const say = async (label: string, fallback: string, wait = true) => {
+    const at = TEXT[label];
+    if (at !== undefined) await game.writeText(at);
+    else await game.say(fallback, false);
+    if (wait) await game.waitButton();
+  };
+  await say(egg ? "Text_EggMoveReminderIntro" : "Text_MoveReminderIntro", "Shall I teach your POKéMON a move it has forgotten?", false);
+  if (!(await game.yesNo())) return say("Text_MoveReminderCancel", "Come back anytime.");
+  await say("Text_MoveReminderWhichMon", "Which POKéMON?");
   const { choosePartyMon } = await import("./menu");
   const slot = await choosePartyMon(game, "Which POKéMON?");
-  if (slot === undefined) { game.scriptVar = 0; return; }
+  if (slot === undefined) return say("Text_MoveReminderCancel", "Come back anytime.");
   const mon = game.save.party[slot];
-  if (mon.egg) { game.scriptVar = 0; return; }
+  if (mon.egg) return say("Text_MoveReminderEgg", "An EGG can't learn moves.");
   let moves: number[];
   if (egg) {
     const first = game.engine.firstStage(mon.species);
@@ -93,15 +102,13 @@ export async function moveReminder(game: CrystalGame, egg: boolean) {
     moves = list;
   } else moves = game.engine.evolutionData(mon.species).learnset.filter(e => e.level <= mon.level).map(e => e.move);
   moves = [...new Set(moves)].filter(m => m && !mon.moves.includes(m));
-  if (!moves.length) {
-    await game.say("There's no move it can remember.");
-    game.scriptVar = 0;
-    return;
-  }
+  if (!moves.length) return say("Text_MoveReminderNoMoves", "There's no move it can remember.");
+  await say("Text_MoveReminderWhichMove", "Which move should it remember?");
   const pick = await game.choose(moves.map(m => game.engine.move(m).name.toUpperCase()), { title: "Which move?", cancel: true });
-  if (pick === undefined) { game.scriptVar = 0; return; }
-  game.strings.set(RAM.wStringBuffer2, game.engine.move(moves[pick]).name.toUpperCase());
-  game.scriptVar = (await learnMove(game, slot, moves[pick])) ? 1 : 0;
-  void TEXT;
+  if (pick !== undefined) {
+    game.strings.set(RAM.wStringBuffer2, game.engine.move(moves[pick]).name.toUpperCase());
+    await learnMove(game, slot, moves[pick]);
+  }
+  await say("Text_MoveReminderCancel", "Come back anytime.");
   void C;
 }
