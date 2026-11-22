@@ -22,6 +22,7 @@ export let CONST = Crystal.CONST;
 export let SPECIALS = Crystal.SPECIALS;
 export let STD = Crystal.STD;
 export let SCRIPT_COMMANDS = Crystal.SCRIPT_COMMANDS;
+export let ENGINE_RAM = Crystal.ENGINE_RAM;
 export let TEXT_COMMANDS = Crystal.TEXT_COMMANDS;
 export let CHARMAP = Crystal.CHARMAP;
 export let SHA1: string = Crystal.SHA1;
@@ -37,7 +38,7 @@ export function cartridgeInUse(): CrystalCartridge {
 export async function useCrystalCartridge(cartridge: CrystalCartridge) {
   if (cartridge === inUse) return;
   const table: Table = cartridge === "legacy" ? await import("./generated/symbols-legacy") : Crystal;
-  ({ SYM, ASM, TEXT, RAM, MAP, ITEM, MON, MOVE, CONST, SPECIALS, STD, SCRIPT_COMMANDS, TEXT_COMMANDS, CHARMAP, SHA1 } = table);
+  ({ SYM, ASM, TEXT, RAM, MAP, ITEM, MON, MOVE, CONST, SPECIALS, STD, SCRIPT_COMMANDS, ENGINE_RAM, TEXT_COMMANDS, CHARMAP, SHA1 } = table);
   inUse = cartridge;
   reverse = new Map();
 }

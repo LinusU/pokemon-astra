@@ -55,7 +55,7 @@ const WANTED = [
   "ItemAttributes", "MagikarpLengths", "OddEggs", "FruitTreeItems", "HiddenItemScript",
   "SeenByTrainerScript", "TalkToTrainerScript", "FindItemInBallScript", "PlayerObjectTemplate", "FruitTreeScript", "TradeTexts",
   "EggMovePointers", "MoveNames", "PokemonNames", "TMHMMoves", "Moves", "TilesetJohtoPalMap", "SpriteMons", "TimeFishGroups",
-  "TileCollisionStdScripts", "TrainerClassDVs", "TrainerEncounterMusic", "SpawnPoints", "Flypoints",
+  "TileCollisionStdScripts", "TrainerClassDVs", "RoamMaps", "TrainerEncounterMusic", "SpawnPoints", "Flypoints",
 ];
 /** Tables that only some versions have. */
 const OPTIONAL = [
@@ -65,7 +65,7 @@ const OPTIONAL = [
   "EnvironmentColorsPointers.OutdoorColors", "EnvironmentColorsPointers.IndoorColors", "EnvironmentColorsPointers.DungeonColors",
   "BerryNames", "ApricornBalls", "PokeBallMenuTMHM", "UnownWords", "SlotsTilemap", "BargainShopData", "RooftopSaleMart1",
   "RooftopSaleMart2", "DefaultMart", "ItemPocketNames", "MenuHeader_BuySell", "PokemonPicPointers", "BugContestantPointers",
-  "BugCatchingContestOverScript", "BugCatchingContestBattleScript", "CutTreeBlockPointers", "WhirlpoolBlockPointers", "HealingHPAmounts", "StatusHealingActions", "EvolutionStones", "SpecialCallOnlyWhenOutside", "SpecialCallWhereverYouAre", "HiddenItemScript",
+  "BugCatchingContestOverScript", "BugCatchingContestBattleScript", "RepelWoreOffScript", "UseAnotherRepelScript", "CutTreeBlockPointers", "WhirlpoolBlockPointers", "HealingHPAmounts", "StatusHealingActions", "EvolutionStones", "SpecialCallOnlyWhenOutside", "SpecialCallWhereverYouAre", "HiddenItemScript",
 ];
 const SYM = {};
 // An entry may list the names older sources use; the table keeps the first.
@@ -123,7 +123,7 @@ for (const file of sources.filter(f => /^(engine|home|data\/text|data\/phone|dat
   for (const line of read(file).split("\n")) {
     const global = /^(\w+)::?/.exec(line);
     if (global) parent = global[1];
-    const m = /^(\.?\w+Text\w*)::?/.exec(line);
+    const m = /^(\.?\w*Text\w*)::?/.exec(line);
     if (!m) continue;
     const name = m[1].startsWith(".") ? parent + m[1] : m[1];
     if (rom.has(name)) TEXT[name] = rom.get(name);
@@ -246,6 +246,10 @@ function commandNames(file, suffix) {
 const SCRIPT_COMMANDS = commandNames("macros/scripts/events.asm", "_command");
 const TEXT_COMMANDS = [...read("macros/scripts/text.asm").matchAll(/^\s*const\s+(TX_\w+)/gm)].map(m => m[1]);
 
+// ------------------------------------------------------------------ engine flags
+/** The RAM byte each ENGINE_* flag lives in, in flag order (data/events/engine_flags.asm). */
+const ENGINE_RAM = [...read("data/events/engine_flags.asm").matchAll(/^\s*engine_flag\s+(\w+)/gm)].map(m => m[1]);
+
 // ------------------------------------------------------------------ characters
 const CHARMAP = Array(256).fill("");
 for (const line of read(existsSync(join(root, "charmap.asm")) ? "charmap.asm" : "constants/charmap.asm").split("\n")) {
@@ -286,6 +290,8 @@ export const SPECIALS: string[] = ${json(SPECIALS)};
 /** StdScripts order. */
 export const STD: string[] = ${json(STD)};
 export const SCRIPT_COMMANDS: string[] = ${json(SCRIPT_COMMANDS)};
+/** The RAM byte of each engine flag, by flag. */
+export const ENGINE_RAM: string[] = ${json(ENGINE_RAM)};
 export const TEXT_COMMANDS: string[] = ${json(TEXT_COMMANDS)};
 /** Byte → character, from the English part of charmap.asm. */
 export const CHARMAP: string[] = ${json(CHARMAP)};
