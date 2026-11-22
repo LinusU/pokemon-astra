@@ -190,6 +190,14 @@ export async function pokemart(game: CrystalGame, kind: number, id: number) {
   await martText(game, intro[type]?.[1] ?? "MartComeAgainText", "Please come again!");
   game.closeText();
 }
+/** The numbers the mart's texts print: quantity, item name and price. */
+function martVars(game: CrystalGame, item: number, n: number, money: number) {
+  game.poke(RAM.wItemQuantityChange, n);
+  game.strings.set(RAM.wStringBuffer2, game.rom.itemName(item));
+  game.poke(RAM.hMoneyTemp, money >> 16);
+  game.poke(RAM.hMoneyTemp + 1, (money >> 8) & 0xff);
+  game.poke(RAM.hMoneyTemp + 2, money & 0xff);
+}
 async function buy(game: CrystalGame, stock: { item: number; price: number }[], type: string) {
   for (;;) {
     const pick = await game.choose(stock.map(s => `${itemTitle(game.rom.itemName(s.item))}  ¥${s.price}`), { title: `¥${game.save.money}`, cancel: true });
@@ -201,15 +209,19 @@ async function buy(game: CrystalGame, stock: { item: number; price: number }[], 
       await martText(game, game.save.money < price ? "MartNoMoneyText" : "MartPackFullText", game.save.money < price ? "You don't have enough money." : "You can't carry any more items.");
       continue;
     }
+    await martText(game, "MartHowManyText", "How many?", false);
     const n = await quantity(game, itemTitle(game.rom.itemName(item)), max, price);
     if (!n) continue;
+    martVars(game, item, n, price * n);
+    await martText(game, "MartFinalPriceText", `${n} ${game.rom.itemName(item)}(S) will be ¥${price * n}. OK?`, false);
+    if (!(await game.yesNo())) continue;
     if (!game.giveItem(item, n)) {
       await martText(game, "MartPackFullText", "You can't carry any more items.");
       continue;
     }
     game.save.money -= price * n;
     game.sfx("SFX_TRANSACTION");
-    await martText(game, "MartBoughtText", "Here you are. Thank you!");
+    await martText(game, "MartThanksText", "Here you are. Thank you!");
   }
 }
 async function sell(game: CrystalGame) {
@@ -219,11 +231,16 @@ async function sell(game: CrystalGame) {
     const pick = await game.choose(sellable.map(id => `${itemTitle(game.rom.itemName(id))} ×${game.save.items[id]}  ¥${Math.floor(game.rom.itemPrice(id) / 2)}`), { title: `¥${game.save.money}`, cancel: true });
     if (pick === undefined) return;
     const id = sellable[pick], price = Math.floor(game.rom.itemPrice(id) / 2);
+    await martText(game, "MartSellHowManyText", "How many?", false);
     const n = await quantity(game, itemTitle(game.rom.itemName(id)), game.save.items[id], price);
     if (!n) continue;
+    martVars(game, id, n, price * n);
+    await martText(game, "MartSellPriceText", `I can pay you ¥${price * n}.`, false);
+    if (!(await game.yesNo())) continue;
     game.takeItem(id, n);
     game.addMoney(0, price * n);
     game.sfx("SFX_TRANSACTION");
+    await martText(game, "MartBoughtText", `Got ¥${price * n} for ${game.rom.itemName(id)}(S).`);
   }
 }
 
