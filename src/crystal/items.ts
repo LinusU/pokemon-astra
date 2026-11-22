@@ -3,7 +3,7 @@
  * medicine from the cartridge's own healing tables, evolution stones, Rare
  * Candy, vitamins, Repels, the Bicycle, rods, the Escape Rope, TMs and HMs.
  */
-import { C, CONST, ITEM, MOVE, SYM, itemConst } from "./symbols";
+import { C, CONST, ITEM, MOVE, RAM, SYM, TEXT, itemConst } from "./symbols";
 import type { CrystalGame } from "./runtime";
 
 /** What a use left for the caller: a message, an action to run on the map, or nothing. */
@@ -28,10 +28,22 @@ async function pickMon(game: CrystalGame, title: string) {
   return choosePartyMon(game, title);
 }
 
+/** A cartridge text as one line for a message, or the fallback. */
+function cartridgeLine(game: CrystalGame, label: string, fallback: string) {
+  const at = TEXT[label];
+  return at === undefined ? fallback : game.textOf(at).replace(/\f/g, " ");
+}
+
+/** UseRepel: starts the Repel's steps unless one is still working. Returns the cartridge's message. */
 export function useRepel(game: CrystalGame, item: number) {
+  if (game.save.repel) return cartridgeLine(game, "_RepelUsedEarlierIsStillInEffectText", "The REPEL used earlier is still in effect.");
   game.save.repel = is(item, "REPEL") ? 100 : is(item, "SUPER_REPEL") ? 200 : 250;
   game.save.vars.repelType = item;
   game.takeItem(item);
+  // UseItemText: "<PLAYER> used the <ITEM>.", with the Full Heal sound.
+  game.strings.set(RAM.wStringBuffer2, game.rom.itemName(item));
+  game.sfx("SFX_FULL_HEAL");
+  return cartridgeLine(game, "_ItemUsedText", `${game.save.name} used the ${game.rom.itemName(item)}.`);
 }
 
 export async function useItem(game: CrystalGame, item: number): Promise<ItemResult> {
@@ -43,11 +55,7 @@ export async function useItem(game: CrystalGame, item: number): Promise<ItemResu
   if (is(item, "RARE_CANDY")) return rareCandy(game, item);
   if (is(item, "HP_UP", "PROTEIN", "IRON", "CARBOS", "CALCIUM")) return vitamin(game, item);
   if (is(item, "FIRE_STONE", "THUNDERSTONE", "WATER_STONE", "LEAF_STONE", "MOON_STONE", "SUN_STONE") || evolvesWith(game, item)) return stone(game, item);
-  if (is(item, "REPEL", "SUPER_REPEL", "MAX_REPEL")) {
-    if (game.save.repel) return "The REPEL's effect is still on.";
-    useRepel(game, item);
-    return "REPEL's effect began.";
-  }
+  if (is(item, "REPEL", "SUPER_REPEL", "MAX_REPEL")) return useRepel(game, item);
   if (is(item, "BICYCLE")) return () => toggleBike(game);
   if (is(item, "OLD_ROD", "GOOD_ROD", "SUPER_ROD")) return async () => {
     const { fish } = await import("./field");

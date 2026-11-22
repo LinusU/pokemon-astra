@@ -518,7 +518,7 @@ const ASM_ROUTINES: Record<string, Routine> = {
   DoItemEffect: async g => {
     const { useRepel } = await import("./items");
     const item = g.peek(RAM.wRepelType);
-    if (g.itemCount(item)) useRepel(g, item);
+    if (g.itemCount(item)) await g.say(useRepel(g, item));
   },
   GetCurTreeFruit: g => {
     const tree = g.peek(RAM.wCurFruitTree);
