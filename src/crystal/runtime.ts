@@ -11,7 +11,7 @@ import type { MusicScene } from "../game/music";
 import type { MenuInput } from "../ui/menu-input";
 import { BODY_RADIUS, bodyTouches, heldHeading, walkFreely, walkSpeed } from "../game/free-movement";
 import { JourneyConflict, type JourneyStore } from "../game/storage";
-import { C, CONST, ITEM, MON, RAM, SYM, cartridgeInUse, constName, mapName, ramName } from "./symbols";
+import { C, CONST, ENGINE_RAM, ITEM, MON, RAM, SYM, cartridgeInUse, constName, mapName, ramName } from "./symbols";
 import { CrystalRom, type BgEvent, type CrystalMap, type ObjectEvent, type TextOp } from "./rom";
 import { CrystalWorld, FACINGS, STEP, opposite, type Facing, type LiveMap } from "./world";
 import { crystalSummary, type CrystalMon, type CrystalSave } from "./save";
@@ -154,7 +154,11 @@ export class CrystalGame {
     for (const o of this.objects) if (o.event.flag === i) o.visible = !on && this.objectTime(o.event);
   }
   ev(name: string) { return this.event(C(name)); }
-  flag(i: number) { return this.flags.has(i); }
+  flag(i: number) {
+    // The player's gender lives in its own byte, not in the flag set.
+    if (i === CONST.ENGINE_PLAYER_IS_FEMALE) return this.save.gender === 1;
+    return this.flags.has(i);
+  }
   setFlag(i: number, on: boolean) {
     if (on) this.flags.add(i);
     else this.flags.delete(i);
@@ -163,6 +167,12 @@ export class CrystalGame {
   sceneOf(group: number, number: number) { return this.save.scenes[`${group}:${number}`] ?? 0; }
   setScene(group: number, number: number, scene: number) { this.save.scenes[`${group}:${number}`] = scene; }
 
+  /** wUnlockedUnowns, from its engine flags (A–K, L–R, S–W, X–Z). */
+  unlockedUnowns() {
+    let bits = 0, n = 0;
+    ENGINE_RAM.forEach((byte, i) => { if (byte === "wUnlockedUnowns") { if (this.flag(i)) bits |= 1 << n; n++; } });
+    return bits;
+  }
   badges() {
     let johto = 0, kanto = 0;
     for (let i = 0; i < 8; i++) {
@@ -201,7 +211,7 @@ export class CrystalGame {
     if (addr === RAM.wMapNumber) return this.map.number;
     if (addr === RAM.wXCoord) return this.me.x;
     if (addr === RAM.wYCoord) return this.me.y;
-    if (addr === RAM.wUnlockedUnowns) return this.save.unlockedUnowns;
+    if (addr === RAM.wUnlockedUnowns) return this.unlockedUnowns();
     if (addr === RAM.wPlayerState) return this.playerStateValue();
     if (addr === RAM.wSpecialPhoneCallID) return this.save.specialCall & 0xff;
     return undefined;
@@ -212,7 +222,10 @@ export class CrystalGame {
     if ((i = this.liveAt("wMoney", addr, 3)) >= 0) { this.save.money = setByte(this.save.money, 2 - i, v); return true; }
     if ((i = this.liveAt("wMomsMoney", addr, 3)) >= 0) { this.save.momMoney = setByte(this.save.momMoney, 2 - i, v); return true; }
     if ((i = this.liveAt("wCoins", addr, 2)) >= 0) { this.save.coins = setByte(this.save.coins, 1 - i, v); return true; }
-    if (addr === RAM.wUnlockedUnowns) { this.save.unlockedUnowns = v; return true; }
+    if (addr === RAM.wUnlockedUnowns) {
+      ENGINE_RAM.forEach((byte, i) => { if (byte === "wUnlockedUnowns") this.setFlag(i, !!(v & (1 << ENGINE_RAM.slice(0, i).filter(b => b === byte).length))); });
+      return true;
+    }
     if (addr === RAM.wPlayerGender) { this.save.gender = (v & 1) as 0 | 1; return true; }
     if (addr === RAM.wSpecialPhoneCallID) { this.save.specialCall = v; return true; }
     return false;
@@ -292,13 +305,11 @@ export class CrystalGame {
     const first = !this.save.day;
     this.save.day = day;
     if (first) return;
-    for (const name of Object.keys(CONST)) {
-      if (/^ENGINE_DAILY_|^ENGINE_.*_TODAY$|^ENGINE_ALL_FRUIT_TREES|^ENGINE_TIME_CAPSULE$|^ENGINE_MT_MOON_SQUARE_CLEFAIRY$|^ENGINE_UNION_CAVE_LAPRAS$|^ENGINE_GOLDENROD_UNDERGROUND_|^ENGINE_DAISYS_GROOMING$|^ENGINE_KURT_MAKING_BALLS$|^ENGINE_DRAGONS_DEN_B1F_ROCKET|^ENGINE_BUG_CONTEST_TIMER$|^ENGINE_SEEN_SHUCKLE|^ENGINE_DUNSPARCE_SWARM$|^ENGINE_YANMA_SWARM$|^ENGINE_TEA_IN_BLUES_HOUSE$|^ENGINE_FISH_SWARM|^ENGINE_GOT_.*_TODAY|^ENGINE_.*_REMATCH|^ENGINE_DAILY/.test(name)) {
-        if (/REMATCH|SWARM|KURT|DAISYS|UNION_CAVE|MT_MOON/.test(name) && !/DAILY|TODAY/.test(name)) continue;
-        this.flags.delete(CONST[name]);
-      }
-    }
+    // CheckDailyResetTimer: the daily, swarm and phone flags clear at midnight.
+    const daily = /^w(Daily(Flags[12]|RematchFlags|PhoneItemFlags|PhoneTimeOfDayFlags)|SwarmFlags)$/;
+    ENGINE_RAM.forEach((byte, i) => { if (daily.test(byte)) this.flags.delete(i); });
     this.save.vars.fruitTrees = 0;
+    delete this.save.swarm;
     delete this.save.vars.luckyDay;
   }
 
@@ -340,6 +351,9 @@ export class CrystalGame {
   register(species: number, caught: boolean) {
     if (!this.save.seen.includes(species)) this.save.seen.push(species);
     if (caught && !this.save.caught.includes(species)) this.save.caught.push(species);
+  }
+  ownsRoamer(species: number) {
+    return [...this.save.party, ...this.save.boxes.flat()].some(m => !m.egg && m.species === species && m.ot_id === this.save.playerId);
   }
   /** Adds a Pokémon to the party or the current box. */
   addMon(mon: CrystalMon) {
@@ -514,7 +528,8 @@ export class CrystalGame {
   cry(species: number) { if (species) this.ctx.cry?.(species); }
   get scene() { return this.mode === "battle" ? "battle" : "world"; }
   musicScene(): MusicScene | number {
-    if (this.mode === "battle") return this.battleCue as MusicScene ?? 0;
+    // Battle songs are Crystal song ids; victory and capture are Astra's music scenes.
+    if (this.mode === "battle") return this.battleCue && /^\d+$/.test(this.battleCue) ? +this.battleCue : (this.battleCue as MusicScene) ?? 0;
     return this.musicTrack() ?? 0;
   }
   musicTrack(): number | undefined {
@@ -568,6 +583,11 @@ export class CrystalGame {
       fn: this.rom.u8(SYM.SpriteMovementData + event.movement * 6), fixedFacing: false,
     }));
     this.encounterCooldown = options.arrival === "connection" ? 0 : 2;
+    if (options.arrival !== "continue") {
+      this.roam();
+      // Strength lasts until the player leaves the map.
+      if (CONST.ENGINE_STRENGTH_ACTIVE !== undefined) this.flags.delete(CONST.ENGINE_STRENGTH_ACTIVE);
+    }
     if (!this.keepMusic) this.musicOverride = undefined;
     this.keepMusic = false;
     this.following = undefined;
@@ -578,7 +598,7 @@ export class CrystalGame {
   }
   private defaultFacing(event: ObjectEvent): Facing {
     const f = this.rom.u8(SYM.SpriteMovementData + event.movement * 6 + 1);
-    return FACINGS[(f >> 2) & 3] ?? "down";
+    return FACINGS[f & 3] ?? "down";
   }
   objectTime(e: ObjectEvent) {
     if (e.h1 === -1) {
@@ -605,6 +625,22 @@ export class CrystalGame {
     await this.callbacks(C("MAPCALLBACK_OBJECTS"));
     await this.callbacks(C("MAPCALLBACK_SPRITES"));
     await this.callbacks(C("MAPCALLBACK_CMDQUEUE"));
+  }
+  /** Raikou and Entei move to a neighbouring route whenever the player changes maps (RoamMaps). */
+  private roam() {
+    const roamers = this.save.roamers;
+    if (!roamers?.length) return;
+    const r = this.rom, next = new Map<string, [number, number][]>();
+    for (let o = SYM.RoamMaps; r.u8(o) !== 0xff;) {
+      const key = `${r.u8(o)}:${r.u8(o + 1)}`, n = r.u8(o + 2);
+      next.set(key, Array.from({ length: n }, (_, i) => [r.u8(o + 3 + i * 2), r.u8(o + 4 + i * 2)] as [number, number]));
+      o += 3 + n * 2 + 1;
+    }
+    for (const mon of roamers) {
+      const options = next.get(`${mon.group}:${mon.number}`) ?? [...next.keys()].map(k => k.split(":").map(Number) as [number, number]);
+      const [group, number] = options[Math.floor(Math.random() * options.length)];
+      Object.assign(mon, { group, number });
+    }
   }
   defer(at: number) { this.deferred.push(at); }
   /** Runs the scene script for the map's scene and anything it defers. */
@@ -667,6 +703,12 @@ export class CrystalGame {
     this.save.backupWarp = { warp: index + 1, group: this.map.group, number: this.map.number };
     const coll = this.world.collision(this.map, this.me.x, this.me.y);
     this.sfx(this.world.isDoor(coll) ? "SFX_ENTER_DOOR" : coll === C("COLL_WARP_PANEL") ? "SFX_WARP_TO" : "SFX_EXIT_BUILDING");
+    const outdoors = (m: CrystalMap) => m.environment === C("TOWN") || m.environment === C("ROUTE");
+    if (outdoors(this.map) && !outdoors(target)) {
+      // EnterMapWarp: a Pokémon Center becomes the blackout spot, and Dig and the Escape Rope lead back to this door.
+      if (target.tileset === CONST.TILESET_POKECENTER) this.save.spawn = { group: this.map.group, number: this.map.number };
+      Object.assign(this.save.vars, { digGroup: this.map.group, digNumber: this.map.number, digX: warp.x, digY: warp.y });
+    }
     await this.fadeAround(async () => {
       this.place(0, arrival.x, arrival.y);
       this.enterMap(group, number, { arrival: "warp" });
@@ -811,6 +853,8 @@ export class CrystalGame {
     try {
       await action();
       await this.runDeferred();
+      // Crystal runs the scene script every frame the player is free; a scene a script just set may start the next cutscene.
+      await this.sceneScript();
     } catch (error) {
       console.error(error);
       if (this.ctx.ui && !this.ctx.canvas) throw error;
@@ -958,6 +1002,8 @@ export class CrystalGame {
       this.sfx("SFX_JUMP_OVER_LEDGE");
       return;
     }
+    const boulder = this.objects.find(o => o.visible && o.x === nx && o.y === ny);
+    if (boulder && this.pushBoulder(boulder)) return;
     if (this.blocked(nx, ny) || !this.passable(nx, ny, me)) {
       if (!this.bumped) this.sfx("SFX_BUMP");
       this.bumped = true;
@@ -1029,9 +1075,22 @@ export class CrystalGame {
       this.sfx("SFX_JUMP_OVER_LEDGE");
       return true;
     }
+    const boulder = this.objects.find(o => o.visible && o.x === me.x + dx && o.y === me.y + dy);
+    if (boulder && lateral < 0.35) {
+      this.pushing += 1 / 60;
+      if (this.pushing > 0.25 && this.pushBoulder(boulder)) this.pushing = 0;
+      return false;
+    }
     if (!this.bumped) this.sfx("SFX_BUMP");
     this.bumped = true;
     return false;
+  }
+  /** Strength: walking into a boulder pushes it a square. */
+  private pushBoulder(o: Obj) {
+    if (!this.hasFlag("ENGINE_STRENGTH_ACTIVE")) return false;
+    if (o.event.sprite !== CONST.SPRITE_BOULDER && o.event.movement !== CONST.SPRITEMOVEDATA_STRENGTH_BOULDER) return false;
+    void import("./field").then(f => f.pushBoulder(this, o));
+    return true;
   }
   private freeBlocked(x: number, y: number) {
     const me = this.me;

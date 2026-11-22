@@ -92,13 +92,20 @@ export async function tryWildEncounter(game: CrystalGame) {
   // A Cleanse Tag on the lead lowers the encounter rate.
   if (game.save.party[0]?.item === CONST.CLEANSE_TAG) rate = Math.floor(rate * 2 / 3);
   if (!pick || Math.random() * 256 >= rate) return;
+  // A roaming legendary on this route turns up one encounter in four, and flees.
   const roamer = game.save.roamers?.find(r => r.group === game.map.group && r.number === game.map.number);
-  if (roamer && Math.random() < 0.25) pick = { species: roamer.species, level: roamer.level };
+  if (roamer && Math.random() < 0.25) {
+    pick = { species: roamer.species, level: roamer.level };
+    game.save.vars.battleType = C("BATTLETYPE_ROAMING");
+  }
   // A Repel keeps away Pokémon weaker than the first Pokémon in the party.
   const lead = game.save.party.find(m => !m.egg);
   if (game.save.repel && lead && pick.level < lead.level) return;
   game.battleSetup = { kind: "wild", species: pick.species, level: pick.level };
-  await startBattle(game);
+  const result = await startBattle(game);
+  // A roamer that was caught or knocked out stops roaming.
+  if (roamer && pick.species === roamer.species && (result === C("WIN") || game.save.caught.includes(roamer.species) && game.ownsRoamer(roamer.species)))
+    game.save.roamers = game.save.roamers!.filter(r => r !== roamer);
   await afterBattle(game);
 }
 
@@ -175,7 +182,7 @@ export async function startBattle(game: CrystalGame): Promise<number> {
     party: fighters, opponent, balls: bag.balls, items: bag.items, money: game.save.money,
     badges: badges.johto, seen: game.save.seen, caught: game.save.caught,
     player: { name: game.save.name, id: game.save.playerId, gender: game.save.gender, kantoBadges: badges.kanto },
-    rivalName: game.save.rival, timeOfDay: game.timeOfDay(), unlockedUnowns: game.save.unlockedUnowns,
+    rivalName: game.save.rival, timeOfDay: game.timeOfDay(), unlockedUnowns: game.unlockedUnowns(),
     unownDex: game.save.unownDex, location: game.landmark(),
   };
   const canLose = battleType === C("BATTLETYPE_CANLOSE");
@@ -206,7 +213,7 @@ async function runBattle(game: CrystalGame, start: BattleOptions, trainerName: s
   const previous = game.mode;
   game.mode = "battle";
   game.inBattle = { trainer: !!trainerName, klass };
-  game.battleCue = trainerName ? battleMusicFor(game, klass) : "wildBattle";
+  game.battleCue = String(battleMusic(game, klass));
   game.ctx.sound.refreshMusic();
   try {
     const launch = new BattleLaunch({ engine, layer: game.ctx.layer, sound: game.ctx.sound, sprite: game.ctx.sprite, cry: game.ctx.cry ?? (() => {}) }, {
@@ -214,7 +221,7 @@ async function runBattle(game: CrystalGame, start: BattleOptions, trainerName: s
       itemName: id => engine.itemName(id),
       party: () => game.save.party.filter(m => !m.egg),
       music: cue => {
-        game.battleCue = cue === "Capture" ? "capture" : trainerName ? "trainerVictory" : "wildVictory";
+        game.battleCue = cue === "Capture" ? "capture" : klass !== undefined && isLeader(klass) ? "gymVictory" : trainerName ? "trainerVictory" : "wildVictory";
         game.ctx.sound?.refreshMusic();
       },
       auto: game.autoBattle,
@@ -234,11 +241,24 @@ async function runBattle(game: CrystalGame, start: BattleOptions, trainerName: s
   }
 }
 
-function battleMusicFor(game: CrystalGame, klass?: number) {
-  const name = klass === undefined ? "" : constName("", klass) ?? "";
-  void name;
-  void game;
-  return "trainerBattle";
+const JOHTO_LEADERS = ["FALKNER", "WHITNEY", "BUGSY", "MORTY", "PRYCE", "JASMINE", "CHUCK", "CLAIR", "WILL", "BRUNO", "KAREN", "KOGA", "CHAMPION"];
+const KANTO_LEADERS = ["BROCK", "MISTY", "LT_SURGE", "ERIKA", "JANINE", "SABRINA", "BLAINE", "BLUE"];
+const classIs = (klass: number, names: string[]) => names.some(n => CONST[n] === klass);
+function isLeader(klass: number) {
+  return classIs(klass, JOHTO_LEADERS) || classIs(klass, KANTO_LEADERS);
+}
+/** PlayBattleMusic: the song for a battle, by battle type, trainer class and region. */
+function battleMusic(game: CrystalGame, klass?: number) {
+  const type = game.save.vars.battleType;
+  if (type === CONST.BATTLETYPE_SUICUNE || type === CONST.BATTLETYPE_ROAMING) return C("MUSIC_SUICUNE_BATTLE");
+  const kanto = game.landmark() >= C("KANTO_LANDMARK");
+  if (klass === undefined) return kanto ? C("MUSIC_KANTO_WILD_BATTLE") : game.timeOfDay() === 2 ? C("MUSIC_JOHTO_WILD_BATTLE_NIGHT") : C("MUSIC_JOHTO_WILD_BATTLE");
+  if (classIs(klass, ["CHAMPION", "RED"])) return C("MUSIC_CHAMPION_BATTLE");
+  if (classIs(klass, ["GRUNTM", "GRUNTF"])) return C("MUSIC_ROCKET_BATTLE");
+  if (classIs(klass, KANTO_LEADERS)) return C("MUSIC_KANTO_GYM_LEADER_BATTLE");
+  if (classIs(klass, JOHTO_LEADERS)) return C("MUSIC_JOHTO_GYM_LEADER_BATTLE");
+  if (classIs(klass, ["RIVAL1", "RIVAL2"])) return C("MUSIC_RIVAL_BATTLE");
+  return kanto ? C("MUSIC_KANTO_TRAINER_BATTLE") : C("MUSIC_JOHTO_TRAINER_BATTLE");
 }
 
 /** Writes a finished battle back into the save. */

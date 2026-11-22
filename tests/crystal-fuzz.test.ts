@@ -18,6 +18,8 @@ describe.skipIf(!run || !hasEngine || !CARTRIDGES.length).each(CARTRIDGES)("Ever
     const errors = new Map<string, string>();
     const strong = () => [g.makeMon(MON.TYRANITAR, 100), g.makeMon(MON.LUGIA, 100)];
     const maps = g.rom.allMaps();
+    const { engineEntries } = await import("../src/crystal/coverage");
+    const engine = engineEntries(g.rom);
     let count = 0;
     for (const map of maps) {
       if (map.name.startsWith("BATTLE_TOWER_") && map.name !== "BATTLE_TOWER_OUTSIDE") continue;
@@ -55,6 +57,23 @@ describe.skipIf(!run || !hasEngine || !CARTRIDGES.length).each(CARTRIDGES)("Ever
         g.mode = "world";
         g.closeText();
       }
+    }
+    // Standard scripts, phone calls and the engine's helpers, from New Bark Town.
+    const [group, number] = [maps.find(m => m.name === "NEW_BARK_TOWN")!.group, maps.find(m => m.name === "NEW_BARK_TOWN")!.number];
+    for (const e of engine) {
+      g.save.party = strong();
+      g.enterMap(group, number, { arrival: "warp" });
+      g.place(0, 5, 8, "down");
+      h.ui.budget = 6;
+      count++;
+      try {
+        await Promise.race([runScript(g, e.at), new Promise((_, reject) => setTimeout(() => reject(Error("timed out")), 5000))]);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const key = message.replace(/\d+/g, "#");
+        if (!errors.has(key)) errors.set(key, `${e.where}: ${message}`);
+      }
+      g.mode = "world";
     }
     console.log(`${count} scripts on ${maps.length} maps`);
     console.log([...errors.values()].join("\n"));
