@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { CARTRIDGES } from "./crystal-fixtures";
 import { hasEngine, headlessGame } from "./crystal-harness";
-import { C, ITEM, MAP, MON } from "../src/crystal/symbols";
+import { C, ITEM, MAP, MON, MOVE } from "../src/crystal/symbols";
 
 describe.skipIf(!hasEngine || !CARTRIDGES.length).each(CARTRIDGES)("Crystal's systems on %s", cart => {
   const adventure = cart === "crystal" ? "crystal" : "crystal-legacy";
@@ -225,6 +225,26 @@ describe.skipIf(!hasEngine || !CARTRIDGES.length).each(CARTRIDGES)("Crystal's sy
     expect(await g.startBattle()).toBe(C("WIN"));
     expect(g.save.momMoney).toBeGreaterThan(0);
     expect(g.save.money - money).toBe(g.save.momMoney * 3);
+  }, 60000);
+
+  it("teaches HM01 and TM01 from the Pack", async () => {
+    const h = await headlessGame(adventure);
+    const g = h.game;
+    g.giveItem(ITEM.HM_CUT);
+    g.giveItem(ITEM.TM_DYNAMICPUNCH);
+    const { useItem } = await import("../src/crystal/items");
+    const use = async (item: number) => {
+      const r = await useItem(g, item);
+      if (typeof r === "function") await g.runScript(r);
+    };
+    g.save.party = [g.makeMon(MON.SCYTHER, 2)];
+    await use(ITEM.HM_CUT);
+    expect(g.save.party[0].moves).toContain(MOVE.CUT);
+    g.save.party = [g.makeMon(MON.MACHOP, 2)];
+    await use(ITEM.TM_DYNAMICPUNCH);
+    expect(g.save.party[0].moves).toContain(MOVE.DYNAMICPUNCH);
+    expect(g.itemCount(ITEM.HM_CUT)).toBe(1);
+    expect(g.itemCount(ITEM.TM_DYNAMICPUNCH)).toBe(0);
   }, 60000);
 
   it("buys from a Mart", async () => {

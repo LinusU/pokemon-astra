@@ -73,7 +73,8 @@ function reversed(key: string, entries: () => [string, number][]) {
 }
 export const ramName = (addr: number) => reversed("ram", () => Object.entries(RAM)).get(addr);
 export const asmName = (offset: number) => reversed("asm", () => Object.entries(ASM)).get(offset);
-export const itemConst = (id: number) => reversed("item", () => Object.entries(ITEM)).get(id);
+/** An item's constant name. TM01 and HM01 also go by their machine numbers; the move's name (TM_DYNAMICPUNCH, HM_CUT) wins. */
+export const itemConst = (id: number) => reversed("item", () => Object.entries(ITEM).sort(([a], [b]) => Number(/^(TM|HM)\d+$/.test(a)) - Number(/^(TM|HM)\d+$/.test(b)))).get(id);
 export const monConst = (id: number) => reversed("mon", () => Object.entries(MON)).get(id);
 export function mapName(group: number, number: number): string | undefined {
   return reversed("map", () => Object.entries(MAP).map(([k, [g, n]]) => [k, g * 256 + n])).get(group * 256 + number);
