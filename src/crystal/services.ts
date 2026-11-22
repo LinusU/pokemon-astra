@@ -387,13 +387,20 @@ async function itemPc(game: CrystalGame) {
     const pick = await game.choose(ids.map(id => `${itemTitle(game.rom.itemName(id))} ×${from[id]}`), { cancel: true });
     if (pick === undefined) continue;
     const id = ids[pick];
-    const n = await quantity(game, itemTitle(game.rom.itemName(id)), from[id]);
+    // A stack holds 99 at most, in the PC as in the Pack.
+    const to = action === 1 ? save.pcItems : action === 0 ? save.items : undefined;
+    const room = to ? 99 - (to[id] ?? 0) : from[id];
+    if (room <= 0) {
+      await game.say(action === 1 ? "There's no more room in the PC." : "There's no more room in the PACK.");
+      continue;
+    }
+    const n = await quantity(game, itemTitle(game.rom.itemName(id)), Math.min(from[id], room));
     if (!n) continue;
     if (action === 0 && !game.giveItem(id, n)) {
       await game.say("There's no more room in the PACK.");
       continue;
     }
-    if (action === 1) save.pcItems[id] = Math.min(99, (save.pcItems[id] ?? 0) + n);
+    if (action === 1) save.pcItems[id] = (save.pcItems[id] ?? 0) + n;
     from[id] -= n;
     if (!from[id]) delete from[id];
   }
