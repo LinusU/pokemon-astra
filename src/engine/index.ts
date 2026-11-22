@@ -67,7 +67,13 @@ export interface BattleResult {
 }
 export interface BattleOptions {
   party: Pokemon[];
-  opponent: { species: number; level: number; stationary?: boolean } | { party: Pokemon[]; prizeMoney?: number };
+  /**
+   * A wild Pokémon, or a trainer: a party of the adventure's own, or with
+   * `trainer` alone the game data's own party for that class and id.
+   */
+  opponent:
+    | { species: number; level: number; stationary?: boolean }
+    | { party?: Pokemon[]; prizeMoney?: number; trainer?: { class: number; id: number } };
   balls?: [number, number][];
   items?: [number, number][];
   money?: number;
@@ -76,6 +82,14 @@ export interface BattleOptions {
   night?: boolean;
   seen?: number[];
   caught?: number[];
+  /** The player and world as the battle shows them (defaults: Astra's). */
+  player?: { name: string; id: number; gender: number; kantoBadges?: number };
+  rivalName?: string;
+  /** MORN_F, DAY_F or NITE_F; overrides `night`. */
+  timeOfDay?: number;
+  unlockedUnowns?: number;
+  unownDex?: number[];
+  location?: number;
 }
 type Exports = {
   memory: WebAssembly.Memory;
@@ -355,12 +369,12 @@ export class Engine {
           };
     const setup = {
       player: {
-        name: "ASTRA",
-        id: 0x1234,
-        gender: 0,
+        name: options.player?.name ?? "ASTRA",
+        id: options.player?.id ?? 0x1234,
+        gender: options.player?.gender ?? 0,
         money: options.money ?? 3000,
         johto_badges: options.badges ?? 0,
-        kanto_badges: 0,
+        kanto_badges: options.player?.kantoBadges ?? 0,
         mom_saving: 0,
         mom_money: 0,
       },
@@ -372,14 +386,14 @@ export class Engine {
       opponent: opp,
       options: { battle_scene: true, stationary_wild: "species" in options.opponent && options.opponent.stationary === true },
       world: {
-        time_of_day: options.night ? 2 : 1,
+        time_of_day: options.timeOfDay ?? (options.night ? 2 : 1),
         // Astra’s wild letter habitat is independent of Johto’s four ruin puzzles.
-        unlocked_unowns: 0x0f,
-        rival_name: "ROBIN",
+        unlocked_unowns: options.unlockedUnowns ?? 0x0f,
+        rival_name: options.rivalName ?? "ROBIN",
         seen: options.seen ?? [],
         caught: options.caught ?? [],
-        unown_dex: [],
-        location: 0,
+        unown_dex: options.unownDex ?? [],
+        location: options.location ?? 0,
       },
     };
     return new Battle(
@@ -387,7 +401,7 @@ export class Engine {
       this.call({
         op: "start",
         setup,
-        trainer_prize: "party" in options.opponent ? options.opponent.prizeMoney : undefined,
+        trainer_prize: "species" in options.opponent ? undefined : options.opponent.prizeMoney,
         seed: options.seed ?? Math.floor(Math.random() * 0xffffffff),
         training_level: "Trainer" in opp ? TRAINING_LEVELS[popcount(options.badges ?? 0)] : 0,
       }),
