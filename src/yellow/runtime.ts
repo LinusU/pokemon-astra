@@ -1834,7 +1834,7 @@ function trainerIntro(klass: number) {
   const name = Object.keys(TRAINER).find(k => TRAINER[k] === klass) ?? "";
   if (/ROCKET|GIOVANNI/.test(name)) return "MUSIC_MEET_EVIL_TRAINER";
   if (/RIVAL/.test(name)) return "MUSIC_MEET_RIVAL";
-  if (/LASS|BEAUTY|JR_TRAINER_F|COOLTRAINER_F|CHANNELER|SWIMMER_F|PICNICKER/.test(name)) return "MUSIC_MEET_FEMALE_TRAINER";
+  if (/LASS|BEAUTY|JR_TRAINER_F|COOLTRAINER_F|CHANNELER|SWIMMER_F|PICNICKER|JANINE|JOY|JENNY/.test(name)) return "MUSIC_MEET_FEMALE_TRAINER";
   return "MUSIC_MEET_MALE_TRAINER";
 }
 function engine_name(game: YellowGame, dex: number) {
