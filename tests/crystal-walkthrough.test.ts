@@ -126,13 +126,17 @@ function walker(h: Harness) {
       }
       throw Error(`Can't reach ${at.x},${at.y} on ${where()}`);
     },
-    /** Talks to every trainer on the map who hasn't been beaten yet. */
+    /** Talks to every trainer on the map who hasn't been beaten yet (jumping to those in other parts of the map). */
     async beatTrainers() {
       for (let i = 0; i < 12; i++) {
         const t = g.objects.find(o => o.visible && o.event.type === C("OBJECTTYPE_TRAINER") && o.event.script >= 0x4000 && !g.event(readTrainerHeader(g, o.event.script).flag));
         if (!t) return;
         const from = `${g.me.x},${g.me.y}`;
-        await this.talk(t);
+        try { await this.talk(t); } catch {
+          const side = (Object.values(STEP) as [number, number][]).map(([dx, dy]) => ({ x: t.x + dx, y: t.y + dy })).find(p => g.passable(p.x, p.y) && !g.blocked(p.x, p.y))!;
+          g.place(0, side.x, side.y);
+          await this.talk(t);
+        }
         if (process.env.WALK_DEBUG) console.log(`trainer ${t.x},${t.y} from ${from} -> ${g.me.x},${g.me.y} facing ${g.me.facing}`);
         if (!g.event(readTrainerHeader(g, t.event.script).flag)) throw Error(`Trainer at ${t.x},${t.y} on ${where()} wasn't beaten: result ${g.battleResult}, party ${g.save.party.map(m => `${m.species}:${m.hp}/${m.stats[0]}`).join(" ")}`);
       }
@@ -421,6 +425,69 @@ describe.skipIf(!run || !hasEngine || !hasLegacy)("Crystal Legacy's story", () =
       await w.talk("JASMINE");
       w.flush("Jasmine");
       expect(g.hasFlag("ENGINE_MINERALBADGE")).toBe(true);
+
+      // ------------------------------------------------------------ Lake of Rage
+      w.strengthen(60);
+      await w.warp("LAKE_OF_RAGE", 21, 30, "up");
+      const gyarados = w.find("GYARADOS");
+      const water = (Object.entries(STEP) as [Facing, [number, number]][]).map(([dir, [dx, dy]]) => ({ dir, x: gyarados.x - dx, y: gyarados.y - dy }))
+        .find(p => g.world.isWater(g.world.collision(g.map, p.x, p.y)) && !g.blocked(p.x, p.y))!;
+      g.save.state = "surf";
+      g.place(0, water.x, water.y, water.dir);
+      await g.runScript(() => g.interact());
+      await h.settle();
+      w.flush("Red Gyarados");
+      expect(w.has("RED_SCALE")).toBe(true);
+      g.save.state = "normal";
+      await w.warp("LAKE_OF_RAGE", 21, 30, "up");
+      await w.talk("LANCE");
+      w.flush("Lance at the lake");
+      expect(w.ev("EVENT_DECIDED_TO_HELP_LANCE")).toBe(true);
+
+      // ------------------------------------------------------------ The Rocket Hideout
+      await w.warp("MAHOGANY_MART_1F", 3, 6, "up");
+      w.flush("Lance uncovers the stairs");
+      expect(w.ev("EVENT_UNCOVERED_STAIRCASE_IN_MAHOGANY_MART")).toBe(true);
+      await w.warp("TEAM_ROCKET_BASE_B1F", 25, 3, "left");
+      await w.beatTrainers();
+      w.flush("Rocket Hideout B1F");
+      await w.warp("TEAM_ROCKET_BASE_B2F", 3, 13, "down");
+      await w.to(5, 14);
+      w.flush("Lance heals");
+      await w.warp("TEAM_ROCKET_BASE_B3F", 3, 3, "down");
+      await w.to(8, 10);
+      w.flush("Rival in the Hideout");
+      await w.beatTrainers();
+      // Beaten grunts tell their passwords when spoken to again (endifjustbattled).
+      for (const o of g.objects.filter(o => o.visible && o.event.type === C("OBJECTTYPE_TRAINER") && o.event.sight !== undefined)) {
+        if (w.ev("EVENT_LEARNED_SLOWPOKETAIL") && w.ev("EVENT_LEARNED_RATICATE_TAIL")) break;
+        try { await w.talk(o); } catch {
+          const side = (Object.values(STEP) as [number, number][]).map(([dx, dy]) => ({ x: o.x + dx, y: o.y + dy })).find(p => g.passable(p.x, p.y) && !g.blocked(p.x, p.y))!;
+          g.place(0, side.x, side.y);
+          await w.talk(o);
+        }
+      }
+      w.flush("Passwords");
+      expect(w.ev("EVENT_LEARNED_SLOWPOKETAIL")).toBe(true);
+      expect(w.ev("EVENT_LEARNED_RATICATE_TAIL")).toBe(true);
+      await w.warp("TEAM_ROCKET_BASE_B3F", 10, 10, "up");
+      await w.inspect("up");
+      w.flush("Password door");
+      expect(w.ev("EVENT_OPENED_DOOR_TO_GIOVANNIS_OFFICE")).toBe(true);
+      await w.to(10, 8);
+      w.flush("Rocket Executive");
+      await w.talk("MURKROW");
+      w.flush("Murkrow's password");
+      expect(w.ev("EVENT_LEARNED_HAIL_GIOVANNI")).toBe(true);
+      await w.warp("TEAM_ROCKET_BASE_B2F", 14, 13, "up");
+      await w.inspect("up");
+      w.flush("Transmitter door");
+      expect(w.ev("EVENT_OPENED_DOOR_TO_ROCKET_HIDEOUT_TRANSMITTER")).toBe(true);
+      await w.to(14, 11);
+      w.flush("The Executive and the Electrodes' door");
+      for (const o of g.objects.filter(o => o.visible && g.spriteOf(o) === C("SPRITE_ELECTRODE") && o.event.type === C("OBJECTTYPE_SCRIPT") && o.x < 12)) await w.talk(o);
+      w.flush("Electrodes");
+      expect(w.ev("EVENT_CLEARED_ROCKET_HIDEOUT")).toBe(true);
     } finally {
       w.flush("end");
       if (process.env.CRYSTAL_WALKTHROUGH_LOG) writeFileSync(process.env.CRYSTAL_WALKTHROUGH_LOG, w.log.join("\n"));

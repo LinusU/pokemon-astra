@@ -80,6 +80,9 @@ export async function headlessGame(adventure: CrystalAdventure, options: { hour?
         const nx = cx + dx, ny = cy + dy, k = key(nx, ny);
         if (prev.has(k) || !game.world.inside(game.map, nx, ny)) continue;
         if (!(nx === x && ny === y) && (game.blocked(nx, ny) || !game.passable(nx, ny, { x: cx, y: cy }))) continue;
+        // Warps that take the player on arrival lead away: only the destination may be one (doormats only lead out when walked off).
+        const coll = game.world.collision(game.map, nx, ny);
+        if (!(nx === x && ny === y) && game.world.warpAt(game.map, nx, ny) >= 0 && game.world.isWarp(coll) && !game.world.carpet(coll)) continue;
         prev.set(k, [key(cx, cy), dir]);
         queue.push([nx, ny]);
       }
