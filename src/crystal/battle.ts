@@ -201,7 +201,7 @@ export async function startBattle(game: CrystalGame): Promise<number> {
   const canLose = battleType === C("BATTLETYPE_CANLOSE");
   const finished = await runBattle(game, start, trainerName, setup.kind === "trainer" ? setup.klass : undefined, battleType);
   if (!finished) return C("DRAW");
-  const result = await applyResult(game, finished, bag, canLose);
+  const result = await applyResult(game, finished, bag, canLose, battleType);
   // A trainer's parting words.
   if (setup.kind === "trainer" && setup.winLoss) {
     const text = result === C("WIN") ? setup.winLoss[0] : canLose ? setup.winLoss[1] : 0;
@@ -274,14 +274,19 @@ function battleMusic(game: CrystalGame, klass: number | undefined, type: number)
 }
 
 /** Writes a finished battle back into the save. */
-async function applyResult(game: CrystalGame, battle: FinishedBattle, bag: ReturnType<typeof battleBag>, canLose: boolean) {
+async function applyResult(game: CrystalGame, battle: FinishedBattle, bag: ReturnType<typeof battleBag>, canLose: boolean, battleType: number) {
   const result = battle.result;
   // The party comes back in the order it went in; Eggs keep their places.
   const eggs = game.save.party.map((m, i) => (m.egg ? [i, m] as const : undefined)).filter(Boolean) as (readonly [number, CrystalMon])[];
   const party: CrystalMon[] = [...battle.party];
   for (const [i, egg] of eggs) party.splice(i, 0, egg);
   game.save.party = party.slice(0, 6);
-  for (const mon of [...party.slice(6), ...battle.overflow]) game.addMon({ ...mon, ot_name: mon.ot_name || game.save.name });
+  const stored = new Map<Pokemon, CrystalMon>();
+  for (const mon of [...party.slice(6), ...battle.overflow]) {
+    const copy = { ...mon, ot_name: mon.ot_name || game.save.name };
+    stored.set(mon, copy);
+    game.addMon(copy, { anyBox: true });
+  }
   game.save.money = result.money;
   for (const [id] of [...bag.balls, ...bag.items]) {
     const left = [...result.bag.balls, ...result.bag.items].find(([x]) => x === id)?.[1] ?? 0;
@@ -295,8 +300,10 @@ async function applyResult(game: CrystalGame, battle: FinishedBattle, bag: Retur
     if (mon && !mon.ot_name) mon.ot_name = game.save.name;
     // CheckCaughtCelebi reads BATTLERESULT_CAUGHT_CELEBI after the shrine's battle.
     if (mon?.species === MON.CELEBI) game.save.vars.caughtCelebi = 1;
-    if (mon) await game.offerNickname(mon as CrystalMon);
-    if (result.caught! >= 6) await game.say(`${game.monName(mon.species)} was sent to BILL's PC.`);
+    // A contest catch waits for the judging, which asks about a nickname.
+    const contest = battleType === C("BATTLETYPE_CONTEST");
+    if (mon && !contest) await game.offerNickname((stored.get(mon) ?? mon) as CrystalMon);
+    if (mon && stored.has(mon)) await game.say(`${stored.get(mon)!.nickname || game.monName(mon.species)} was sent to BILL's PC.`);
   }
   if (battle.end === "loss") {
     if (canLose) game.heal();

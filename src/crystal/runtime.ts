@@ -356,16 +356,24 @@ export class CrystalGame {
   ownsRoamer(species: number) {
     return [...this.save.party, ...this.save.boxes.flat()].some(m => !m.egg && m.species === species && m.ot_id === this.save.playerId);
   }
-  /** Adds a Pokémon to the party or the current box. */
-  addMon(mon: CrystalMon) {
+  /**
+   * Adds a Pokémon to the party or the current box. With `anyBox`, a full
+   * current box passes it on to the next box with room: a Pokémon caught in
+   * battle is never lost (the cartridge refuses the throw instead).
+   */
+  addMon(mon: CrystalMon, options: { anyBox?: boolean } = {}) {
     if (this.save.party.length < 6) {
       this.save.party.push(mon);
       return "party";
     }
-    const box = this.save.boxes[this.save.box];
-    if (box.length >= 20) return undefined;
-    box.push(mon);
-    return "box";
+    const boxes = this.save.boxes;
+    for (let i = 0; i < (options.anyBox ? boxes.length : 1); i++) {
+      const box = boxes[(this.save.box + i) % boxes.length];
+      if (box.length >= 20) continue;
+      box.push(mon);
+      return "box";
+    }
+    return undefined;
   }
   async givePoke(species: number, level: number, item: number, ot?: { name: number; nickname: number }) {
     const mon = this.makeMon(species, level);
