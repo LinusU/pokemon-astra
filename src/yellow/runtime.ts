@@ -1390,6 +1390,19 @@ export class YellowGame implements Game {
     const { gainExperience } = await import("./growth");
     return gainExperience(this, mon, exp);
   }
+  learnset(dex: number) { return this.ctx.engine.evolutionData(dex).learnset; }
+  moveName(move: number) { return this.ctx.engine.move(move).name; }
+  async learnMove(slot: number, move: number) {
+    const { learn } = await import("./evolution");
+    return learn(this, slot, move);
+  }
+  async fieldMove(move: "strength") {
+    const { fieldUser, useStrength } = await import("./field");
+    const mon = fieldUser(this, move);
+    if (!mon) return false;
+    await useStrength(this, mon);
+    return true;
+  }
   dex(species: string) {
     const id = MON[species];
     if (id === undefined) throw Error(`Unknown species ${species}`);

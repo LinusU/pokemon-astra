@@ -103,6 +103,13 @@ export interface Game {
   rename(slot: number): Promise<boolean>;
   /** Adds experience to a Pokémon (Day-Care, Rare Candy): level, stats and new moves follow. */
   gainExp(mon: Pokemon, exp: number): Promise<Pokemon>;
+  /** A species' level-up moves (by Pokédex number), from the game data. */
+  learnset(dex: number): readonly { level: number; move: number }[];
+  moveName(move: number): string;
+  /** Teaches a party Pokémon a move, asking which to forget when it knows four. Resolves true if it learned it. */
+  learnMove(slot: number, move: number): Promise<boolean>;
+  /** Uses Strength with a party Pokémon that knows it, if the badge allows; resolves false when none can. */
+  fieldMove(move: "strength"): Promise<boolean>;
   /** The cartridge's name for an item constant ("HM05", "ITEMFINDER"). */
   itemName(item: string): string;
   /** National Pokédex number of a species constant. */
