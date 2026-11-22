@@ -225,8 +225,16 @@ export async function useFieldMove(game: CrystalGame, slot: number, move: FieldM
     case "dig": return useEscape(game, "dig");
     case "teleport": return useEscape(game, "teleport");
     case "sweetscent": {
+      // SweetScentFromMenu: a Pokémon turns up wherever wild ones live, whatever the odds.
+      nameFor(game, slot);
+      await text(game, "_UseSweetScentText", "Used SWEET SCENT!");
+      game.closeText();
       const { tryWildEncounter } = await import("./battle");
-      return tryWildEncounter(game);
+      if (!(await tryWildEncounter(game, true))) {
+        await text(game, "_SweetScentNothingText", "Looks like there's nothing here…");
+        game.closeText();
+      }
+      return;
     }
   }
 }

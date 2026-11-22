@@ -65,37 +65,40 @@ function pickSlot<T>(slots: T[], weights: number[]) {
   return slots[slots.length - 1];
 }
 
-/** A step in grass, water or a cave may start a wild battle. */
-export async function tryWildEncounter(game: CrystalGame) {
-  if (game.save.noWild || !game.save.party.some(m => !m.egg && m.hp > 0)) return;
+/**
+ * A step in grass, water or a cave may start a wild battle. Sweet Scent
+ * (`forced`) skips the roll and Repel. Resolves true when a battle was fought.
+ */
+export async function tryWildEncounter(game: CrystalGame, forced = false): Promise<boolean> {
+  if (game.save.noWild || !game.save.party.some(m => !m.egg && m.hp > 0)) return false;
   const env = game.map.environment;
   const coll = game.world.collision(game.map, game.me.x, game.me.y);
   const cave = env === C("CAVE") || env === C("DUNGEON");
-  if (cave ? game.world.isIce(coll) : !game.world.isGrass(coll)) return;
-  if (game.save.contest && game.map.name.startsWith("NATIONAL_PARK")) return contestEncounter(game);
+  if (cave ? game.world.isIce(coll) : !game.world.isGrass(coll)) return false;
+  if (game.save.contest && game.map.name.startsWith("NATIONAL_PARK")) return contestEncounter(game, forced);
   const surfing = game.save.state === "surf" || game.world.isWater(coll);
   const swarm = game.save.swarm?.group === game.map.group && game.save.swarm.number === game.map.number;
   let pick: { species: number; level: number } | undefined;
   let rate = 0;
   if (surfing) {
     const table = game.rom.water(game.map.group, game.map.number, swarm);
-    if (!table) return;
+    if (!table) return false;
     rate = table.rate;
     pick = pickSlot(table.slots, WATER_SLOTS);
   } else {
     const table = game.rom.grass(game.map.group, game.map.number, swarm);
-    if (!table) return;
+    if (!table) return false;
     const time = game.timeOfDay();
     rate = table.rates[time];
     pick = pickSlot(table.slots[time], GRASS_SLOTS);
   }
   rate = encounterRateEffects(game, rate);
-  if (!pick || Math.random() * 256 >= rate) return;
+  if (!pick || !rate || (!forced && Math.random() * 256 >= rate)) return false;
   // A roaming legendary on this route turns up one encounter in four, and flees.
   const roamer = game.save.roamers?.find(r => r.group === game.map.group && r.number === game.map.number);
   const roaming = !!roamer && Math.random() < 0.25;
   if (roaming) pick = { species: roamer!.species, level: roamer!.level };
-  if (repelled(game, pick.level)) return;
+  if (!forced && repelled(game, pick.level)) return false;
   if (roaming) game.save.vars.battleType = C("BATTLETYPE_ROAMING");
   game.battleSetup = { kind: "wild", species: pick.species, level: pick.level };
   const result = await startBattle(game);
@@ -103,6 +106,7 @@ export async function tryWildEncounter(game: CrystalGame) {
   if (roamer && pick.species === roamer.species && (result === C("WIN") || game.save.caught.includes(roamer.species) && game.ownsRoamer(roamer.species)))
     game.save.roamers = game.save.roamers!.filter(r => r !== roamer);
   await afterBattle(game);
+  return true;
 }
 
 /** ApplyMusicEffectOnEncounterRate and ApplyCleanseTagEffectOnEncounterRate. */
@@ -119,17 +123,18 @@ function repelled(game: CrystalGame, level: number) {
   return !!game.save.repel && !!lead && level < lead.level;
 }
 
-async function contestEncounter(game: CrystalGame) {
+async function contestEncounter(game: CrystalGame, forced = false) {
   const mons = game.rom.contestMons();
   let roll = Math.random() * 100;
   const pick = mons.find(m => (roll -= m.chance) < 0) ?? mons[0];
   // TryWildEncounter_BugContest: 40% in the park's tallest grass, 20% elsewhere.
   const tall = game.world.collision(game.map, game.me.x, game.me.y) === CONST.COLL_LONG_GRASS;
-  if (Math.random() * 256 >= encounterRateEffects(game, Math.floor((tall ? 40 : 20) * 256 / 100))) return;
+  if (!forced && Math.random() * 256 >= encounterRateEffects(game, Math.floor((tall ? 40 : 20) * 256 / 100))) return false;
   const level = pick.min + Math.floor(Math.random() * (pick.max - pick.min + 1));
-  if (repelled(game, level)) return;
+  if (!forced && repelled(game, level)) return false;
   const { contestBattle } = await import("./contest");
   await contestBattle(game, pick.species, level);
+  return true;
 }
 
 // ------------------------------------------------------------------ battles
