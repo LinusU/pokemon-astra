@@ -91,15 +91,15 @@ const TOWNS = ["PALLET_TOWN", "VIRIDIAN_CITY", "PEWTER_CITY", "CERULEAN_CITY", "
 
 export async function useFly(game: YellowGame) {
   if (game.map >= 0x25) return game.say("You can't FLY indoors!");
-  const towns = TOWNS.filter(t => game.save.visited.includes(MAP[t]) && MAP[t] !== game.map);
+  const towns = TOWNS.filter(t => game.save.visited.includes(MAP[t]));
   if (!towns.length) return game.say("There's nowhere to fly yet.");
-  const titles = towns.map(t => game.rom.mapName(MAP[t]));
-  const pick = await game.choose("Fly to", titles);
-  if (pick === undefined) return;
+  const destination = await game.townMap({ kind: "fly", destinations: towns.map(t => MAP[t]) }, "Fly to");
+  const town = towns.find(t => MAP[t] === destination);
+  if (!town) return;
   const { blackoutSpot } = await import("./services");
-  const spot = blackoutSpot(game, MAP[towns[pick]]);
+  const spot = blackoutSpot(game, MAP[town]);
   game.sfx("SFX_TELEPORT_ENTER_1");
-  await game.warp(towns[pick], spot.x, spot.y, "down");
+  await game.warp(town, spot.x, spot.y, "down");
 }
 
 /** Dig and Teleport, like an Escape Rope, return to the last Pokémon Center. */

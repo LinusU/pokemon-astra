@@ -3,7 +3,7 @@
  * cartridge: tilesets, Crystal's day and night palettes, roof colors,
  * animated water and flowers, overworld sprites and Pokémon icons.
  */
-import { C, CONST, SYM } from "./symbols";
+import { C, CONST, SYM, cartridgeInUse } from "./symbols";
 import type { CrystalMap, CrystalRom } from "./rom";
 import type { Facing, LiveMap } from "./world";
 
@@ -97,15 +97,19 @@ export class CrystalGraphics {
   }
 
   /** A tile's 64 pixels (0–3) and its palette slot. */
-  private tile(tilesetId: number, id: number) {
+  private tile(tilesetId: number, id: number, roof = 0xff) {
     const t = this.tileset(tilesetId);
     // Crystal's tilesets hold $60 tiles in each VRAM bank; Crystal Legacy's
     // expanded ones (pret wiki: "Expand tilesets from 192 to 255 tiles") $80.
-    const expanded = t.graphics.length > 0xc0 * 16;
+    const expanded = cartridgeInUse() === "legacy";
     const index = id >= 0x80 && !expanded ? id - 0x20 : id;
+    const roofLength = C("ROOF_LENGTH");
+    const useRoof = roof !== 0xff && id >= 0x0a && id < 0x0a + roofLength;
+    const bytes = useRoof ? this.rom.bytes : t.graphics;
+    const offset = useRoof ? SYM.Roofs + (roof * roofLength + id - 0x0a) * 16 : index * 16;
     const pixels = new Uint8Array(64);
     for (let y = 0; y < 8; y++) {
-      const lo = t.graphics[index * 16 + y * 2] ?? 0, hi = t.graphics[index * 16 + y * 2 + 1] ?? 0;
+      const lo = bytes[offset + y * 2] ?? 0, hi = bytes[offset + y * 2 + 1] ?? 0;
       for (let x = 0; x < 8; x++) pixels[y * 8 + x] = ((lo >> (7 - x)) & 1) | (((hi >> (7 - x)) & 1) << 1);
     }
     const slot = (this.rom.u8(t.palMap + (id >> 1)) >> ((id & 1) * 4)) & 7;
@@ -127,15 +131,18 @@ export class CrystalGraphics {
    * A block's 32×32 pixels. With `cover`, only its colors 1–3: what the Game
    * Boy draws over a sprite tile placed behind the background (OAM_PRIO).
    */
-  block(tilesetId: number, block: number, pals: Rgb[][], key: string, cover = false): HTMLCanvasElement {
-    const k = `${tilesetId}:${block}:${key}${cover ? ":cover" : ""}`;
+  block(map: CrystalMap, block: number, pals: Rgb[][], key: string, cover = false): HTMLCanvasElement {
+    const tilesetId = map.tileset;
+    const dynamicRoof = tilesetId === CONST.TILESET_JOHTO || tilesetId === CONST.TILESET_JOHTO_MODERN || tilesetId === CONST.TILESET_BATTLE_TOWER_OUTSIDE;
+    const roof = dynamicRoof ? this.rom.u8(SYM.MapGroupRoofs + map.group) : 0xff;
+    const k = `${tilesetId}:${roof}:${block}:${key}${cover ? ":cover" : ""}`;
     let c = this.blocks.get(k);
     if (!c) {
       c = canvas(32, 32);
       const ctx = c.getContext("2d")!;
       const tiles = this.rom.blockTiles(this.rom.tileset(tilesetId), block);
       for (let i = 0; i < 16; i++) {
-        const t = this.tile(tilesetId, tiles[i]);
+        const t = this.tile(tilesetId, tiles[i], roof);
         this.draw(ctx, t.pixels, pals[t.slot], (i & 3) * 8, (i >> 2) * 8, cover);
       }
       if (this.blocks.size > 4000) this.blocks.clear();
@@ -152,7 +159,7 @@ export class CrystalGraphics {
     const blocks = "live" in map ? map.live : map.blocks;
     const c = canvas(map.width * 32, map.height * 32), ctx = c.getContext("2d")!;
     for (let by = 0; by < map.height; by++)
-      for (let bx = 0; bx < map.width; bx++) ctx.drawImage(this.block(map.tileset, blocks[by * map.width + bx], pals, key), bx * 32, by * 32);
+      for (let bx = 0; bx < map.width; bx++) ctx.drawImage(this.block(map, blocks[by * map.width + bx], pals, key), bx * 32, by * 32);
     if (this.maps.size > 16) this.maps.delete(this.maps.keys().next().value!);
     this.maps.set(k, c);
     return c;
@@ -183,6 +190,7 @@ export class CrystalGraphics {
     return list;
   }
   frame(kind: "water" | "flower", step: number, pal: Rgb[]): HTMLCanvasElement {
+    step %= kind === "water" ? 4 : 2;
     const k = `${kind}:${step}:${pal.flat().join(",")}`;
     let c = this.frames.get(k);
     if (!c) {
@@ -208,6 +216,7 @@ export class CrystalGraphics {
    * up/down walking alternates feet by mirroring.
    */
   sprite(sprite: number, facing: Facing, walking: boolean, leg: number, pal: Rgb[], palKey: string): HTMLCanvasElement | undefined {
+    leg %= 2;
     const k = `${sprite}:${facing}:${walking}:${leg}:${palKey}`;
     if (this.sprites.has(k)) return this.sprites.get(k);
     let c: HTMLCanvasElement | undefined;

@@ -51,6 +51,7 @@ const WANTED = [
   "JohtoGrassWildMons", "JohtoWaterWildMons", "KantoGrassWildMons", "KantoWaterWildMons",
   "SwarmGrassWildMons", "SwarmWaterWildMons", "FishGroups", "TreeMonMaps", "RockMonMaps", "TreeMons", "ContestMons",
   "Marts", "NPCTrades", "StdScripts", "SpecialsPointers", "TrainerGroups", "TrainerClassNames", "TrainerClassAttributes",
+  "MapGroupRoofs", "Roofs", "DecorationDesc_PosterPointers", "JohtoMap", "KantoMap", "TownMapGFX", "TownMapPals.PalMap", "MalePokegearPals", "FemalePokegearPals",
   "ItemNames", "Landmarks", "PhoneContacts", "SpecialPhoneCallList", "IconPointers", "MonMenuIcons", "Emotes",
   "ItemAttributes", "MagikarpLengths", "OddEggs", "FruitTreeItems", "HiddenItemScript",
   "SeenByTrainerScript", "TalkToTrainerScript", "FindItemInBallScript", "PlayerObjectTemplate", "FruitTreeScript", "TradeTexts",
@@ -61,7 +62,7 @@ const WANTED = [
 /** Tables that only some versions have. */
 const OPTIONAL = [
   "HousePalette", "MansionPalette1", "MansionPalette2", "RadioTowerPalette", "PokeComPalette", "BattleTowerInsidePalette",
-  "IcePathPalette", "GatePalette", "MapGroupRoofs", "UnusedTMHMMoves", "AnimateWaterTile.WaterTileFrames",
+  "IcePathPalette", "GatePalette", "UnusedTMHMMoves", "AnimateWaterTile.WaterTileFrames",
   "AnimateFlowerTile.FlowerTileFrames", "TilesetAnims", "BugContestantPointers", "DecorationAttributes",
   "EnvironmentColorsPointers.OutdoorColors", "EnvironmentColorsPointers.IndoorColors", "EnvironmentColorsPointers.DungeonColors",
   "BerryNames", "ApricornBalls", "PokeBallMenuTMHM", "UnownWords", "SlotsTilemap", "BargainShopData", "RooftopSaleMart1",

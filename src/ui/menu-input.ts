@@ -4,6 +4,7 @@ import { summaryController } from "./partner-summary";
 import { pcController } from "./storage-pc";
 import { journalController } from "./journal";
 import { dexController } from "./pokedex";
+import { cartridgeMapController } from "./cartridge-map";
 import { bagController } from "./bag";
 
 const directions = ["up", "down", "left", "right"] as const;
@@ -59,7 +60,8 @@ export class MenuInput {
     now: number,
     battle: boolean,
   ) {
-    const controller = bagController(layer) ?? dexController(layer) ?? journalController(layer) ?? pcController(layer) ?? summaryController(layer) ?? martController(layer);
+    const map = cartridgeMapController(layer);
+    const controller = map ?? bagController(layer) ?? dexController(layer) ?? journalController(layer) ?? pcController(layer) ?? summaryController(layer) ?? martController(layer);
     const party = layer.querySelector<HTMLElement>(".party-screen");
     const scroller =
       layer.querySelector<HTMLElement>(
@@ -77,9 +79,11 @@ export class MenuInput {
     const pressed = directions.find((direction) => input.hit(direction));
     const held = this.repeating && input.held(this.repeating);
     if (!pressed && !held) this.repeating = undefined;
+    // On the town map only landmark browsing repeats. Region and zoom are single presses.
+    const repeatable = !map || this.repeating === "left" || this.repeating === "right";
     const direction =
       pressed ??
-      ((!battle || controller || party) && held && now >= this.repeatAt
+      ((!battle || controller || party) && repeatable && held && now >= this.repeatAt
         ? this.repeating
         : undefined);
     if (pressed) {

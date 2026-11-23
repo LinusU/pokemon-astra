@@ -242,8 +242,15 @@ export function openCrystalMenu(game: CrystalGame): Promise<(() => Promise<void>
         await game.modal(() => openPokegear(game));
       });
       if (v === "dex") {
-        const list = save.seen.slice().sort((a, b) => a - b).map(n => `<li><img alt="" src="${game.ctx.sprite!(n)}"><span>№${String(n).padStart(3, "0")} ${escapeHtml(engine.species(n).name)}</span><em>${save.caught.includes(n) ? "Caught" : "Seen"}</em></li>`);
+        const list = save.seen.slice().sort((a, b) => a - b).map(n => `<li><img alt="" src="${game.ctx.sprite!(n)}"><span>№${String(n).padStart(3, "0")} ${escapeHtml(engine.species(n).name)}</span><em>${save.caught.includes(n) ? "Caught" : "Seen"}</em><button data-area="${n}" aria-label="Show ${escapeHtml(engine.species(n).name)} habitat">Area</button></li>`);
         const p = panel(game.layer, "Pokédex", `<p>Seen ${save.seen.length} · Owned ${save.caught.length}</p><ul class="yellow-dex">${list.join("") || "<li>No Pokémon yet.</li>"}</ul><div class="buttons"><button id="back">Back</button></div>`, "yellow-dex-panel");
+        for (const b of p.querySelectorAll<HTMLButtonElement>("[data-area]")) b.onclick = async () => {
+          const species = Number(b.dataset.area);
+          const purpose = { kind: "area" as const, species };
+          const title = `${engine.species(species).name} · Pokédex Area`;
+          const { openCrystalMap } = await import("./town-map");
+          await openCrystalMap(game, purpose, title);
+        };
         p.querySelector<HTMLButtonElement>("#back")!.onclick = main;
         return;
       }

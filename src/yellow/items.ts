@@ -157,7 +157,7 @@ export async function useYellowItem(game: YellowGame, id: number): Promise<strin
     const { fish } = await import("./services");
     return () => fish(game, n);
   }
-  if (n === "TOWN_MAP") return `You are in ${game.summary().place}.`;
+  if (n === "TOWN_MAP") { await game.townMap(); return; }
   if (n === "COIN_CASE") return `Coins: ${save.coins}`;
   if (n === "ITEMFINDER") {
     const { itemfinder } = await import("./services");

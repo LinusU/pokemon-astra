@@ -268,3 +268,9 @@ After reloading the same journey, the player flew to Dewdrop, walked Aurora Trai
 - The `CRYSTAL_FUZZ=1` sweep still runs 2,776 scripts on Crystal and 2,788 on Crystal Legacy without errors. All 330 Vitest checks, the TypeScript check, `npm run test:native` and the production build pass.
 - In the in-app browser, a new Crystal Legacy journey was played on screen: the journey screen, Mom's scene and clock questions, leaving the house, Elm's errand, Cyndaquil's picture, the nickname prompt, the start menu at desktop and phone sizes, jumping a ledge in free movement, and a wild battle back to the map.
 - Not verified on screen this time: the later towns, the Pokégear, the PC and marts, the minigames, and sound.
+
+## Cartridge town maps
+
+- In isolated Chrome journeys on Crystal, Crystal Legacy, Yellow and Yellow Legacy, the Pokégear Map Card and bag Town Map opened on the player's landmark. A simulated standard gamepad browsed and repeated with left/right, zoomed with A, located the player with Down, and returned with B even when a footer button held focus. The chart and control hints fit desktop and phone viewports, including the unlocked two-region map. Wall maps opened through the normal interaction before the player owned the card or item.
+- The Pokédex Area screen showed Pidgey's habitats and an empty area for Mew. Crystal Legacy's Area screen could switch to Kanto before the League. Fly was cancelled and reopened, then landed in Violet City on the Crystal adventures and Pewter City on the Yellow adventures.
+- The full Vitest run passed all 351 checks with the Crystal render, script sweep and Legacy walkthrough suites enabled. The production build and offline asset generation passed.

@@ -404,8 +404,8 @@ async function playersHousePC(g: CrystalGame) {
 }
 
 async function townMap(g: CrystalGame) {
-  const { openPokegear } = await import("./pokegear");
-  await g.modal(() => openPokegear(g, "map"));
+  const { openCrystalMap } = await import("./town-map");
+  await openCrystalMap(g);
 }
 async function mapRadio(g: CrystalGame) {
   const { openPokegear } = await import("./pokegear");
@@ -558,7 +558,14 @@ const SPECIAL: Record<string, Routine> = {
   UpdateSprites: noop, UpdatePlayerSprite: noop, RefreshSprites: noop, LoadUsedSpritesGFX: noop, LoadMapPalettes: noop,
   SetPlayerPalette: noop, FadeOutPalettes: noop, FadeBlackQuickly: noop, FadeInPalettes: noop, FadeInQuickly: noop,
   InitialSetDSTFlag: g => askClock(g, "_DSTIsThatOKText"), InitialClearDSTFlag: g => askClock(g, "_TimeAskOkayText"),
-  ToggleMaptileDecorations: noop, ToggleDecorationsVisibility: noop,
+  ToggleMaptileDecorations: g => {
+    // InitDecorations hangs the Town Map in a new bedroom. Older saves lack this RAM byte.
+    const poster = g.save.ram[RAM.wDecoPoster] ?? g.rom.u8(SYM.DecorationDesc_PosterPointers);
+    g.poke(RAM.wDecoPoster, poster);
+    g.setEvent(C("EVENT_PLAYERS_ROOM_POSTER"), poster !== 0);
+    if (poster) g.changeBlock(6, 0, g.rom.u8(SYM.DecorationAttributes + poster * 6 + 5));
+  },
+  ToggleDecorationsVisibility: noop,
   UnownPrinter: noop, StubbedTrainerRankings_Healings: noop, UnusedDummySpecial: noop, UnusedFindItemInPCOrBag: noop,
   SetDayOfWeek: noop, AskRememberPassword: setVar(0), GameboyCheck: g => { g.scriptVar = C("GBCHECK_CGB"); },
   SurfStartStep: async g => { await g.walk(0, [g.me.facing]); },

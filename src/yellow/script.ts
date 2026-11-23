@@ -88,6 +88,7 @@ export interface Game {
   /** Starts or stops the starter Pikachu following the player. */
   follower(on: boolean): void;
   /** Multiple-choice menu; resolves to the index or undefined for B. */
+  townMap(): Promise<number | undefined>;
   choose(title: string, options: string[]): Promise<number | undefined>;
   /** ReplaceTileBlock: changes a 32×32 block of the current map (block coordinates). */
   setBlock(bx: number, by: number, block: number): void;

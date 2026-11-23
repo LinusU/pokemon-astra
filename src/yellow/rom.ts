@@ -4,7 +4,7 @@
  * (see scripts/yellow-symbols.mjs); the data itself is never bundled.
  */
 import { YELLOW_SHA1 } from "./generated/symbols";
-import { MAP_LABELS, SYM, type Cartridge } from "./symbols";
+import { CONST, MAP_LABELS, SYM, type Cartridge } from "./symbols";
 
 export class UnsupportedYellowCartridge extends Error {}
 
@@ -462,15 +462,19 @@ export class YellowRom {
     const o = addr("MapSongBanks") + map * 2;
     return { id: this.u8(o), bank: this.u8(o + 1) };
   }
-  /** Town map name of a map, from the external and internal map tables. */
-  mapName(map: number) {
-    const names = this.bankOf(addr("ExternalMapEntries"));
-    if (map < 0x25) {
-      const o = addr("ExternalMapEntries") + map * 3;
-      return this.string(this.far(names, this.u16(o + 1)), 24);
+  /** The outdoor entry or the cartridge's containing landmark for an indoor map. */
+  townMapEntry(map: number) {
+    let o: number;
+    if (map < CONST.FIRST_INDOOR_MAP) o = addr("ExternalMapEntries") + map * 3;
+    else {
+      o = addr("InternalMapEntries");
+      while (this.u8(o) !== 0xff && map >= this.u8(o)) o += 4;
+      if (this.u8(o) === 0xff) return undefined;
+      o++;
     }
-    for (let o = addr("InternalMapEntries"); this.u8(o) !== 0xff; o += 4)
-      if (map < this.u8(o)) return this.string(this.far(names, this.u16(o + 2)), 24);
-    return "";
+    const coords = this.u8(o);
+    return { name: this.string(this.far(this.bankOf(o), this.u16(o + 1)), 24),
+      x: (coords & 15) * 8 + 20, y: (coords >> 4) * 8 + 12 };
   }
+  mapName(map: number) { return this.townMapEntry(map)?.name ?? ""; }
 }

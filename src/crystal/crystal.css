@@ -71,7 +71,6 @@
 .crystal-gear-tabs button.active { background: #f2c94c; color: #3b2f0c; }
 .crystal-clock { font-family: "VT323", monospace; font-size: 24px; text-align: center; }
 .crystal-clock strong { font-size: 44px; }
-.crystal-map { height: min(176px, 26vh); width: auto; max-width: 100%; image-rendering: pixelated; display: block; margin: 0 auto; }
 .crystal-puzzle { display: grid; grid-template-columns: repeat(4, 48px); gap: 3px; justify-content: center; }
 .crystal-puzzle button { height: 48px; font-family: "VT323", monospace; font-size: 22px; }
 .crystal-puzzle button.empty { visibility: hidden; }

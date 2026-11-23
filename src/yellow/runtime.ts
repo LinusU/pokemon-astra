@@ -668,11 +668,12 @@ export class YellowGame implements Game {
         else if (input.hit("a")) this.yesNoResolve(focused !== 1);
         else if (input.hit("b")) this.yesNoResolve(false);
       } else {
+        const top = this.layer.querySelector<HTMLElement>(".cartridge-map-overlay") ?? this.layer;
         if (input.hit("b")) {
-          const back = this.ctx.layer.querySelector<HTMLButtonElement>("[data-bag-cancel], #back, #close");
+          const back = top.querySelector<HTMLButtonElement>("[data-bag-cancel], #back, #close");
           if (back) back.click();
-        } else if (input.hit("menu")) this.ctx.layer.querySelector<HTMLButtonElement>("#close")?.click();
-        else this.ctx.menuInput.update(this.ctx.layer, input, now, false);
+        } else if (input.hit("menu")) top.querySelector<HTMLButtonElement>("#close")?.click();
+        else this.ctx.menuInput.update(top, input, now, false);
       }
     } else if (this.mode === "battle") {
       if (input.hit("b")) this.battleLaunch?.back();
@@ -1470,6 +1471,16 @@ export class YellowGame implements Game {
   follower(on: boolean) {
     this.save.vars.pikachuStarter = on ? 1 : 0;
     this.placePikachu();
+  }
+  async townMap(purpose: import("../ui/cartridge-map").MapPurpose = { kind: "browse" }, title = "Town Map") {
+    const { showYellowMap } = await import("./town-map");
+    const previous = this.mode;
+    this.mode = "menu";
+    try {
+      return await showYellowMap(this.layer, this.rom, this.map, purpose, title);
+    } finally {
+      this.mode = previous;
+    }
   }
   choose(title: string, options: string[]) {
     return import("./services").then(async ({ choose }) => {

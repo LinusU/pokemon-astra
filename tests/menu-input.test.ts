@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Action } from "../src/game/input";
+import * as cartridgeMap from "../src/ui/cartridge-map";
 import { MenuInput } from "../src/ui/menu-input";
 
 function panel(
@@ -64,6 +65,26 @@ function panel(
 }
 
 describe("menu input", () => {
+  it("sends handheld map commands directly regardless of focus and only repeats browsing", () => {
+    const { update, buttons, ownerDocument } = panel([[0, 0, 50, 20]]);
+    ownerDocument.activeElement = buttons[0];
+    const input = vi.fn();
+    const map = vi.spyOn(cartridgeMap, "cartridgeMapController").mockReturnValue({ input });
+    try {
+      update(0, "right");
+      update(310, undefined, "right");
+      update(400, "up");
+      update(750, undefined, "up");
+      update(800, "down");
+      update(1150, undefined, "down");
+      update(1200, "a");
+      expect(input.mock.calls.flat()).toEqual(["right", "right", "up", "down", "a"]);
+      expect(buttons[0].click).not.toHaveBeenCalled();
+    } finally {
+      map.mockRestore();
+    }
+  });
+
   it("turns map entries with left and right, repeating while the D-pad is held", () => {
     const { update, buttons } = panel([[0, 80, 25, 25], [175, 80, 25, 25]]);
     buttons[0].dataset.mapStep = "-1";

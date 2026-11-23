@@ -1034,7 +1034,7 @@ export class CrystalGame {
     } else if (this.ui.busy) this.ui.frame(input, now);
     else if (this.mode === "menu") {
       // The topmost overlay, such as a party chooser over the Pack, takes the input.
-      const overlays = this.layer.querySelectorAll<HTMLElement>(":scope > .crystal-overlay");
+      const overlays = this.layer.querySelectorAll<HTMLElement>(":scope > .crystal-overlay, :scope > .cartridge-map-overlay");
       const top = overlays[overlays.length - 1] ?? this.layer;
       if (input.hit("b")) top.querySelector<HTMLButtonElement>("[data-bag-cancel], #back, #close")?.click();
       else if (input.hit("menu")) top.querySelector<HTMLButtonElement>("#close")?.click();

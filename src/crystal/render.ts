@@ -32,7 +32,7 @@ export class CrystalRenderer {
     c.fillStyle = `rgb(${pals[0][0].join(",")})`;
     c.fillRect(0, 0, 320, 240);
     // The border block fills everything beyond the map and its neighbours.
-    const border = this.gfx.block(map.tileset, map.border, pals, key);
+    const border = this.gfx.block(map, map.border, pals, key);
     const bx0 = Math.floor(camX / 32), by0 = Math.floor(camY / 32);
     for (let by = by0; by <= by0 + 8; by++)
       for (let bx = bx0; bx <= bx0 + 10; bx++) c.drawImage(border, bx * 32 - camX, by * 32 - camY);
@@ -119,7 +119,7 @@ export class CrystalRenderer {
         if (!g.world.inside(map, tx, ty) || !g.world.isTallGrass(g.world.collision(map, tx, ty))) continue;
         const x0 = Math.max(sx, tx * 16), x1 = Math.min(sx + 16, tx * 16 + 16), y0 = Math.max(top, ty * 16), y1 = Math.min(bottom, ty * 16 + 16);
         if (x1 <= x0 || y1 <= y0) continue;
-        const bx = tx >> 1, by = ty >> 1, cover = this.gfx.block(map.tileset, g.world.block(map, bx, by), pals, key, true);
+        const bx = tx >> 1, by = ty >> 1, cover = this.gfx.block(map, g.world.block(map, bx, by), pals, key, true);
         c.drawImage(cover, x0 - bx * 32, y0 - by * 32, x1 - x0, y1 - y0, x0 - camX, y0 - camY, x1 - x0, y1 - y0);
       }
   }

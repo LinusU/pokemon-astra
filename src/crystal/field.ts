@@ -173,7 +173,7 @@ export async function useFlash(game: CrystalGame, slot: number) {
 export async function useFly(game: CrystalGame) {
   const env = game.map.environment;
   if (env !== C("TOWN") && env !== C("ROUTE")) return game.say("You can't FLY here.");
-  const r = game.rom, points: { name: string; spawn: number }[] = [];
+  const r = game.rom, points: { landmark: number; spawn: number }[] = [];
   // FlyMap: the region the player is in; Kanto's towns once the Indigo Plateau is visited.
   const kantoAt = C("KANTO_LANDMARK"), visited = (spawn: number) => game.flag(C("ENGINE_FLYPOINT_PLAYERS_HOUSE") + spawn);
   const kanto = game.landmark() >= kantoAt && visited(C("SPAWN_INDIGO"));
@@ -181,13 +181,21 @@ export async function useFly(game: CrystalGame) {
     const landmark = r.u8(o), spawn = r.u8(o + 1);
     // HasVisitedSpawn checks the flag of the point's spawn, not of its place in the list.
     if ((landmark >= kantoAt) !== kanto || !visited(spawn)) continue;
-    points.push({ name: r.landmarkName(landmark), spawn });
+    points.push({ landmark, spawn });
   }
   if (!points.length) return game.say("There's nowhere to FLY to yet.");
-  const pick = await game.choose(points.map(p => p.name), { title: "Where to?", cancel: true });
-  if (pick === undefined) return;
+  let destination;
+  if (game.ctx.layer) {
+    const { openCrystalMap } = await import("./town-map");
+    const id = await openCrystalMap(game, { kind: "fly", destinations: points.map(p => p.landmark) }, "Fly to");
+    destination = points.find(p => p.landmark === id);
+  } else {
+    const pick = await game.choose(points.map(p => r.landmarkName(p.landmark)), { title: "Where to?", cancel: true });
+    if (pick !== undefined) destination = points[pick];
+  }
+  if (!destination) return;
   const { spawnPoint } = await import("./services");
-  const spot = spawnPoint(game, points[pick].spawn);
+  const spot = spawnPoint(game, destination.spawn);
   game.sfx("SFX_FLY");
   // FlyFunction: loadvar VAR_MOVEMENT, PLAYER_NORMAL.
   game.setPlayerState(C("PLAYER_NORMAL"));

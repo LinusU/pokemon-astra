@@ -1,7 +1,8 @@
 /** The Pokégear: clock, map card, phone and radio card. */
 import { escapeHtml, panel } from "../ui/shell";
-import { C, CONST, RAM, SYM } from "./symbols";
+import { C, CONST, RAM } from "./symbols";
 import type { CrystalGame } from "./runtime";
+import { openCrystalMap } from "./town-map";
 import { contact, contactName, call } from "./phone";
 
 const DAYS = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
@@ -24,6 +25,9 @@ function stations(game: CrystalGame) {
 
 export function openPokegear(game: CrystalGame, start: "clock" | "map" | "phone" | "radio" = "clock"): Promise<void> {
   if (!game.ctx.layer) return Promise.resolve();
+  if (start === "map" && game.hasFlag("ENGINE_MAP_CARD")) {
+    return openCrystalMap(game, { kind: "browse" }, "Pokégear · Map Card").then(() => {});
+  }
   return new Promise(resolve => {
     const host = document.createElement("div");
     host.className = "crystal-overlay";
@@ -39,11 +43,13 @@ export function openPokegear(game: CrystalGame, start: "clock" | "map" | "phone"
       let body = "";
       const now = game.now();
       if (tab === "clock") body = `<p class="crystal-clock">${DAYS[now.getDay()]}<br><strong>${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}</strong><br>${["MORNING", "DAY", "NIGHT"][game.timeOfDay()]}</p>`;
-      if (tab === "map") body = `<canvas class="crystal-map" width="160" height="144"></canvas><p>${escapeHtml(game.rom.landmarkName(game.landmark()))}</p>`;
       if (tab === "phone") body = `<nav class="journey-list">${game.save.phone.map(i => `<button data-call="${i}">${escapeHtml(contactName(game, contact(game, i)))}</button>`).join("") || "<p>No numbers yet.</p>"}</nav>`;
       if (tab === "radio") body = `<nav class="journey-list">${stations(game).map((s, i) => `<button data-station="${i}">${escapeHtml(s.name)}</button>`).join("")}<button data-station="-1">Turn off</button></nav>`;
       const p = panel(host, "Pokégear", `<div class="crystal-gear-tabs">${tabs.filter(t => t[2]).map(([id, label]) => `<button data-tab="${id}" class="${id === tab ? "active" : ""}">${label}</button>`).join("")}</div>${body}<div class="buttons"><button class="secondary" id="back">Close</button></div>`, "crystal-gear");
-      for (const b of p.querySelectorAll<HTMLButtonElement>("[data-tab]")) b.onclick = () => show(b.dataset.tab!);
+      for (const b of p.querySelectorAll<HTMLButtonElement>("[data-tab]")) b.onclick = () => {
+        if (b.dataset.tab === "map") void openCrystalMap(game, { kind: "browse" }, "Pokégear · Map Card");
+        else show(b.dataset.tab!);
+      };
       p.querySelector<HTMLButtonElement>("#back")!.onclick = close;
       p.querySelector<HTMLButtonElement>(`[data-tab="${tab}"]`)?.focus({ preventScroll: true });
       for (const b of p.querySelectorAll<HTMLButtonElement>("[data-call]")) b.onclick = async () => {
@@ -58,25 +64,7 @@ export function openPokegear(game: CrystalGame, start: "clock" | "map" | "phone"
         // Hearing Buena's show gives the password she asks for at the Radio Tower.
         if (s?.name === "BUENA'S PASSWORD" && game.timeOfDay() === 2) game.poke(RAM.wBuenasPassword, 0x80 | Math.floor(Math.random() * 11));
       };
-      const canvas = p.querySelector<HTMLCanvasElement>(".crystal-map");
-      if (canvas) drawMap(game, canvas);
     };
-    show(start === "map" && !game.hasFlag("ENGINE_MAP_CARD") ? "clock" : start);
+    show(start === "map" ? "clock" : start);
   });
-}
-
-/** Landmarks on the map card, the current one highlighted. */
-function drawMap(game: CrystalGame, canvas: HTMLCanvasElement) {
-  const c = canvas.getContext("2d")!;
-  c.fillStyle = "#1c3a5c";
-  c.fillRect(0, 0, 160, 144);
-  const here = game.landmark(), kanto = here >= (CONST.KANTO_LANDMARK ?? 0x2f);
-  const count = CONST.NUM_LANDMARKS ?? 0x60;
-  for (let l = 1; l < count; l++) {
-    if ((l >= (CONST.KANTO_LANDMARK ?? 0x2f)) !== kanto) continue;
-    const { x, y } = game.rom.landmarkSpot(l);
-    c.fillStyle = l === here ? "#ffd84a" : "#9ad08a";
-    c.fillRect(x - 2, y - 2, l === here ? 6 : 4, l === here ? 6 : 4);
-  }
-  void SYM;
 }

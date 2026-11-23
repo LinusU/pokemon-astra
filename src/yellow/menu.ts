@@ -107,9 +107,15 @@ export function openYellowMenu(game: YellowGame): Promise<(() => Promise<void>) 
       if (v === "dex") {
         const rows = save.seen.slice().sort((a, b) => a - b).map(n => {
           const name = engine.species(n).name;
-          return `<li><img alt="" src="${game.ctx.sprite(n)}"><span>№${String(n).padStart(3, "0")} ${escapeHtml(name)}</span><em>${save.caught.includes(n) ? "Caught" : "Seen"}</em></li>`;
+          return `<li><img alt="" src="${game.ctx.sprite(n)}"><span>№${String(n).padStart(3, "0")} ${escapeHtml(name)}</span><em>${save.caught.includes(n) ? "Caught" : "Seen"}</em><button data-area="${n}" aria-label="Show ${escapeHtml(engine.species(n).name)} habitat">Area</button></li>`;
         });
         const p = panel(game.layer, "Pokédex", `<p>Seen ${save.seen.filter(n => n <= 151).length} · Owned ${save.caught.filter(n => n <= 151).length}</p><ul class="yellow-dex">${rows.join("") || "<li>No Pokémon yet.</li>"}</ul><div class="buttons"><button id="back">Back</button></div>`, "yellow-dex-panel");
+        for (const b of p.querySelectorAll<HTMLButtonElement>("[data-area]")) b.onclick = async () => {
+          const species = Number(b.dataset.area);
+          const purpose = { kind: "area" as const, species };
+          const title = `${engine.species(species).name} · Pokédex Area`;
+          await game.townMap(purpose, title);
+        };
         p.querySelector<HTMLButtonElement>("#back")!.onclick = main;
         return;
       }

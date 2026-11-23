@@ -51,7 +51,13 @@ export function showPokepic(game: CrystalGame, species: number) {
 }
 
 export async function describeDecoration(game: CrystalGame, kind: number) {
-  void kind;
+  if (kind === C("DECODESC_POSTER")) {
+    const r = game.rom, poster = game.peek(RAM.wDecoPoster);
+    for (let o = SYM.DecorationDesc_PosterPointers; r.u8(o) !== 0xff; o += 3) {
+      if (r.u8(o) === poster) return runScript(game, r.near(o + 1));
+    }
+    return;
+  }
   await engineText(game, "LookTownMapText", "It's a decoration.");
   game.closeText();
 }

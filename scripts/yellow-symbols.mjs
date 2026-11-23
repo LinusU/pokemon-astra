@@ -213,7 +213,7 @@ const wanted = [...sym.keys()].filter(name =>
     "MapHeaderPointers", "MapHeaderBanks", "Tilesets", "WildDataPointers", "TrainerDataPointers", "TrainerNames",
     "ItemNames", "ItemPrices", "TechnicalMachinePrices", "PokedexOrder", "MonsterNames", "SpriteSheetPointerTable",
     "MapSongBanks", "MapHSPointers", "MissableObjects", "HiddenObjectMaps", "HiddenObjectPointers", "TownMapEntries",
-    "InternalMapEntries", "TownMapOrder", "CollisionTiles", "WarpTileIDPointers", "DoorTileIDPointers",
+    "InternalMapEntries", "TownMapOrder", "TownMapOrderEnd", "CompressedMap", "WorldMapTileGraphics", "CollisionTiles", "WarpTileIDPointers", "DoorTileIDPointers",
     "LedgeTiles", "TrainerClassMoveChoiceModifications", "TrainerPicAndMoneyPointers", "TradeMons", "ExternalMapEntries",
     "BaseStats", "FlyWarpDataPtr", "NewGameWarps", "BikeRidingTilesets", "DungeonMaps1", "DungeonMaps2",
     "ForcedBikeOrSurfMaps", "SpecialTrainerMoves", "YellowLeaderMoves", "TilePairCollisionsLand", "TilePairCollisionsWater",

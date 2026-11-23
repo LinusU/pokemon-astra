@@ -103,7 +103,7 @@ SHARED_TEXTS.BookOrSculptureText = async g => {
   await g.text(sculpture ? "DiglettSculptureText" : "PokemonBooksText");
 };
 SHARED_TEXTS.ElevatorText = g => g.text("ElevatorText");
-SHARED_TEXTS.TownMapText = async g => g.say("A map of the KANTO region.");
+SHARED_TEXTS.TownMapText = async g => { await g.townMap(); };
 void SYM;
 
 /** Professor Oak's aides give an item once the player owns enough species (engine/events/oaks_aide.asm). */
