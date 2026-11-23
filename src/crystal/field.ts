@@ -129,9 +129,16 @@ export async function useHeadbutt(game: CrystalGame, slot: number) {
   game.closeText();
   game.sfx("SFX_SANDSTORM");
   const trees = game.rom.treeMons(game.map.group, game.map.number);
-  const rare = ((game.save.playerId % 10) + game.me.x + game.me.y) % 10;
-  const list = trees && (rare === 0 ? trees.rare : trees.common);
-  if (!list?.length || Math.random() < 0.4) return text(game, "HeadbuttNothingText", "Nope. Nothing…");
+  // GetTreeScore: each tree is bad, good or rare for the player, from its square
+  // (in object coordinates, 4 in from the map's corner) and the player's ID.
+  const { x, y } = game.front(), d = x + 4, e = y + 4;
+  let score = Math.floor((d * e + d + e) / 5) % 10 - game.save.playerId % 10;
+  if (score < 0) score += 10;
+  const kind = score === 0 ? "rare" : score < 5 ? "good" : "bad";
+  // GetTreeMon: a Pokémon falls from a bad tree 1 time in 10, a good one 5 in 10 and a rare one 8 in 10.
+  const odds = kind === "rare" ? 8 : kind === "good" ? 5 : 1;
+  const list = trees && (kind === "rare" ? trees.rare : trees.common);
+  if (!list?.length || Math.floor(Math.random() * 10) >= odds) return text(game, "HeadbuttNothingText", "Nope. Nothing…");
   let roll = Math.random() * 100;
   const pick = list.find(e => (roll -= e.chance) < 0) ?? list[0];
   game.save.vars.battleType = C("BATTLETYPE_TREE");
