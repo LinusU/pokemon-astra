@@ -550,6 +550,54 @@ describe.skipIf(!romAvailable)("complete native battle decisions", () => {
     expect(result?.party[0].exp).toBe(lead.exp + 171);
     expect(result?.party[1].exp).toBe(reserve.exp + 13);
   });
+
+  it("keeps both level-up friendship gains of a combined Exp. Share award", async () => {
+    const { instance } = await WebAssembly.instantiate(
+      readFileSync("public/astra_native.wasm"),
+      {},
+    );
+    const engine = new Engine(
+      instance.exports as never,
+      readFileSync("pokecrystal11.gbc"),
+    );
+    // Level 3 with 60 EXP against a wild level 14 Caterpie: the battling
+    // batch (52) reaches level 4 (80) and the holder batch (52) level 5 (156).
+    const base = engine.makePokemon(58, 3);
+    const trained = {
+      ...engine.teachMove(base, 52, base.moves.indexOf(0)),
+      exp: 60,
+      item: 57,
+      stat_exp: base.stat_exp.map(() => 65535),
+      dvs: base.dvs.map(() => 15),
+    };
+    const lead = { ...trained, stats: engine.statsFor(trained) };
+    lead.hp = lead.stats[0];
+    const battle = engine.startBattle({
+      party: [lead, engine.makePokemon(1, 6)],
+      opponent: { species: 10, level: 14 },
+      balls: [[5, 2]],
+      seed: 123,
+    });
+    const gained: number[] = [];
+    const grew: number[] = [];
+    for (let i = 0; i < 20; i++) {
+      const snapshot = battle.snapshot();
+      for (const event of snapshot.events as any[]) {
+        if (event.Message?.GainedExp?.mon === lead.nickname) gained.push(event.Message.GainedExp.exp);
+        if (event.Message?.GrewToLevel?.slot === 0) grew.push(event.Message.GrewToLevel.level);
+      }
+      if (snapshot.outcome) break;
+      const actions = snapshot.legal as { Move?: { slot: number } }[];
+      battle.act(actions.findIndex((a) => a.Move?.slot === lead.moves.indexOf(52)));
+    }
+    const result = battle.snapshot().result;
+    expect(result?.outcome).toBe("win");
+    expect(gained).toEqual([104]);
+    expect(grew).toEqual([4, 5]);
+    expect(result?.party[0].exp).toBe(164);
+    // The cartridge's two level-up batches raise happiness twice (70 → 90).
+    expect(result?.party[0].happiness).toBe(90);
+  });
 });
 
 describe("authored trainer names", () => {

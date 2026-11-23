@@ -799,7 +799,11 @@ impl Engine {
             .map(|(i, &first)| {
                 let Some(&second) = holders.get(i) else { return Some(first) };
                 let exp = first.exp.checked_add(second.exp)?;
-                Some(crate::engine::setup::ExpAward { exp, boosted: if first.exp != 0 { first.boosted } else { second.boosted } })
+                Some(crate::engine::setup::ExpAward {
+                    exp,
+                    boosted: if first.exp != 0 { first.boosted } else { second.boosted },
+                    split_level_up: first.exp != 0 && second.exp != 0 && self.levels_up_twice(i, first.exp, second.exp),
+                })
             })
             .collect();
         match combined {
@@ -810,6 +814,24 @@ impl Engine {
                 self.award_experience_points(&holders)
             }
         }
+    }
+
+    /// Whether the party member in `slot` would grow a level from `first`
+    /// and grow again from `second` granted after it.
+    fn levels_up_twice(&self, slot: usize, first: u16, second: u16) -> bool {
+        let mon = W_PARTY_MON1 + slot as u16 * PARTY_LEN;
+        let level = self.mem.rb(mon + u16::from(MON_LEVEL));
+        let species = self.mem.rb(mon + u16::from(MON_SPECIES));
+        let exp = mon + u16::from(MON_EXP);
+        let current = u32::from_be_bytes([0, self.mem.rb(exp), self.mem.rb(exp + 1), self.mem.rb(exp + 2)]);
+        let max = self.data.experience_at_level(species, MAX_LEVEL);
+        // CalcLevel: the highest level whose experience the total reaches.
+        let level_at = |total: u32| {
+            let total = total.min(max);
+            (2..=MAX_LEVEL).take_while(|&l| self.data.experience_at_level(species, l) <= total).last().unwrap_or(1)
+        };
+        let after_first = level_at(current + u32::from(first)).max(level);
+        after_first > level && level < MAX_LEVEL && level_at(current + u32::from(first) + u32::from(second)) > after_first
     }
 
     /// Mark the members `awards` brings to the level cap as already there,

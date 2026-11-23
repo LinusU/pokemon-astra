@@ -318,6 +318,9 @@ pub(super) struct ExpAward {
     pub exp: u16,
     /// Traded: the message says "a boosted".
     pub boosted: bool,
+    /// The cartridge would level this member up in two separate batches,
+    /// each raising its happiness.
+    pub split_level_up: bool,
 }
 
 impl Engine {
@@ -385,7 +388,7 @@ impl Engine {
             return ExpAward::default();
         }
         let exp = self.participation_exp(bc).max(self.training_exp(bc));
-        ExpAward { exp, boosted: self.mem.rb(W_STRING_BUFFER2 + 2) != 0 }
+        ExpAward { exp, boosted: self.mem.rb(W_STRING_BUFFER2 + 2) != 0, split_level_up: false }
     }
 
     /// Announce and apply `award` to the party mon at `bc`.
@@ -401,7 +404,7 @@ impl Engine {
         let v = self.mem.rb(W_STRING_BUFFER2);
         self.mem.wb(H_QUOTIENT + 2, v);
         self.animate_exp_bar();
-        self.apply_earned_exp(bc, cur)
+        self.apply_earned_exp(bc, cur, award.split_level_up)
     }
 
     /// Training uses the member's growth curve and only brings them toward
@@ -504,7 +507,7 @@ impl Engine {
         u16::from_be_bytes([self.mem.rb(H_QUOTIENT + 2), self.mem.rb(H_QUOTIENT + 3)])
     }
 
-    fn apply_earned_exp(&mut self, bc: u16, cur: u8) -> Flow {
+    fn apply_earned_exp(&mut self, bc: u16, cur: u8, split_level_up: bool) -> Flow {
         // MON_EXP += hQuotient + 2..3
         let exp = bc + u16::from(MON_EXP);
         let (v, carry) = self.mem.rb(exp + 2).overflowing_add(self.mem.rb(H_QUOTIENT + 3));
@@ -578,6 +581,9 @@ impl Engine {
         }
         // .skip_active_mon_update
         self.level_up_happiness_mod();
+        if split_level_up {
+            self.level_up_happiness_mod();
+        }
         if self.mem.rb(W_CUR_BATTLE_MON) != cur {
             self.show(crate::battle::Event::Sound(SFX_HIT_END_OF_EXP_BAR.into()));
             self.text(r::BATTLE_TEXT_STRING_BUFFER1_GREW_TO_LEVEL);
