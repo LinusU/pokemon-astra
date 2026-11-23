@@ -1,7 +1,7 @@
 /** Starting and continuing Crystal and Crystal Legacy journeys from the journey list. */
 import type { Engine } from "../engine";
 import type { PokemonPortrait } from "../engine/appearance";
-import type { GameAudio } from "../game/audio";
+import { soundSetting, type GameAudio } from "../game/audio";
 import type { Input } from "../game/input";
 import type { MusicScene } from "../game/music";
 import { createJourney, get, JourneyStore, set, type JourneyEntry } from "../game/storage";
@@ -140,7 +140,7 @@ export async function newCrystalJourney(host: CrystalHost, adventure: CrystalAdv
     const [group, number] = MAP.PLAYERS_HOUSE_2F;
     Object.assign(save, { map: [group, number], x: 3, y: 3, facing: "up", spawn: { group, number } });
     save.pcItems[ITEM.POTION] = 1;
-    save.settings.music = host.sound.enabled;
+    save.settings.music = soundSetting(host.sound.mode);
     void C;
     let id: string;
     try {

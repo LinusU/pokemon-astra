@@ -41,6 +41,19 @@ const JINGLE_SOUNDS = new Set<number>([
   0x91, 0x96, 0x9b, // Key item, Egg and TM
 ]);
 
+/** Full sound, sound effects without music, or silence. */
+export type SoundMode = "on" | "effects" | "off";
+/** How a save stores the sound mode; booleans are the older on/off setting. */
+export type SoundSetting = boolean | "effects";
+export const soundMode = (setting?: SoundSetting): SoundMode =>
+  setting === "effects" ? "effects" : setting === false ? "off" : "on";
+export const soundSetting = (mode: SoundMode): SoundSetting =>
+  mode === "effects" ? "effects" : mode === "on";
+export const isSoundSetting = (value: unknown): value is SoundSetting =>
+  typeof value === "boolean" || value === "effects";
+export const SOUND_MODE_LABEL: Record<SoundMode, string> = { on: "On", effects: "Effects only", off: "Off" };
+const NEXT_SOUND_MODE: Record<SoundMode, SoundMode> = { on: "effects", effects: "off", off: "on" };
+
 /** One gesture-unlocked audio context, with continuous ROM synthesis and no overlapping tracks. */
 export class GameAudio {
   private context?: AudioContext;
@@ -57,8 +70,14 @@ export class GameAudio {
   private current?: MusicScene | number;
   private trackEnded = false;
   private engine?: Engine;
-  enabled = true;
+  mode: SoundMode = "on";
   failed = false;
+  get enabled() {
+    return this.mode !== "off";
+  }
+  get music() {
+    return this.mode === "on";
+  }
   constructor(
     /** A named scene, or a Crystal music id for adventures with their own song tables. */
     private scene: () => MusicScene | number,
@@ -74,18 +93,20 @@ export class GameAudio {
       }
     });
   }
-  attach(engine: Engine, enabled = true) {
+  attach(engine: Engine, setting: SoundSetting = true) {
+    const mode = soundMode(setting);
     if (this.engine !== engine) {
       this.buffers.clear();
     }
-    if (this.engine !== engine || !enabled) {
+    if (this.engine !== engine || mode === "off") {
       this.stopScheduled();
       this.stopEffects();
     }
+    if (mode === "effects") this.stopScheduled();
     this.engine = engine;
-    this.enabled = enabled;
+    this.mode = mode;
     this.current = undefined;
-    if (!enabled) this.suspend();
+    if (mode === "off") this.suspend();
     else if (this.playing) this.pump();
     this.changed();
   }
@@ -94,7 +115,7 @@ export class GameAudio {
   }
   async unlock() {
     if (!this.engine || !this.enabled || document.hidden) return;
-    if (this.playing && this.timer !== undefined) return;
+    if (this.playing && (this.timer !== undefined || !this.music)) return;
     try {
       if (!this.context || this.context.state === "closed") {
         this.context = new AudioContext({ latencyHint: "interactive" });
@@ -116,15 +137,25 @@ export class GameAudio {
     }
     this.changed();
   }
-  setEnabled(enabled: boolean) {
-    this.enabled = enabled;
-    if (enabled) void this.unlock();
-    else {
+  setMode(mode: SoundMode) {
+    if (mode === this.mode) return;
+    this.mode = mode;
+    if (mode === "off") {
       this.stopScheduled();
       this.stopEffects();
       this.suspend();
+    } else {
+      if (mode === "effects") this.stopScheduled();
+      this.current = undefined;
+      void this.unlock();
+      this.pump();
     }
     this.changed();
+  }
+  /** Steps On → Effects only → Off → On, returning the new mode. */
+  cycleMode() {
+    this.setMode(NEXT_SOUND_MODE[this.mode]);
+    return this.mode;
   }
   private suspend() {
     if (this.context && this.context.state !== "closed")
@@ -149,7 +180,7 @@ export class GameAudio {
     this.timer = undefined;
     const ctx = this.context;
     if (
-      !this.enabled ||
+      !this.music ||
       !this.engine ||
       !ctx ||
       ctx.state !== "running" ||

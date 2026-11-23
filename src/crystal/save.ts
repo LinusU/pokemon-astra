@@ -1,6 +1,7 @@
 /** Crystal and Crystal Legacy journeys, as kept in the browser. */
 import type { Pokemon } from "../engine";
 import type { JourneySummary } from "../game/storage";
+import type { SoundSetting } from "../game/audio";
 import type { Facing } from "./world";
 
 export type CrystalAdventure = "crystal" | "crystal-legacy";
@@ -65,7 +66,7 @@ export interface CrystalSave {
   swarm?: { kind: number; group: number; number: number };
   roamers?: { species: number; level: number; group: number; number: number; hp?: number }[];
   hallOfFame: { party: { species: number; level: number; nickname: string; dvs: number[] }[]; time: number }[];
-  settings: { music?: boolean; battleSpeed: number; swapGamepadAB?: boolean; movement?: "free" | "grid"; textSpeed?: number };
+  settings: { music?: SoundSetting; battleSpeed: number; swapGamepadAB?: boolean; movement?: "free" | "grid"; textSpeed?: number };
   contest?: { balls: number; minutes: number; started: number; caught?: CrystalMon; party?: CrystalMon[] };
   /** Mail and misc. state that doesn't fit elsewhere. */
   vars: Record<string, number>;

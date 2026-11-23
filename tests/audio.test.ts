@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { GameAudio, HEAL_TRACK } from "../src/game/audio";
+import { GameAudio, HEAL_TRACK, isSoundSetting, soundMode, soundSetting } from "../src/game/audio";
 import { MUSIC_TRACKS, battleTheme, fieldMusic, trainerIntroMusic, victoryTheme, type MusicScene } from "../src/game/music";
 import { WORLD } from "../src/world";
 import type { Engine } from "../src/engine";
@@ -94,7 +94,7 @@ it("plays the cartridge heal tune and restores the map music at the end", async 
   expect(gain.linearRampToValueAtTime).toHaveBeenCalledWith(0, 0.02);
   expect(gain.linearRampToValueAtTime).toHaveBeenLastCalledWith(0.28, 0.02 + heal.buffer.duration + 0.12);
   expect(context.oscillators).toHaveLength(0);
-  audio.setEnabled(false);
+  audio.setMode("off");
   expect(heal.stop).toHaveBeenCalled();
   expect(gain.setValueAtTime).toHaveBeenLastCalledWith(0.28, 0);
   audio.heal();
@@ -134,7 +134,7 @@ it("ducks music for reward jingles through a victory music change", async () => 
   expect(gain.cancelScheduledValues).toHaveBeenLastCalledWith(0.75);
   expect(gain.setTargetAtTime).toHaveBeenLastCalledWith(1, 1.27, 0.03);
 
-  audio.setEnabled(false);
+  audio.setMode("off");
   expect(gain.setValueAtTime).toHaveBeenLastCalledWith(1, 0.75);
 });
 it("starts music after a gesture with sound enabled by default", async () => {
@@ -251,7 +251,7 @@ it("schedules cartridge sounds on the animation clock and retriggers repeated so
   expect(effects[0].start.mock.calls[0][0]).toBeCloseTo(0.058);
   expect(effects[0].start.mock.calls[0][2]).toBeCloseTo(0.1);
   expect(effects[1].start.mock.calls[0][0]).toBeCloseTo(0.158);
-  audio.setEnabled(false);
+  audio.setMode("off");
   expect(effects.every((effect) => effect.stop.mock.calls.length === 1)).toBe(true);
   audio.battleAnimation(44, 0, 25, false, 400);
   expect(context.sources.slice(before)).toHaveLength(3);
@@ -265,15 +265,61 @@ it("honors saved mute and resumes explicitly without creating more audio context
   audio.attach(engine as unknown as Engine, false);
   await audio.unlock();
   expect(engine.startMusicTrack).not.toHaveBeenCalled();
-  audio.setEnabled(true);
+  audio.setMode("on");
   await Promise.resolve();
   expect(audio.playing).toBe(true);
   const original = context;
-  audio.setEnabled(false);
+  audio.setMode("off");
   expect(audio.playing).toBe(false);
-  audio.setEnabled(true);
+  audio.setMode("on");
   await Promise.resolve();
   expect(context).toBe(original);
+});
+
+it("plays sound effects without music in effects-only mode", async () => {
+  const engine = {
+    startMusicTrack: vi.fn(),
+    nextMusicChunk: () => new Float32Array(12000),
+    soundEffect: vi.fn(() => new Float32Array(2400)),
+  };
+  const audio = new GameAudio(() => "town");
+  audio.attach(engine as unknown as Engine, "effects");
+  await audio.unlock();
+  expect(audio.playing).toBe(true);
+  expect(engine.startMusicTrack).not.toHaveBeenCalled();
+  audio.soundEffect(1);
+  expect(context.sources.length).toBe(1);
+  await vi.advanceTimersByTimeAsync(500);
+  expect(engine.startMusicTrack).not.toHaveBeenCalled();
+});
+
+it("cycles sound on, effects only and off, stopping music for effects", async () => {
+  const engine = { startMusicTrack: vi.fn(), nextMusicChunk: () => new Float32Array(12000) };
+  const audio = new GameAudio(() => "town");
+  audio.attach(engine as unknown as Engine);
+  await audio.unlock();
+  const scheduled = [...context.sources];
+  expect(audio.cycleMode()).toBe("effects");
+  expect(scheduled.every(source => source.stop.mock.calls.length === 1)).toBe(true);
+  expect(audio.enabled).toBe(true);
+  expect(audio.music).toBe(false);
+  expect(audio.cycleMode()).toBe("off");
+  expect(context.state).toBe("suspended");
+  expect(audio.cycleMode()).toBe("on");
+  await Promise.resolve();
+  expect(engine.startMusicTrack).toHaveBeenCalledTimes(2);
+});
+
+it("reads older on/off saves and stores effects-only as its own setting", () => {
+  expect(soundMode(undefined)).toBe("on");
+  expect(soundMode(true)).toBe("on");
+  expect(soundMode(false)).toBe("off");
+  expect(soundMode("effects")).toBe("effects");
+  expect(soundSetting("effects")).toBe("effects");
+  expect(soundSetting("on")).toBe(true);
+  expect(soundSetting("off")).toBe(false);
+  expect(isSoundSetting("effects")).toBe(true);
+  expect(isSoundSetting("music")).toBe(false);
 });
 
 it("silences queued music immediately when restoring a muted journey", async () => {

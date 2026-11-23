@@ -4,6 +4,7 @@ import { mountPartnerSummary } from "../ui/partner-summary";
 import { mountBag, type BagPocket, type BagState } from "../ui/bag";
 import { escapeHtml, panel } from "../ui/shell";
 import { download } from "../game/storage";
+import { SOUND_MODE_LABEL, soundSetting } from "../game/audio";
 import { C } from "./symbols";
 import type { CrystalGame } from "./runtime";
 import type { CrystalMon } from "./save";
@@ -294,15 +295,13 @@ export function openCrystalMenu(game: CrystalGame): Promise<(() => Promise<void>
       if (v === "options") {
         const p = panel(game.layer, "Option", `<div class="preference-grid">
           <button id="speed">Battle speed<strong>${save.settings.battleSpeed}×</strong></button>
-          <button id="music">Sound<strong>${game.ctx.sound?.enabled ? "On" : "Off"}</strong></button>
+          <button id="music">Sound<strong>${SOUND_MODE_LABEL[game.ctx.sound?.mode ?? "off"]}</strong></button>
           <button id="gamepad">Controller A/B<strong>${save.settings.swapGamepadAB ? "Swapped" : "Standard"}</strong></button>
           <button id="movement">Movement<strong>${save.settings.movement === "grid" ? "Square by square" : "Free"}</strong></button>
           </div><div class="buttons"><button class="secondary" id="back">Back</button></div>`, "settings-screen");
         p.querySelector<HTMLButtonElement>("#speed")!.onclick = () => { save.settings.battleSpeed = save.settings.battleSpeed % 3 + 1; view("options"); };
         p.querySelector<HTMLButtonElement>("#music")!.onclick = () => {
-          save.settings.music = !game.ctx.sound?.enabled;
-          game.ctx.sound?.setEnabled(save.settings.music);
-          if (save.settings.music) void game.ctx.sound?.unlock();
+          if (game.ctx.sound) save.settings.music = soundSetting(game.ctx.sound.cycleMode());
           view("options");
         };
         p.querySelector<HTMLButtonElement>("#gamepad")!.onclick = () => {

@@ -138,7 +138,7 @@ export class CrystalGame {
     this.dailyReset();
     this.enterMap(this.save.map[0], this.save.map[1], { arrival: "continue" });
     ctx.input.setGamepadLayout?.(!!this.save.settings.swapGamepadAB);
-    ctx.sound?.attach(ctx.engine, this.save.settings.music !== false);
+    ctx.sound?.attach(ctx.engine, this.save.settings.music);
   }
   /** Starts the game once the first map is ready: callbacks and scene scripts. */
   async begin() {

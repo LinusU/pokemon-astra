@@ -1,5 +1,6 @@
 import type { Pokemon } from "../engine";
 import type { JourneySummary } from "../game/storage";
+import type { SoundSetting } from "../game/audio";
 import { HS, MAP } from "./symbols";
 import type { YellowRom } from "./rom";
 import type { Facing } from "./world";
@@ -53,7 +54,7 @@ export interface YellowSave {
   daycare?: { mon: Pokemon; steps: number };
   settings: {
     battleSpeed: number;
-    music?: boolean;
+    music?: SoundSetting;
     swapGamepadAB?: boolean;
     /** Free movement like Astra's, or square-by-square steps as on the Game Boy. */
     movement?: "free" | "grid";

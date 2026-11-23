@@ -119,7 +119,7 @@ export class YellowGame implements Game {
     this.me = { x: this.save.x, y: this.save.y, facing: this.save.facing, walkFrame: 0 };
     this.enterMap(this.save.map, false);
     ctx.input.setGamepadLayout(!!this.save.settings.swapGamepadAB);
-    ctx.sound.attach(ctx.engine, this.save.settings.music !== false);
+    ctx.sound.attach(ctx.engine, this.save.settings.music);
     void this.runScript(() => this.afterArrival(true));
   }
 

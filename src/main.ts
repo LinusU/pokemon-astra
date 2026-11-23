@@ -43,7 +43,7 @@ import { mountPokedex, type DexState } from "./ui/pokedex";
 import { mountJournal, type JournalState } from "./ui/journal";
 import { MenuInput } from "./ui/menu-input";
 import { MEDICINE, isMedicine, useMedicine } from "./game/medicine";
-import { GameAudio } from "./game/audio";
+import { GameAudio, SOUND_MODE_LABEL, soundSetting } from "./game/audio";
 import { battleTheme, fieldMusic, trainerIntroMusic, victoryTheme, type MusicScene } from "./game/music";
 import { BattleLaunch, type FinishedBattle } from "./ui/battle-launch";
 import { evolutionInput, playEvolution } from "./ui/evolution";
@@ -144,7 +144,9 @@ function updateSoundButton() {
   button.textContent = sound.failed
     ? "♫ Retry sound"
     : sound.playing
-      ? "♫ Sound on"
+      ? sound.music
+        ? "♫ Sound on"
+        : "♫ Effects only"
       : sound.enabled
         ? "♫ Enable sound"
         : "♫ Sound off";
@@ -155,8 +157,7 @@ function cry(id: number) {
 }
 function toggleMusic() {
   if (mode === "saving") return;
-  save.settings.music = !sound.enabled;
-  sound.setEnabled(save.settings.music);
+  save.settings.music = soundSetting(sound.cycleMode());
   persist();
 }
 window.addEventListener(
@@ -378,7 +379,7 @@ function restoreSession(ready: Save) {
   battleMusic = undefined;
   interactionMusic = undefined;
   renderer.setNight(!!save.settings.night);
-  sound.attach(engine, save.settings.music !== false);
+  sound.attach(engine, save.settings.music);
 }
 async function readBackup(file: File) {
   let data: unknown;
@@ -558,7 +559,7 @@ function intro(back: () => void, error = "") {
   p.querySelector<HTMLButtonElement>("#how")!.onclick = () => fieldBasics(() => intro(back, error));
   p.querySelector<HTMLButtonElement>("#begin")!.onclick = async () => {
     const next = prepareSave(freshSave());
-    next.settings.music = sound.enabled;
+    next.settings.music = soundSetting(sound.mode);
     mode = "loading";
     panel(layer, "Beginning your adventure", "<p>Saving in Dewdrop Village…</p>", "opening-panel");
     try {
@@ -1148,7 +1149,7 @@ function view(v: string, pageIndex = 0) {
       <div class="preference-grid">
         <button id="speed" aria-label="Change battle speed, currently ${save.settings.battleSpeed}×">Battle speed<strong>${save.settings.battleSpeed}×</strong></button>
         <button id="time" aria-label="Camp until ${save.settings.night ? "day" : "night"}">Camp<strong>${save.settings.night ? "Night" : "Day"}</strong></button>
-        <button id="music" aria-pressed="${sound.enabled}">Sound<strong>${sound.enabled ? "On" : "Off"}</strong></button>
+        <button id="music" aria-pressed="${sound.enabled}">Sound<strong>${SOUND_MODE_LABEL[sound.mode]}</strong></button>
         <button id="gamepad-layout" aria-pressed="${!!save.settings.swapGamepadAB}" aria-label="Swap controller A and B">Controller A/B<strong>${save.settings.swapGamepadAB ? "Swapped" : "Standard"}</strong></button>
       </div>
       <div class="save-tools"><p>Your journey saves in this browser.</p><div class="buttons"><button id="export">Export save</button><button data-backup-picker id="choose-save">Import save</button><input hidden id="import" type="file" accept="application/json,.json"></div></div>

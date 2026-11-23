@@ -5,6 +5,7 @@ import { ABILITIES, WORLD, type Ability, type Requirement } from "../world";
 import { barrierAt, exitOpen } from "./navigation";
 import { bodyTouches } from "./free-movement";
 import type { Pokemon } from "../engine";
+import { isSoundSetting, type SoundSetting } from "./audio";
 
 export type Save = {
   version: 1;
@@ -31,7 +32,7 @@ export type Save = {
   center?: string;
   hallOfFame?: { species: number; level: number; dvs?: number[] }[];
   repel?: number;
-  settings: { battleSpeed: number; night?: boolean; music?: boolean; swapGamepadAB?: boolean };
+  settings: { battleSpeed: number; night?: boolean; music?: SoundSetting; swapGamepadAB?: boolean };
 };
 export const freshSave = (): Save => ({
   version: 1,
@@ -212,7 +213,7 @@ export function isValidSave(x: any): x is Save {
     !!x.settings &&
     integer(x.settings.battleSpeed, 1, 3) &&
     (x.settings.night === undefined || typeof x.settings.night === "boolean") &&
-    (x.settings.music === undefined || typeof x.settings.music === "boolean") &&
+    (x.settings.music === undefined || isSoundSetting(x.settings.music)) &&
     (x.settings.swapGamepadAB === undefined || typeof x.settings.swapGamepadAB === "boolean")
   );
 }

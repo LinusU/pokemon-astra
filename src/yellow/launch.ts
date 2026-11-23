@@ -1,7 +1,7 @@
 /** Starting and continuing Yellow journeys from the journey list. */
 import type { Engine } from "../engine";
 import type { PokemonPortrait } from "../engine/appearance";
-import type { GameAudio } from "../game/audio";
+import { soundSetting, type GameAudio } from "../game/audio";
 import type { Input } from "../game/input";
 import type { MusicScene } from "../game/music";
 import { createJourney, get, JourneyStore, set, type JourneyEntry } from "../game/storage";
@@ -183,7 +183,7 @@ export async function newYellowJourney(host: YellowHost, adventure: YellowAdvent
     const clean = (id: string, fallback: string) =>
       (p.querySelector<HTMLInputElement>(id)!.value.toUpperCase().replace(/[^A-Z0-9 ]/g, "").trim() || fallback).slice(0, 7);
     const save = freshYellowSave(rom, adventure, clean("#name", "RED"), clean("#rival", "BLUE"));
-    save.settings.music = host.sound.enabled;
+    save.settings.music = soundSetting(host.sound.mode);
     let id: string;
     try {
       id = await createJourney(adventure, save, yellowSummary(save, () => "Pallet Town"));
