@@ -512,6 +512,44 @@ describe.skipIf(!romAvailable)("complete native battle decisions", () => {
       }
     }
   });
+
+  it("combines a battling Exp. Share holder's two awards into one", async () => {
+    const { instance } = await WebAssembly.instantiate(
+      readFileSync("public/astra_native.wasm"),
+      {},
+    );
+    const engine = new Engine(
+      instance.exports as never,
+      readFileSync("pokecrystal11.gbc"),
+    );
+    const lead = { ...engine.makeStarter(58), item: 57 };
+    const reserve = { ...engine.makePokemon(1, 6), item: 57 };
+    const ember = lead.moves.indexOf(52);
+    const battle = engine.startBattle({
+      party: [lead, reserve],
+      opponent: { party: [engine.makePokemon(10, 5)] },
+      balls: [[5, 2]],
+      seed: 123,
+    });
+    const gained = new Map<string, number[]>();
+    for (let i = 0; i < 20; i++) {
+      const snapshot = battle.snapshot();
+      for (const event of snapshot.events as any[]) {
+        const message = event.Message?.GainedExp;
+        if (message) gained.set(message.mon, [...(gained.get(message.mon) ?? []), message.exp]);
+      }
+      if (snapshot.outcome) break;
+      const actions = snapshot.legal as { Move?: { slot: number } }[];
+      battle.act(actions.findIndex((a) => a.Move?.slot === ember));
+    }
+    const result = battle.snapshot().result;
+    expect(result?.outcome).toBe("win");
+    // The cartridge's two batches for the lead were 158 and 13.
+    expect(gained.get(lead.nickname)).toEqual([171]);
+    expect(gained.get(reserve.nickname)).toEqual([13]);
+    expect(result?.party[0].exp).toBe(lead.exp + 171);
+    expect(result?.party[1].exp).toBe(reserve.exp + 13);
+  });
 });
 
 describe("authored trainer names", () => {

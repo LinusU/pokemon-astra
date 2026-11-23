@@ -771,18 +771,68 @@ impl Engine {
         // .skip_exp
         self.mem.copy(W_BACKUP_ENEMY_MON_BASE_STATS, W_ENEMY_MON_BASE_STATS, base_len);
         self.mem.wb(W_GIVING_EXPERIENCE_TO_EXP_SHARE_HOLDERS, 0);
-        self.give_experience_points()?;
         let (count, mask) = self.is_any_mon_holding_exp_share();
         if count == 0 {
-            return Ok(());
+            return self.give_experience_points();
         }
+        // The cartridge runs `GiveExperiencePoints` twice, once for the
+        // participants and once for the Exp. Share holders. Both passes are
+        // calculated first so a member in both gets one combined award.
+        let Some(participants) = self.collect_experience_points() else {
+            return Ok(());
+        };
         let saved = self.mem.rb(W_BATTLE_PARTICIPANTS_NOT_FAINTED);
         self.mem.wb(W_BATTLE_PARTICIPANTS_NOT_FAINTED, mask);
         self.mem.copy(W_ENEMY_MON_BASE_STATS, W_BACKUP_ENEMY_MON_BASE_STATS, base_len);
         self.mem.wb(W_GIVING_EXPERIENCE_TO_EXP_SHARE_HOLDERS, 1);
-        self.give_experience_points()?;
+        // The second pass sees the levels the first pass's award reaches.
+        let levels = self.preview_max_levels(&participants);
+        let holders = self.collect_experience_points();
+        for (level_addr, level) in levels {
+            self.mem.wb(level_addr, level);
+        }
+        let holders = holders.unwrap_or_default();
         self.mem.wb(W_BATTLE_PARTICIPANTS_NOT_FAINTED, saved);
-        Ok(())
+        let combined: Option<Vec<_>> = participants
+            .iter()
+            .enumerate()
+            .map(|(i, &first)| {
+                let Some(&second) = holders.get(i) else { return Some(first) };
+                let exp = first.exp.checked_add(second.exp)?;
+                Some(crate::engine::setup::ExpAward { exp, boosted: if first.exp != 0 { first.boosted } else { second.boosted } })
+            })
+            .collect();
+        match combined {
+            Some(combined) => self.award_experience_points(&combined),
+            // A sum too large for one award is granted in the cartridge's two batches.
+            None => {
+                self.award_experience_points(&participants)?;
+                self.award_experience_points(&holders)
+            }
+        }
+    }
+
+    /// Mark the members `awards` brings to the level cap as already there,
+    /// returning each changed level's address and its real value.
+    fn preview_max_levels(&mut self, awards: &[crate::engine::setup::ExpAward]) -> Vec<(u16, u8)> {
+        let mut changed = Vec::new();
+        for (i, award) in awards.iter().enumerate() {
+            let mon = W_PARTY_MON1 + i as u16 * PARTY_LEN;
+            let level_addr = mon + u16::from(MON_LEVEL);
+            let level = self.mem.rb(level_addr);
+            if award.exp == 0 || level >= MAX_LEVEL {
+                continue;
+            }
+            let exp = mon + u16::from(MON_EXP);
+            let total = u32::from_be_bytes([0, self.mem.rb(exp), self.mem.rb(exp + 1), self.mem.rb(exp + 2)])
+                + u32::from(award.exp);
+            let species = self.mem.rb(mon + u16::from(MON_SPECIES));
+            if total >= self.data.experience_at_level(species, MAX_LEVEL) {
+                changed.push((level_addr, level));
+                self.mem.wb(level_addr, MAX_LEVEL);
+            }
+        }
+        changed
     }
 
     /// `IsAnyMonHoldingExpShare`: (how many living mons hold one, their

@@ -312,53 +312,88 @@ fn sbc(a: u8, b: u8, carry: bool) -> (u8, bool) {
 
 // --- GiveExperiencePoints ----------------------------------------------------------------
 
+/// One party member's experience from a single `GiveExperiencePoints` pass.
+#[derive(Clone, Copy, Default)]
+pub(super) struct ExpAward {
+    pub exp: u16,
+    /// Traded: the message says "a boosted".
+    pub boosted: bool,
+}
+
 impl Engine {
     /// `GiveExperiencePoints`: split the fainted enemy's experience among the
     /// participants (`wBattleParticipantsNotFainted`), level them up, and teach moves.
     pub fn give_experience_points(&mut self) -> Flow {
+        match self.collect_experience_points() {
+            Some(awards) => self.award_experience_points(&awards),
+            None => Ok(()),
+        }
+    }
+
+    /// The calculating half of `GiveExperiencePoints`: add each participant's
+    /// stat experience and work out its experience award without granting it
+    /// yet. `None` when the battle gives no experience at all.
+    pub(super) fn collect_experience_points(&mut self) -> Option<Vec<ExpAward>> {
         // Don't give experience if linked or in the Battle Tower.
         if self.link_mode() != 0 {
-            return Ok(());
+            return None;
         }
         if self.mem.bit(W_IN_BATTLE_TOWER_BATTLE, IN_BATTLE_TOWER_BATTLE_F) {
-            return Ok(());
+            return None;
         }
         self.evenly_divide_exp_among_participants();
-        self.mem.wb(W_CUR_PARTY_MON, 0);
-        let mut bc = W_PARTY_MON1_SPECIES;
-        loop {
-            self.give_experience_to_mon(bc)?;
-            // .next_mon
-            let count = self.mem.rb(W_PARTY_COUNT);
-            let next = self.mem.rb(W_CUR_PARTY_MON).wrapping_add(1);
-            if next == count {
-                break;
-            }
-            self.mem.wb(W_CUR_PARTY_MON, next);
-            bc = self.get_party_param_location(MON_SPECIES);
+        let count = self.mem.rb(W_PARTY_COUNT);
+        let mut awards = Vec::with_capacity(usize::from(count));
+        for cur in 0..count {
+            self.mem.wb(W_CUR_PARTY_MON, cur);
+            let bc = self.get_party_param_location(MON_SPECIES);
+            awards.push(self.experience_for_mon(bc));
         }
         // .done
         self.reset_battle_participants();
+        Some(awards)
+    }
+
+    /// The granting half of `GiveExperiencePoints`: announce and apply each
+    /// party member's award in party order.
+    pub(super) fn award_experience_points(&mut self, awards: &[ExpAward]) -> Flow {
+        for (cur, award) in awards.iter().enumerate() {
+            if award.exp == 0 {
+                continue;
+            }
+            let cur = cur as u8;
+            self.mem.wb(W_CUR_PARTY_MON, cur);
+            let bc = self.get_party_param_location(MON_SPECIES);
+            self.give_experience_to_mon(bc, cur, *award)?;
+        }
+        // The cartridge's loop leaves the last party slot current.
+        if let Some(last) = awards.len().checked_sub(1) {
+            self.mem.wb(W_CUR_PARTY_MON, last as u8);
+        }
         Ok(())
     }
 
-    /// The loop body of `GiveExperiencePoints` for the party mon at `bc`.
-    fn give_experience_to_mon(&mut self, bc: u16) -> Flow {
+    /// The award the loop body of `GiveExperiencePoints` computes for the
+    /// party mon at `bc`, after adding its stat experience.
+    fn experience_for_mon(&mut self, bc: u16) -> ExpAward {
         let cur = self.mem.rb(W_CUR_PARTY_MON);
         if self.mem.rw(bc + u16::from(MON_HP)) == 0 {
-            return Ok(()); // fainted
+            return ExpAward::default(); // fainted
         }
         let participated = self.small_far_flag_action(W_BATTLE_PARTICIPANTS_NOT_FAINTED, cur, FlagAction::Check);
         if !participated {
-            return Ok(());
+            return ExpAward::default();
         }
-        let gained = self.participation_exp(bc).max(self.training_exp(bc));
-        if gained == 0 {
-            return Ok(());
-        }
-        let [q2, q3] = gained.to_be_bytes();
+        let exp = self.participation_exp(bc).max(self.training_exp(bc));
+        ExpAward { exp, boosted: self.mem.rb(W_STRING_BUFFER2 + 2) != 0 }
+    }
+
+    /// Announce and apply `award` to the party mon at `bc`.
+    fn give_experience_to_mon(&mut self, bc: u16, cur: u8, award: ExpAward) -> Flow {
+        let [q2, q3] = award.exp.to_be_bytes();
         self.mem.wb(W_STRING_BUFFER2 + 1, q3);
         self.mem.wb(W_STRING_BUFFER2, q2);
+        self.mem.wb(W_STRING_BUFFER2 + 2, u8::from(award.boosted));
         self.get_nickname(W_PARTY_MON_NICKNAMES, cur);
         self.text(r::TEXT_MON_GAINED_EXP_POINT);
         let v = self.mem.rb(W_STRING_BUFFER2 + 1);
