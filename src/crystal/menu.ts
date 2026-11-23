@@ -141,7 +141,22 @@ export function openCrystalMenu(game: CrystalGame): Promise<(() => Promise<void>
           title: "POKéMON", initialSlot: index, confirm: "Summary", rows: rows(game),
           onSelect: async slot => {
             const mon = save.party[slot];
-            if (mon.egg) return message("It's an EGG. It's making sounds inside. It's going to hatch soon!", () => view("party", slot));
+            if (mon.egg) {
+              // The stats screen's Egg note, by the cycles left to hatch.
+              const cycles = mon.eggCycles ?? 0;
+              const note = cycles < 6 ? "It's making sounds inside. It's going to hatch soon!"
+                : cycles < 11 ? "It moves around inside sometimes. It must be close to hatching."
+                : cycles < 41 ? "Wonder what's inside? It needs more time, though."
+                : "This EGG needs a lot more time to hatch.";
+              const pick = await game.choose(["Status", "Switch"], { title: "EGG", cancel: true });
+              if (pick === 0) return message(note, () => view("party", slot));
+              if (pick === 1) {
+                const other = await choosePartyMon(game, "Switch with which POKéMON?");
+                if (other !== undefined) [save.party[slot], save.party[other]] = [save.party[other], save.party[slot]];
+                return view("party", other ?? slot);
+              }
+              return view("party", slot);
+            }
             const moves = knownFieldMoves(mon);
             const pick = await game.choose(["Summary", ...moves.map(m => FIELD_MOVES[m].move.replace("_", " ")), "Switch"], { title: mon.nickname || engine.species(mon.species).name, cancel: true });
             if (pick === undefined) return view("party", slot);
