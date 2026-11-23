@@ -17,8 +17,8 @@ const bagState: BagState = {};
 
 function rows(game: CrystalGame, usable?: (m: CrystalMon) => boolean) {
   return game.save.party.map((mon, slot) => ({
-    name: mon.egg ? "EGG" : mon.nickname || game.engine.species(mon.species).name, sprite: game.ctx.sprite!(mon), level: mon.egg ? 0 : mon.level,
-    status: mon.status, hp: mon.egg ? 0 : mon.hp, maxHp: mon.stats[0], note: slot === 0 ? "Lead" : undefined, disabled: usable ? !usable(mon) : false,
+    name: mon.egg ? "EGG" : mon.nickname || game.engine.species(mon.species).name, sprite: game.ctx.sprite!(mon.egg ? 253 : mon), egg: mon.egg,
+    level: mon.level, status: mon.status, hp: mon.hp, maxHp: mon.stats[0], note: slot === 0 ? "Lead" : undefined, disabled: usable ? !usable(mon) : false,
   }));
 }
 

@@ -19,6 +19,8 @@ type PartyRow = {
   maxHp: number;
   note?: string;
   disabled?: boolean;
+  /** An Egg shows only its name and note: no level, condition or HP. */
+  egg?: boolean;
 };
 
 type PartyOptions = {
@@ -38,16 +40,17 @@ export function mountParty(host: HTMLElement, options: PartyOptions) {
   const rows = Array.from({ length: 6 }, (_, slot) => {
     const mon = options.rows[slot];
     if (!mon) return '<li class="party-empty" aria-label="Empty slot"><span aria-hidden="true">—</span></li>';
-    const condition = mon.hp === 0 ? ["FNT", "Fainted"] : battleStatus(mon.status);
+    const condition = mon.egg ? undefined : mon.hp === 0 ? ["FNT", "Fainted"] : battleStatus(mon.status);
     const fraction = Math.min(1, Math.max(0, mon.hp / Math.max(1, mon.maxHp)));
+    const meta = [mon.egg ? "" : `Lv ${mon.level}`, mon.note ? escapeHtml(mon.note) : ""].filter(Boolean).join(" · ");
     return `<li><button type="button" class="party-member" data-slot="${slot}"${mon.disabled ? " disabled" : ""}>
       <img src="${escapeHtml(mon.sprite)}" alt="">
       <span class="party-identity"><strong>${escapeHtml(mon.name)}</strong>
-        <span class="party-meta">Lv ${mon.level}${mon.note ? ` · ${escapeHtml(mon.note)}` : ""}${condition ? ` <abbr title="${condition[1]}" aria-label="${condition[1]}">${condition[0]}</abbr>` : ""}</span>
+        <span class="party-meta">${meta}${condition ? ` <abbr title="${condition[1]}" aria-label="${condition[1]}">${condition[0]}</abbr>` : ""}</span>
       </span>
-      <span class="party-health"><span><b>HP</b> ${mon.hp} / ${mon.maxHp}</span>
+      ${mon.egg ? "" : `<span class="party-health"><span><b>HP</b> ${mon.hp} / ${mon.maxHp}</span>
         <span class="party-gauge" aria-hidden="true"><i class="${fraction <= 0.2 ? "low" : fraction <= 0.5 ? "mid" : ""}" style="width:${fraction * 100}%"></i></span>
-      </span>
+      </span>`}
     </button></li>`;
   });
   screen.innerHTML = `<header><h2>${escapeHtml(options.title)}</h2><span aria-label="${options.rows.length} of 6 Pokémon">${options.rows.length} / 6</span></header>
