@@ -530,6 +530,59 @@ describe.skipIf(!run || !hasEngine || !hasLegacy)("Crystal Legacy's story", () =
       w.flush("Radio Tower boss");
       expect(w.ev("EVENT_CLEARED_RADIO_TOWER")).toBe(true);
       expect(w.has("CLEAR_BELL")).toBe(true);
+
+      // ------------------------------------------------------------ Blackthorn: Clair and the Dragon's Den
+      w.strengthen(70);
+      await w.warp("BLACKTHORN_GYM_1F", 5, 15, "up");
+      w.skipTrainers();
+      await w.warp("BLACKTHORN_GYM_1F", 5, 4, "up");
+      await w.talk("CLAIR");
+      w.flush("Clair");
+      expect(w.ev("EVENT_BEAT_CLAIR")).toBe(true);
+      expect(g.hasFlag("ENGINE_RISINGBADGE")).toBe(false);
+      // The elder's questions: the right answers, in order.
+      h.ui.answers = [0, 0, 1, 0, 1];
+      await w.warp("DRAGON_SHRINE", 4, 8, "up");
+      h.ui.answers = [];
+      w.flush("Dragon Shrine");
+      expect(g.hasFlag("ENGINE_RISINGBADGE")).toBe(true);
+      expect(w.ev("EVENT_ANSWERED_DRAGON_MASTER_QUIZ_WRONG")).toBe(false);
+      // The elder gives Dratini once the player has been out and back (EVENT_TEMPORARY_UNTIL_MAP_RELOAD_1).
+      await w.warp("DRAGONS_DEN_B1F", 19, 31, "up");
+      await w.warp("DRAGON_SHRINE", 4, 8, "up");
+      await w.talk("ELDER", { x: 5, y: 1 });
+      w.flush("Dratini");
+      const dratini = [...g.save.party, ...g.save.boxes.flat()].find(m => m.species === MON.DRATINI);
+      expect(dratini?.moves).toContain(MOVE.EXTREMESPEED);
+      await w.warp("DRAGONS_DEN_B1F", 19, 31, "up");
+      await w.to(19, 30);
+      w.flush("Clair's TM");
+
+      // ------------------------------------------------------------ To the League
+      w.strengthen(80);
+      await w.warp("ROUTE_27", 20, 10, "left");
+      await w.to(18, 10);
+      w.flush("First step into Kanto");
+      await w.warp("VICTORY_ROAD", 12, 10, "up");
+      await w.to(12, 8);
+      w.flush("Rival on Victory Road");
+      await w.warp("INDIGO_PLATEAU_POKECENTER_1F", 16, 6, "up");
+      await w.to(16, 4);
+      w.flush("Rival at the Plateau");
+      for (const [room, leader] of [["WILLS_ROOM", "WILL"], ["KOGAS_ROOM", "KOGA"], ["BRUNOS_ROOM", "BRUNO"], ["KARENS_ROOM", "KAREN"]] as const) {
+        await w.warp(room, 5, 9, "up");
+        await w.talk(leader);
+        w.flush(leader);
+        expect(w.ev(`EVENT_BEAT_ELITE_4_${leader}`)).toBe(true);
+      }
+      await w.warp("LANCES_ROOM", 5, 23, "up");
+      w.flush("Lance's door closes");
+      await w.to(5, 5);
+      w.flush("Lance");
+      await h.settle();
+      expect(w.ev("EVENT_BEAT_CHAMPION_LANCE")).toBe(true);
+      expect(g.save.hallOfFame.length).toBe(1);
+      expect(g.map.name).toBe("NEW_BARK_TOWN");
     } finally {
       w.flush("end");
       if (process.env.CRYSTAL_WALKTHROUGH_LOG) writeFileSync(process.env.CRYSTAL_WALKTHROUGH_LOG, w.log.join("\n"));
