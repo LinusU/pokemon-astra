@@ -1,7 +1,8 @@
 import { mountParty } from "../ui/party";
 import { mountPartnerSummary } from "../ui/partner-summary";
 import { mountBag, type BagPocket, type BagState } from "../ui/bag";
-import { escapeHtml, panel } from "../ui/shell";
+import { escapeHtml, panel, type PanelCursor } from "../ui/shell";
+import { cycleOption, optionStep } from "../ui/options";
 import { download } from "../game/storage";
 import { SOUND_MODE_LABEL, soundSetting } from "../game/audio";
 import { ITEM } from "./symbols";
@@ -14,6 +15,7 @@ import { choose } from "./services";
 const BADGES = ["Boulder", "Cascade", "Thunder", "Rainbow", "Soul", "Marsh", "Volcano", "Earth"];
 let selection = "party";
 const bagState: BagState = {};
+const optionCursor: PanelCursor = {};
 
 /** Yellow's start menu. Resolves when the player closes it. */
 export function openYellowMenu(game: YellowGame): Promise<(() => Promise<void>) | void> {
@@ -145,10 +147,10 @@ export function openYellowMenu(game: YellowGame): Promise<(() => Promise<void>) 
           <button id="gamepad">Controller A/B<strong>${save.settings.swapGamepadAB ? "Swapped" : "Standard"}</strong></button>
           <button id="movement">Movement<strong>${save.settings.movement === "grid" ? "Square by square" : "Free"}</strong></button>
           <button id="look">Graphics<strong>${save.settings.look === "yellow" ? "Yellow" : "Crystal"}</strong></button>
-          </div><div class="buttons"><button class="secondary" id="back">Back</button></div>`, "settings-screen");
-        p.querySelector<HTMLButtonElement>("#speed")!.onclick = () => { save.settings.battleSpeed = save.settings.battleSpeed % 3 + 1; view("options"); };
-        p.querySelector<HTMLButtonElement>("#music")!.onclick = () => {
-          save.settings.music = soundSetting(game.ctx.sound.cycleMode());
+          </div><div class="buttons"><button class="secondary" id="back">Back</button></div>`, "settings-screen", optionCursor);
+        p.querySelector<HTMLButtonElement>("#speed")!.onclick = event => { save.settings.battleSpeed = cycleOption(save.settings.battleSpeed, optionStep(event.currentTarget as HTMLElement), 3, 1); view("options"); };
+        p.querySelector<HTMLButtonElement>("#music")!.onclick = event => {
+          save.settings.music = soundSetting(game.ctx.sound.cycleMode(optionStep(event.currentTarget as HTMLElement)));
           view("options");
         };
         p.querySelector<HTMLButtonElement>("#gamepad")!.onclick = () => {

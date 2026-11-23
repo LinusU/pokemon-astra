@@ -117,6 +117,19 @@ describe("menu input", () => {
     expect(ownerDocument.activeElement).toBe(buttons[2]);
   });
 
+  it("changes an option row with left and right instead of moving off it", () => {
+    const { update, buttons, ownerDocument } = panel([[0, 0, 200, 20], [0, 30, 200, 20]]);
+    for (const button of buttons) (button as unknown as { closest: (s: string) => unknown }).closest = s => s === ".preference-grid" ? {} : null;
+    update(0);
+    update(10, "left");
+    expect(buttons[0].dataset.step).toBe("-1");
+    update(20);
+    update(30, "right");
+    expect(buttons[0].dataset.step).toBe("1");
+    expect(buttons[0].click).toHaveBeenCalledTimes(2);
+    expect(ownerDocument.activeElement).toBe(buttons[0]);
+  });
+
   it("moves down a column, across a row and confirms the selected button", () => {
     const { update, buttons, ownerDocument } = panel([
       [0, 6, 88, 26],

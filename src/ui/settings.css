@@ -9,21 +9,28 @@
   border: 4px double #385a48;
 }
 .panel:is(.settings-screen, .field-guide) h2 { margin: 0 0 6px; }
-.preference-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
-.panel .preference-grid button {
+/* One option to a line: the cursor runs down the list, left and right change the value. */
+.preference-grid { display: grid; }
+.panel.settings-screen .preference-grid button {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 3px;
   min-width: 0;
-  padding: 7px 9px;
-  background: #e2e8ce;
+  border: 0;
+  padding: 3px 4px 3px 22px;
+  background: transparent;
   color: #345645;
   text-align: left;
   line-height: 1;
   font-size: 21px;
 }
-.preference-grid strong { font-weight: 400; color: #193d2f; }
+.preference-grid strong { font-weight: 400; color: #193d2f; padding-inline: 1.1em; position: relative; }
+.preference-grid [aria-current="true"] strong::before,
+.preference-grid [aria-current="true"] strong::after { position: absolute; top: 0; color: #9a6a24; }
+.preference-grid [aria-current="true"] strong::before { content: "◂"; left: 0; }
+.preference-grid [aria-current="true"] strong::after { content: "▸"; right: 0; }
 .save-tools { margin: 8px 0; border-block: 1px solid #a1b197; padding: 5px 0 8px; }
 .panel .save-tools p { margin: 0 0 5px; line-height: 1; }
 .settings-footer, .guide-pager { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
@@ -40,9 +47,7 @@
   .panel:is(.settings-screen, .field-guide) { padding: 5px 8px; border-width: 3px; }
   .panel:is(.settings-screen, .field-guide) h2 { font-size: 22px; line-height: 1; margin: 0 0 4px; }
   .panel:is(.settings-screen, .field-guide) button { font-size: 18px; padding: 3px 7px; }
-  .preference-grid { gap: 3px; }
-  .panel .preference-grid button { align-items: flex-start; flex-direction: column; gap: 0; padding: 3px 7px; }
-  .preference-grid strong { font-size: 1.1em; }
+  .panel.settings-screen .preference-grid button { padding: 1px 4px 1px 22px; }
   .save-tools { margin: 4px 0; padding: 3px 0; }
   .panel .save-tools p { font-size: 17px; margin-bottom: 3px; }
   .panel .guide-pager h3 { font-size: 20px; }
@@ -55,6 +60,17 @@
 .panel .preference-grid button:is(:hover, :focus-visible, [aria-current="true"]) {
   color: #213e32;
   background: #e5d9ad;
+  outline: none;
+  box-shadow: none;
+}
+.preference-grid button[aria-current="true"]::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: calc(50% - 5px);
+  border-left: 7px solid currentColor;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
 }
 .settings-screen #retry-offline[hidden] { display: none; }
 #offline-status button {
@@ -67,8 +83,7 @@
 }
 @container (max-width: 320px) {
   .panel.settings-screen { padding: 3px 6px; }
-  .panel .preference-grid button { padding: 1px 5px; }
-  .preference-grid strong { font-size: 1em; }
+  .panel.settings-screen .preference-grid button { padding: 0 4px 0 22px; font-size: 18px; }
 }
 .panel.field-guide {
   display: grid;

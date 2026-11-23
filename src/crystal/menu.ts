@@ -2,7 +2,8 @@
 import { mountParty } from "../ui/party";
 import { mountPartnerSummary } from "../ui/partner-summary";
 import { mountBag, type BagPocket, type BagState } from "../ui/bag";
-import { escapeHtml, panel } from "../ui/shell";
+import { escapeHtml, panel, type PanelCursor } from "../ui/shell";
+import { cycleOption, optionStep } from "../ui/options";
 import { download } from "../game/storage";
 import { SOUND_MODE_LABEL, soundSetting } from "../game/audio";
 import { C } from "./symbols";
@@ -15,6 +16,7 @@ const JOHTO = ["Zephyr", "Hive", "Plain", "Fog", "Storm", "Mineral", "Glacier", 
 const KANTO = ["Boulder", "Cascade", "Thunder", "Rainbow", "Soul", "Marsh", "Volcano", "Earth"];
 let selection = "party";
 const bagState: BagState = {};
+const optionCursor: PanelCursor = {};
 
 function rows(game: CrystalGame, usable?: (m: CrystalMon) => boolean, note?: (m: CrystalMon) => string | undefined) {
   return game.save.party.map((mon, slot) => ({
@@ -293,10 +295,10 @@ export function openCrystalMenu(game: CrystalGame): Promise<(() => Promise<void>
           <button id="music">Sound<strong>${SOUND_MODE_LABEL[game.ctx.sound?.mode ?? "off"]}</strong></button>
           <button id="gamepad">Controller A/B<strong>${save.settings.swapGamepadAB ? "Swapped" : "Standard"}</strong></button>
           <button id="movement">Movement<strong>${save.settings.movement === "grid" ? "Square by square" : "Free"}</strong></button>
-          </div><div class="buttons"><button class="secondary" id="back">Back</button></div>`, "settings-screen");
-        p.querySelector<HTMLButtonElement>("#speed")!.onclick = () => { save.settings.battleSpeed = save.settings.battleSpeed % 3 + 1; view("options"); };
-        p.querySelector<HTMLButtonElement>("#music")!.onclick = () => {
-          if (game.ctx.sound) save.settings.music = soundSetting(game.ctx.sound.cycleMode());
+          </div><div class="buttons"><button class="secondary" id="back">Back</button></div>`, "settings-screen", optionCursor);
+        p.querySelector<HTMLButtonElement>("#speed")!.onclick = event => { save.settings.battleSpeed = cycleOption(save.settings.battleSpeed, optionStep(event.currentTarget as HTMLElement), 3, 1); view("options"); };
+        p.querySelector<HTMLButtonElement>("#music")!.onclick = event => {
+          if (game.ctx.sound) save.settings.music = soundSetting(game.ctx.sound.cycleMode(optionStep(event.currentTarget as HTMLElement)));
           view("options");
         };
         p.querySelector<HTMLButtonElement>("#gamepad")!.onclick = () => {

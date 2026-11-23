@@ -37,7 +37,9 @@ function destination(
       bounds[crossLow] - from[crossHigh],
     );
     if (!vertical && gap >= 0) continue;
-    const cross =
+    // A row as wide as the menu leads to the first button under it, not the one nearest its middle.
+    const spans = from[crossLow] <= bounds[crossLow] + 1 && from[crossHigh] >= bounds[crossHigh] - 1;
+    const cross = spans ? 0 :
       Math.abs(
         bounds[crossLow] + bounds[crossHigh] - from[crossLow] - from[crossHigh],
       ) / 2;
@@ -174,6 +176,12 @@ export class MenuInput {
         focus(arrow);
         arrow.button.click();
       }
+      return;
+    }
+    // An option row changes its value with left and right, as the cartridge's Option screen does.
+    if (!vertical && current?.button.closest?.(".preference-grid")) {
+      current.button.dataset.step = direction === "left" ? "-1" : "1";
+      current.button.click();
       return;
     }
     const next = current && destination(buttons, current.bounds, direction);

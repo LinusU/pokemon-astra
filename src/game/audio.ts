@@ -152,9 +152,11 @@ export class GameAudio {
     }
     this.changed();
   }
-  /** Steps On → Effects only → Off → On, returning the new mode. */
-  cycleMode() {
-    this.setMode(NEXT_SOUND_MODE[this.mode]);
+  /** Steps On → Effects only → Off → On (or back the other way), returning the new mode. */
+  cycleMode(step: 1 | -1 = 1) {
+    // Three modes: one step back is two steps on.
+    const next = NEXT_SOUND_MODE[this.mode];
+    this.setMode(step < 0 ? NEXT_SOUND_MODE[next] : next);
     return this.mode;
   }
   private suspend() {

@@ -62,6 +62,7 @@ import {
   type Save,
 } from "./game/save";
 import { createShell, panel, escapeHtml, type PanelCursor } from "./ui/shell";
+import { cycleOption, optionStep } from "./ui/options";
 import {
   WORLD,
   isWildEncounter,
@@ -155,9 +156,9 @@ function updateSoundButton() {
 function cry(id: number) {
   sound.cry(id);
 }
-function toggleMusic() {
+function toggleMusic(step: 1 | -1 = 1) {
   if (mode === "saving") return;
-  save.settings.music = soundSetting(sound.cycleMode());
+  save.settings.music = soundSetting(sound.cycleMode(step));
   persist();
 }
 window.addEventListener(
@@ -1188,8 +1189,8 @@ function view(v: string, pageIndex = 0) {
   p
     .querySelector("#how")
     ?.addEventListener("click", () => fieldBasics(() => view("settings")));
-  p.querySelector("#speed")?.addEventListener("click", () => {
-    save.settings.battleSpeed = (save.settings.battleSpeed % 3) + 1;
+  p.querySelector<HTMLElement>("#speed")?.addEventListener("click", event => {
+    save.settings.battleSpeed = cycleOption(save.settings.battleSpeed, optionStep(event.currentTarget as HTMLElement), 3, 1);
     persist();
     view(v);
   });
@@ -1205,8 +1206,8 @@ function view(v: string, pageIndex = 0) {
     persist();
     view(v);
   });
-  p.querySelector("#music")?.addEventListener("click", () => {
-    toggleMusic();
+  p.querySelector<HTMLElement>("#music")?.addEventListener("click", event => {
+    toggleMusic(optionStep(event.currentTarget as HTMLElement));
     view(v);
   });
   p
