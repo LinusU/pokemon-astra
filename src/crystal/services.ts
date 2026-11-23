@@ -161,6 +161,15 @@ async function martText(game: CrystalGame, label: string, fallback: string, wait
 }
 /** A count chooser: up and down change it, A confirms. */
 export async function quantity(game: CrystalGame, title: string, max: number, price = 0) {
+  if (game.ctx.layer) {
+    const { mountQuantity } = await import("../ui/quantity");
+    return game.modal(() => new Promise<number>(resolve => {
+      const host = document.createElement("div");
+      host.className = "crystal-overlay";
+      game.layer.append(host);
+      mountQuantity(host, { title, max, price, currency: "¥", onDone: n => { host.remove(); resolve(n ?? 0); } });
+    }));
+  }
   const options = Array.from({ length: Math.max(1, Math.min(max, 99)) }, (_, i) => `×${String(i + 1).padStart(2, "0")}${price ? `  ¥${price * (i + 1)}` : ""}`);
   const pick = await game.choose(options, { title, cancel: true });
   return pick === undefined ? 0 : pick + 1;

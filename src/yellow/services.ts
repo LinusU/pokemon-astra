@@ -1,4 +1,5 @@
 /** Pokémon Centers, Marts, PCs and other shared services. */
+import { mountQuantity } from "../ui/quantity";
 import { mountStoragePc, type PcState } from "../ui/storage-pc";
 import { sortCollection } from "../game/collection";
 import { escapeHtml, panel } from "../ui/shell";
@@ -22,33 +23,7 @@ export function choose(game: YellowGame, title: string, options: string[], promp
 }
 
 function quantity(game: YellowGame, title: string, price: number, max: number): Promise<number | undefined> {
-  return new Promise(resolve => {
-    let n = 1;
-    const render = () => {
-      const p = panel(game.layer, title, `<p class="yellow-qty">×${String(n).padStart(2, "0")} · ₽${price * n}</p><p class="small">Up/down change the amount.</p><div class="buttons"><button id="more">+</button><button id="less">−</button><button id="confirm">OK</button><button class="secondary" id="back">Cancel</button></div>`, "yellow-choice");
-      p.querySelector<HTMLButtonElement>("#more")!.onclick = () => { n = n >= max ? 1 : n + 1; render(); p.isConnected; };
-      p.querySelector<HTMLButtonElement>("#less")!.onclick = () => { n = n <= 1 ? max : n - 1; render(); };
-      p.querySelector<HTMLButtonElement>("#confirm")!.onclick = () => resolve(n);
-      p.querySelector<HTMLButtonElement>("#back")!.onclick = () => resolve(undefined);
-      p.querySelector<HTMLButtonElement>("#confirm")!.focus({ preventScroll: true });
-      const keys = (e: KeyboardEvent) => {
-        if (e.key === "ArrowUp" || e.key === "w") { n = n >= max ? 1 : n + 1; render(); }
-        else if (e.key === "ArrowDown" || e.key === "s") { n = n <= 1 ? max : n - 1; render(); }
-        else return;
-        e.preventDefault();
-        window.removeEventListener("keydown", keys, true);
-      };
-      window.addEventListener("keydown", keys, true);
-      const observer = new MutationObserver(() => {
-        if (!p.isConnected) {
-          window.removeEventListener("keydown", keys, true);
-          observer.disconnect();
-        }
-      });
-      observer.observe(game.layer, { childList: true });
-    };
-    render();
-  });
+  return new Promise(resolve => mountQuantity(game.layer, { title, max, price, currency: "₽", onDone: resolve }));
 }
 
 const kinds = (items: Record<string, number>) => Object.keys(items).filter(k => items[k] > 0).length;
