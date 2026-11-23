@@ -64,7 +64,7 @@ export class CrystalRenderer {
           if (!img) return;
           const x = Math.round(at.x - camX), y = Math.round(at.y - camY - 4 - at.lift);
           c.drawImage(img, x, y);
-          if (!at.lift) this.grass(c, ground, map, Math.round(at.x), Math.round(at.y - 4), camX, camY);
+          if (!at.lift) this.grass(c, map, pals, key, Math.round(at.x), Math.round(at.y - 4), camX, camY);
           if (m.emote) this.emote(c, m.emote.kind, x, y - 16);
         },
       });
@@ -102,14 +102,20 @@ export class CrystalRenderer {
     if (g.save.state === "bike") return C(girl ? "SPRITE_KRIS_BIKE" : "SPRITE_CHRIS_BIKE");
     return C(girl ? "SPRITE_KRIS" : "SPRITE_CHRIS");
   }
-  /** Tall grass hides the lower half of anyone standing in it. */
-  private grass(c: CanvasRenderingContext2D, ground: HTMLCanvasElement, map: LiveMap, sx: number, sy: number, camX: number, camY: number) {
+  /**
+   * Tall grass: Crystal puts the lower half of anyone standing in it behind the
+   * background (OAM_PRIO), so the grass blades cover it and it shows through
+   * the gaps between them (the tiles' color 0).
+   */
+  private grass(c: CanvasRenderingContext2D, map: LiveMap, pals: Rgb[][], key: string, sx: number, sy: number, camX: number, camY: number) {
     const top = sy + 8, bottom = sy + 16, g = this.game;
     for (let tx = Math.floor(sx / 16); tx <= Math.floor((sx + 15) / 16); tx++)
       for (let ty = Math.floor(top / 16); ty <= Math.floor((bottom - 1) / 16); ty++) {
         if (!g.world.inside(map, tx, ty) || !g.world.isTallGrass(g.world.collision(map, tx, ty))) continue;
         const x0 = Math.max(sx, tx * 16), x1 = Math.min(sx + 16, tx * 16 + 16), y0 = Math.max(top, ty * 16), y1 = Math.min(bottom, ty * 16 + 16);
-        if (x1 > x0 && y1 > y0) c.drawImage(ground, x0, y0, x1 - x0, y1 - y0, x0 - camX, y0 - camY, x1 - x0, y1 - y0);
+        if (x1 <= x0 || y1 <= y0) continue;
+        const bx = tx >> 1, by = ty >> 1, cover = this.gfx.block(map.tileset, g.world.block(map, bx, by), pals, key, true);
+        c.drawImage(cover, x0 - bx * 32, y0 - by * 32, x1 - x0, y1 - y0, x0 - camX, y0 - camY, x1 - x0, y1 - y0);
       }
   }
   private emote(c: CanvasRenderingContext2D, kind: number, x: number, y: number) {

@@ -111,20 +111,24 @@ export class CrystalGraphics {
     const slot = (this.rom.u8(t.palMap + (id >> 1)) >> ((id & 1) * 4)) & 7;
     return { pixels, slot };
   }
-  private draw(ctx: CanvasRenderingContext2D, pixels: Uint8Array, pal: Rgb[], x: number, y: number) {
+  private draw(ctx: CanvasRenderingContext2D, pixels: Uint8Array, pal: Rgb[], x: number, y: number, cover = false) {
     const image = ctx.createImageData(8, 8);
     for (let i = 0; i < 64; i++) {
       const [r, g, b] = pal[pixels[i]];
       image.data[i * 4] = r;
       image.data[i * 4 + 1] = g;
       image.data[i * 4 + 2] = b;
-      image.data[i * 4 + 3] = 255;
+      image.data[i * 4 + 3] = cover && pixels[i] === 0 ? 0 : 255;
     }
     ctx.putImageData(image, x, y);
   }
 
-  block(tilesetId: number, block: number, pals: Rgb[][], key: string): HTMLCanvasElement {
-    const k = `${tilesetId}:${block}:${key}`;
+  /**
+   * A block's 32×32 pixels. With `cover`, only its colors 1–3: what the Game
+   * Boy draws over a sprite tile placed behind the background (OAM_PRIO).
+   */
+  block(tilesetId: number, block: number, pals: Rgb[][], key: string, cover = false): HTMLCanvasElement {
+    const k = `${tilesetId}:${block}:${key}${cover ? ":cover" : ""}`;
     let c = this.blocks.get(k);
     if (!c) {
       c = canvas(32, 32);
@@ -132,7 +136,7 @@ export class CrystalGraphics {
       const tiles = this.rom.blockTiles(this.rom.tileset(tilesetId), block);
       for (let i = 0; i < 16; i++) {
         const t = this.tile(tilesetId, tiles[i]);
-        this.draw(ctx, t.pixels, pals[t.slot], (i & 3) * 8, (i >> 2) * 8);
+        this.draw(ctx, t.pixels, pals[t.slot], (i & 3) * 8, (i >> 2) * 8, cover);
       }
       if (this.blocks.size > 4000) this.blocks.clear();
       this.blocks.set(k, c);
