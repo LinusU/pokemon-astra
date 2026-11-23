@@ -583,6 +583,30 @@ describe.skipIf(!run || !hasEngine || !hasLegacy)("Crystal Legacy's story", () =
       expect(w.ev("EVENT_BEAT_CHAMPION_LANCE")).toBe(true);
       expect(g.save.hallOfFame.length).toBe(1);
       expect(g.map.name).toBe("NEW_BARK_TOWN");
+
+      // ------------------------------------------------------------ Kanto by the S.S. Aqua
+      for (let i = 0; i < 8 && g.save.specialCall; i++) await h.step(i % 2 ? "up" : "down");
+      w.flush("Elm's call about the ticket");
+      await w.warp("ELMS_LAB", 4, 10, "up");
+      await w.talk("ELM");
+      w.flush("S.S. Ticket");
+      expect(w.has("S_S_TICKET")).toBe(true);
+      await w.warp("OLIVINE_PORT", 7, 13, "down");
+      await w.to(7, 15);
+      await h.settle();
+      w.flush("Boarding the S.S. Aqua");
+      expect(g.map.name).toBe("FAST_SHIP_1F");
+      await w.to(24, 6);
+      w.flush("Worried grandpa");
+      await w.warp("FAST_SHIP_CABINS_SE_SSE_CAPTAINS_CABIN", 3, 31, "up");
+      await w.talk("TWIN", { x: 2, y: 25 });
+      w.flush("The lost granddaughter");
+      expect(w.ev("EVENT_FAST_SHIP_HAS_ARRIVED")).toBe(true);
+      await w.warp("FAST_SHIP_1F", 25, 3, "up");
+      await w.talk("SAILOR", { x: 25, y: 2 });
+      await h.settle();
+      w.flush("Arriving in Vermilion");
+      expect(g.map.name).toBe("VERMILION_PORT");
     } finally {
       w.flush("end");
       if (process.env.CRYSTAL_WALKTHROUGH_LOG) writeFileSync(process.env.CRYSTAL_WALKTHROUGH_LOG, w.log.join("\n"));
