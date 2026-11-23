@@ -2,7 +2,7 @@
  * The Pokégear phone (engine/phone): contacts' own call scripts from the
  * cartridge, special calls scripts queue, and the occasional random call.
  */
-import { C, CONST, SYM, TEXT } from "./symbols";
+import { C, CONST, ITEM, SYM, TEXT } from "./symbols";
 import type { CrystalGame } from "./runtime";
 import { runScript } from "./script";
 
@@ -84,4 +84,59 @@ async function phoneText(game: CrystalGame, label: string, fallback: string) {
 async function hangUp(game: CrystalGame) {
   game.sfx("SFX_HANG_UP");
   game.closeText();
+}
+
+// ------------------------------------------------------------------ Mom's shopping
+/** data/items/mom_phone.asm: the money that sets Mom shopping, what it costs and what she buys. */
+const MOM_ITEMS_1: [number, number, string][] = [
+  [0, 600, "SUPER_POTION"], [0, 90, "ANTIDOTE"], [0, 180, "POKE_BALL"], [0, 450, "ESCAPE_ROPE"], [0, 500, "GREAT_BALL"],
+];
+const MOM_ITEMS_2: [number, number, string][] = [
+  [900, 600, "SUPER_POTION"], [4000, 270, "REPEL"], [7000, 600, "SUPER_POTION"], [10000, 1800, "DOLL"], [15000, 3000, "MOON_STONE"],
+  [19000, 600, "SUPER_POTION"], [30000, 4800, "DOLL"], [40000, 900, "HYPER_POTION"], [50000, 8000, "DOLL"], [100000, 22800, "DOLL"],
+];
+const MOM_MONEY = 2300;
+
+/**
+ * MomTriesToBuySomething, after a won trainer battle: with enough saved, Mom
+ * buys the next thing on her list (or, now and then, something from her
+ * everyday list) and calls to say it's in the player's PC. Astra has no room
+ * decorations, so she passes over the dolls without spending anything.
+ */
+export async function momTriesToBuySomething(game: CrystalGame) {
+  if (game.map.phoneService) return;
+  const v = game.save.vars;
+  let pick: [number, number, string] | undefined;
+  let fromList2 = false;
+  const next = v.momItem ?? 0;
+  if (next < MOM_ITEMS_2.length && game.save.momMoney >= MOM_ITEMS_2[next][0]) {
+    pick = MOM_ITEMS_2[next];
+    fromList2 = true;
+  } else {
+    // .check_have_2300: every 2,300 saved, if the balance lands on the mark exactly.
+    let trigger = v.momTrigger ?? MOM_MONEY;
+    while (trigger < game.save.momMoney) trigger += MOM_MONEY;
+    if (trigger === game.save.momMoney) {
+      trigger += MOM_MONEY;
+      pick = MOM_ITEMS_1[Math.floor(Math.random() * MOM_ITEMS_1.length)];
+    }
+    v.momTrigger = trigger;
+  }
+  if (!pick) return;
+  const [, cost, name] = pick;
+  if (fromList2) v.momItem = next + 1;
+  if (name === "DOLL" || game.save.momMoney < cost) return;
+  // The item goes to the player's PC; a full PC means she doesn't buy it.
+  const item = ITEM[name], stored = game.save.pcItems[item] ?? 0;
+  if (stored >= 99) return;
+  game.save.pcItems[item] = stored + 1;
+  game.save.momMoney -= cost;
+  const mom = contact(game, C("PHONECONTACT_MOM"));
+  await ring(game, mom);
+  for (const label of ["MomHiHowAreYouText", "MomFoundAnItemText", "MomBoughtWithYourMoneyText", "MomItsInPCText"]) {
+    const at = TEXT[label];
+    if (at !== undefined) await game.writeText(at);
+  }
+  await game.waitButton();
+  await hangUp(game);
 }

@@ -222,6 +222,13 @@ export async function startBattle(game: CrystalGame): Promise<number> {
   }
   game.battleResult = result;
   if (result === C("LOSE") && !canLose) game.save.vars.whitedOut = 1;
+  // Script_reloadmapafterbattle: after a won trainer battle, Mom may go shopping.
+  if (setup.kind === "trainer" && result === C("WIN")) {
+    game.queueAfterScript(async () => {
+      const { momTriesToBuySomething } = await import("./phone");
+      await momTriesToBuySomething(game);
+    });
+  }
   return result;
 }
 

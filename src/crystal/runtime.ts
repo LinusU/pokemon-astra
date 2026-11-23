@@ -700,6 +700,9 @@ export class CrystalGame {
     }
   }
   defer(at: number) { this.deferred.push(at); }
+  /** Work queued to run once the current script has ended (LoadScriptBDE), such as Mom's shopping call. */
+  private afterScript: (() => Promise<void>)[] = [];
+  queueAfterScript(action: () => Promise<void>) { this.afterScript.push(action); }
   /** Runs the scene script for the map's scene and anything it defers. */
   async sceneScript() {
     for (let guard = 0; guard < 4; guard++) {
@@ -931,6 +934,7 @@ export class CrystalGame {
     try {
       await action();
       await this.runDeferred();
+      while (this.afterScript.length) await this.afterScript.shift()!();
       // Crystal runs the scene script every frame the player is free; a scene a script just set may start the next cutscene.
       await this.sceneScript();
     } catch (error) {

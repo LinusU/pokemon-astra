@@ -227,6 +227,20 @@ describe.skipIf(!hasEngine || !CARTRIDGES.length).each(CARTRIDGES)("Crystal's sy
     expect(g.save.money - money).toBe(g.save.momMoney * 3);
   }, 60000);
 
+  it("has Mom buy something with the savings and call about it", async () => {
+    const h = await headlessGame(adventure);
+    const g = h.game;
+    g.save.party = [g.makeMon(MON.TYRANITAR, 60)];
+    g.save.momMoney = 1000;
+    const [group, number] = MAP.ROUTE_30;
+    await g.warpTo(group, number, 5, 30);
+    g.battleSetup = { kind: "trainer", klass: C("YOUNGSTER"), id: C("JOEY1") };
+    await g.runScript(async () => { await g.startBattle(); await g.afterBattle(); });
+    expect(g.save.pcItems[ITEM.SUPER_POTION]).toBe(1);
+    expect(g.save.momMoney).toBe(400);
+    expect(h.ui.log.join(" ")).toMatch(/PC/);
+  }, 60000);
+
   it("teaches HM01 and TM01 from the Pack", async () => {
     const h = await headlessGame(adventure);
     const g = h.game;
