@@ -21,6 +21,8 @@ export const FIELD_MOVES = {
   dig: { move: "DIG", badge: "" },
   teleport: { move: "TELEPORT", badge: "" },
   sweetscent: { move: "SWEET_SCENT", badge: "" },
+  softboiled: { move: "SOFTBOILED", badge: "" },
+  milkdrink: { move: "MILK_DRINK", badge: "" },
 } as const;
 export type FieldMove = keyof typeof FIELD_MOVES;
 
@@ -184,6 +186,21 @@ export async function useFly(game: CrystalGame) {
   game.setPlayerState(C("PLAYER_NORMAL"));
   await game.warpTo(spot.group, spot.number, spot.x, spot.y, "down");
 }
+/** Softboiled and Milk Drink (Softboiled_MilkDrinkFunction): a fifth of the user's max HP goes to another Pokémon. */
+async function shareHp(game: CrystalGame, slot: number) {
+  const user = game.save.party[slot], share = Math.floor(user.stats[0] / 5);
+  if (user.hp <= share) return text(game, "_PokemonNotEnoughHPText", "Not enough HP!");
+  const { choosePartyMon } = await import("./menu");
+  const pick = await choosePartyMon(game, "Use on which POKéMON?", m => m !== user && !m.egg && m.hp > 0 && m.hp < m.stats[0]);
+  if (pick === undefined) return;
+  const target = game.save.party[pick], before = target.hp;
+  user.hp -= share;
+  target.hp = Math.min(target.stats[0], target.hp + share);
+  game.ctx.sound?.heal();
+  const name = target.nickname || game.monName(target.species);
+  game.strings.set(RAM.wStringBuffer1, name);
+  await game.say(`${name} recovered ${target.hp - before} HP!`);
+}
 /** Whether Dig and the Escape Rope have a way out (CheckCanDig): in a cave, with a door to go back to. */
 export function canDig(game: CrystalGame) {
   const env = game.map.environment;
@@ -224,6 +241,7 @@ export async function useFieldMove(game: CrystalGame, slot: number, move: FieldM
     case "fly": return useFly(game);
     case "dig": return useEscape(game, "dig");
     case "teleport": return useEscape(game, "teleport");
+    case "softboiled": case "milkdrink": return shareHp(game, slot);
     case "sweetscent": {
       // SweetScentFromMenu: a Pokémon turns up wherever wild ones live, whatever the odds.
       nameFor(game, slot);

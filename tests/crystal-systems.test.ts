@@ -268,6 +268,21 @@ describe.skipIf(!hasEngine || !CARTRIDGES.length).each(CARTRIDGES)("Crystal's sy
     expect([g.me.x, g.me.y]).toEqual([ledge!.x, ledge!.y + 2]);
   }, 60000);
 
+  it("shares HP with Milk Drink from the party menu", async () => {
+    const h = await headlessGame(adventure);
+    const g = h.game;
+    const miltank = g.makeMon(MON.MILTANK, 40);
+    miltank.moves = [MOVE.MILK_DRINK, 0, 0, 0];
+    const hurt = g.makeMon(MON.PIDGEY, 20);
+    hurt.hp = 1;
+    g.save.party = [miltank, hurt];
+    const { useFieldMove } = await import("../src/crystal/field");
+    await g.runScript(() => useFieldMove(g, 0, "milkdrink"));
+    const share = Math.floor(miltank.stats[0] / 5);
+    expect(g.save.party[0].hp).toBe(miltank.stats[0] - share);
+    expect(g.save.party[1].hp).toBe(Math.min(hurt.stats[0], 1 + share));
+  }, 60000);
+
   it("buys from a Mart", async () => {
     const h = await headlessGame(adventure);
     const g = h.game;
