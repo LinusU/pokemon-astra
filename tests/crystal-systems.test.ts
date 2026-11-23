@@ -318,4 +318,21 @@ describe.skipIf(!hasEngine || !CARTRIDGES.length).each(SUITES)("Crystal's system
     expect(g.itemCount(ITEM.POTION)).toBe(1);
     expect(g.save.money).toBe(3000 - g.rom.itemPrice(ITEM.POTION));
   }, 60000);
+
+  it("leaves the player where the teacher brings them back", async () => {
+    const h = await headlessGame(adventure);
+    const g = h.game;
+    const [group, number] = MAP.NEW_BARK_TOWN;
+    await g.warpTo(group, number, 2, 8, "left");
+    // Astra's free movement: the player's centre has just entered the square where the teacher stops them.
+    g.me.x = 1;
+    g.me.free = { x: 1.4, y: 8 };
+    const steps = g.save.steps;
+    await g.runScript(() => g.arrived());
+    const teacher = g.objects.find(o => o.visible && o.event.sprite === C("SPRITE_TEACHER"))!;
+    expect([teacher.x, teacher.y]).toEqual([6, 8]);
+    expect([g.me.x, g.me.y]).toEqual([5, 8]);
+    expect(g.me.free).toBeUndefined();
+    expect(g.save.steps).toBe(steps + 1);
+  }, 60000);
 });

@@ -903,7 +903,7 @@ export class CrystalGame {
       const prior = { x: m.x, y: m.y };
       m.x += dx * dist;
       m.y += dy * dist;
-      if (this.following && this.following.leader === slot) this.followStep(prior);
+      if (this.following && this.following.leader === slot) this.followStep(prior, WALK_SECONDS * dist / (options.speed ?? 1));
       if (!this.ctx.canvas) {
         if (slot === 0) this.crossEdge();
         continue;
@@ -915,13 +915,21 @@ export class CrystalGame {
       if (slot === 0) this.crossEdge();
     }
   }
-  private followStep(prior: { x: number; y: number }) {
+  /** Steps the follower onto the square the leader just left, in time with the leader. */
+  private followStep(prior: { x: number; y: number }, duration: number) {
     const f = this.mover(this.following!.follower);
     if (!f) return;
+    // A player stopped partway across a square (free movement) steps on from where they stand.
+    const fx = f.free?.x ?? f.x, fy = f.free?.y ?? f.y;
+    f.free = undefined;
+    f.moving = false;
     const dir = (["down", "up", "left", "right"] as Facing[]).find(d => f.x + STEP[d][0] === prior.x && f.y + STEP[d][1] === prior.y);
-    if (!dir) { Object.assign(f, prior); return; }
-    f.facing = dir;
-    if (this.ctx.canvas) f.from = { x: f.x, y: f.y, t: 0, duration: WALK_SECONDS };
+    if (dir) f.facing = dir;
+    if (dir && this.ctx.canvas) {
+      f.from = { x: fx, y: fy, t: 0, duration };
+      // Being led is part of the cutscene: no step is counted and nothing triggers on arrival.
+      f.onPath = () => {};
+    }
     f.x = prior.x;
     f.y = prior.y;
   }
