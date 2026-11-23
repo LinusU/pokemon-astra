@@ -1296,6 +1296,8 @@ export class CrystalGame {
     if (warp >= 0 && this.world.isWarp(coll) && !this.world.carpet(coll)) return this.useWarp(warp);
     const coord = this.map.coords.find(c => c.x === this.me.x && c.y === this.me.y && c.scene === this.sceneOf(this.map.group, this.map.number));
     if (coord) {
+      // The cartridge starts the scene with the player on the square, so finish the step first.
+      await this.settle();
       await runScript(this, coord.script);
       return;
     }
@@ -1336,6 +1338,8 @@ export class CrystalGame {
   private async trainerSighting() {
     const seen = this.watchingTrainer();
     if (!seen) return false;
+    // The trainer walks up to the player's square, so the player finishes stepping onto it.
+    await this.settle();
     await this.trainerBattle(seen.o, seen.header, true);
     return true;
   }
