@@ -25,6 +25,8 @@ type BagOptions = {
   items: BagItem[];
   state: BagState;
   pockets?: BagPocket[];
+  /** Ask "Use / Cancel" before onUse; off when the caller shows its own item submenu. */
+  confirm?: boolean;
   onUse: (item: BagItem) => void;
   onCancel: () => void;
 };
@@ -227,6 +229,10 @@ export function mountBag(
   function chooseItem() {
     const item = selected();
     if (!item) return;
+    if (options.confirm === false) {
+      if (!item.unavailable) onUse(item);
+      return;
+    }
     choosing = true;
     const actions = bag.ownerDocument.createElement("div");
     actions.className = "astra-bag-actions";

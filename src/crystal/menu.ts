@@ -182,7 +182,7 @@ export function openCrystalMenu(game: CrystalGame): Promise<(() => Promise<void>
           key, count, name: itemTitle(game.rom.itemName(+key)), pocket: pocketOf(game, +key), action: "Use",
         }));
         mountBag(game.layer, {
-          items, state: bagState, pockets: ["items", "balls", "key", "tms"],
+          items, state: bagState, pockets: ["items", "balls", "key", "tms"], confirm: false,
           onUse: item => void (async () => {
             const id = +item.key;
             const choice = await game.choose(["USE", "GIVE", "REGISTER", "TOSS"], { title: item.name, cancel: true });
