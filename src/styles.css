@@ -714,6 +714,11 @@ canvas {
 .journey-list {
   display: grid;
 }
+/* The start menu lists every entry; the journeys screen's short scrolling list is its own. */
+.panel.journey-menu .journey-list {
+  max-height: none;
+  overflow: visible;
+}
 .panel .journey-list button {
   text-align: left;
   border: 0;
