@@ -359,6 +359,18 @@ describe.skipIf(!hasEngine || !CARTRIDGES.length).each(SUITES)("Crystal's system
     expect(h.ui.log.join(" ")).not.toContain("We hope to see you again.");
   }, 60000);
 
+  it("returns to the start menu after choosing a Pokémon from it", async () => {
+    const h = await headlessGame(adventure);
+    const g = h.game;
+    // Switch and Give open a party chooser over the start menu.
+    g.mode = "menu";
+    await g.modal(async () => undefined);
+    expect(g.mode).toBe("menu");
+    g.mode = "script";
+    await g.modal(async () => undefined);
+    expect(g.mode).toBe("script");
+  }, 60000);
+
   it("names each new area as the player enters it", async () => {
     const h = await headlessGame(adventure);
     const g = h.game;

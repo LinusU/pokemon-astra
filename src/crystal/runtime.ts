@@ -1544,13 +1544,14 @@ export class CrystalGame {
   delCmdQueue(index: number) { void index; const had = !!this.save.vars.cmdQueue; delete this.save.vars.cmdQueue; return had; }
 
   /** Runs a screen over the map (menus, marts, the PC) with the player locked. */
+  /** Runs a screen that takes menu input, then gives input back to whatever had it (the start menu, a script). */
   async modal<T>(run: () => Promise<T>): Promise<T> {
     const previous = this.mode;
     this.mode = "menu";
     try {
       return await run();
     } finally {
-      this.mode = previous === "menu" ? "script" : previous;
+      this.mode = previous;
     }
   }
   private async openMenu() {
