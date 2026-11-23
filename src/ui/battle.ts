@@ -453,6 +453,8 @@ export class BattlePresenter {
   private root: HTMLElement;
   private snapshot: BattleSnapshot;
   private shown: Record<Battler, BattleMon>;
+  /** The HP an animating bar is drawn at, between whole points; the number shows whole points. */
+  private barHp: Partial<Record<Battler, number>> = {};
   private sentOut: Record<Battler, BattleMon>;
   private shownSlots: Record<Battler, number>;
   private expProgress: number;
@@ -550,7 +552,7 @@ export class BattlePresenter {
     for (const side of ["player", "enemy"] as const) {
       const mon = this.shown[side];
       const hud = this.root.querySelector<HTMLElement>(`.battle-${side}-hud`)!;
-      const ratio = Math.max(0, Math.min(1, mon.hp / Math.max(1, mon.max_hp)));
+      const ratio = Math.max(0, Math.min(1, (this.barHp[side] ?? mon.hp) / Math.max(1, mon.max_hp)));
       const image = this.root.querySelector<HTMLImageElement>(
         `.battle-${side} img`,
       )!;
@@ -854,14 +856,18 @@ export class BattlePresenter {
       overlay.hidden = false;
       overlay.innerHTML = `<div class="battle-hud-top"><strong>${escapeHtml(this.memberName(reserve))}</strong><span></span></div><div class="battle-hp"><b>HP</b><div class="battle-hp-track"><i></i></div></div>`;
     }
-    const setHp = (hp: number) => {
+    // As in Crystal, the bar moves smoothly and the number follows it in whole
+    // points, reaching the new value as the bar does.
+    const setHp = (bar: number) => {
+      const hp = h.to < h.from ? Math.ceil(bar) : Math.floor(bar);
       if (reserve === undefined) {
         this.shown[side].hp = hp;
         this.shown[side].max_hp = h.max;
+        this.barHp[side] = bar;
         this.paint();
       } else {
         overlay.querySelector("span")!.textContent = `${hp} / ${h.max}`;
-        overlay.querySelector("i")!.style.width = `${100 * hp / Math.max(1, h.max)}%`;
+        overlay.querySelector("i")!.style.width = `${100 * bar / Math.max(1, h.max)}%`;
       }
     };
     const start = performance.now();
@@ -869,9 +875,10 @@ export class BattlePresenter {
     const step = (now: number) => {
       if (this.disposed) return;
       const p = Math.min(1, (now - start) / duration);
-      setHp(Math.round(h.from + (h.to - h.from) * p));
-      if (p < 1) requestAnimationFrame(step);
-      else if (reserve === undefined) this.next();
+      setHp(p < 1 ? h.from + (h.to - h.from) * p : h.to);
+      if (p < 1) return void requestAnimationFrame(step);
+      delete this.barHp[side];
+      if (reserve === undefined) this.next();
       else this.delay(450, () => {
         overlay.hidden = true;
         this.next();
