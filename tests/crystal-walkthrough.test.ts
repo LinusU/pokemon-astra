@@ -147,10 +147,15 @@ function walker(h: Harness) {
         if (!g.event(readTrainerHeader(g, t.event.script).flag)) throw Error(`Trainer at ${t.x},${t.y} on ${where()} wasn't beaten: result ${g.battleResult}, party ${g.save.party.map(m => `${m.species}:${m.hp}/${m.stats[0]}`).join(" ")}`);
       }
     },
-    /** Makes the party strong enough to win every battle on the engine's auto-play. */
+    /**
+     * Makes the party strong enough to win every battle on the engine's auto-play. The real
+     * trainers' set-up moves (Jasmine's rain, Red's Snorlax) outlast a strongest-move auto-play
+     * at any level, so the stats go past what a level allows.
+     */
     strengthen(level = 70) {
       g.save.party = g.save.party.map(m => (m.egg ? m : { ...g.makeMon(m.species, Math.max(level, m.level)), nickname: m.nickname, item: m.item }));
       g.heal();
+      g.save.party = g.save.party.map(m => (m.egg ? m : { ...m, hp: 999, stats: m.stats.map(() => 999) }));
     },
     has(item: string) { return g.itemCount(ITEM[item] ?? C(item)) > 0; },
   };
