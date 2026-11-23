@@ -21,6 +21,7 @@ function panel(
   const scroller = {
     scrollTop: 0,
     clientHeight: height,
+    get scrollHeight() { return Math.max(height, ...layout.map(([, top, , h]) => top + h)); },
     getBoundingClientRect: () => rect(0, 0, 200, height),
     querySelectorAll: () => buttons,
     querySelector: (selector: string) => {
@@ -50,6 +51,8 @@ function panel(
   const layer = {
     firstElementChild: {},
     ownerDocument,
+    querySelectorAll: () => [],
+    matches: () => false,
     querySelector: (selector: string) =>
       selector === "[data-bag]" || (selector === ".party-screen" && !party) ? null : scroller,
   } as unknown as HTMLElement;
@@ -96,6 +99,22 @@ describe("menu input", () => {
     expect(buttons[1].click).toHaveBeenCalledTimes(2);
     update(320, "left");
     expect(buttons[0].click).toHaveBeenCalledOnce();
+  });
+
+  it("comes round to the first entry on a fresh press past the last, but not while held", () => {
+    const { update, buttons, ownerDocument } = panel([[0, 0, 100, 20], [0, 30, 100, 20], [0, 60, 100, 20]]);
+    update(0);
+    update(10, "down");
+    update(320, undefined, "down");
+    expect(ownerDocument.activeElement).toBe(buttons[2]);
+    update(430, undefined, "down");
+    expect(ownerDocument.activeElement).toBe(buttons[2]);
+    update(500);
+    update(510, "down");
+    expect(ownerDocument.activeElement).toBe(buttons[0]);
+    update(520);
+    update(530, "up");
+    expect(ownerDocument.activeElement).toBe(buttons[2]);
   });
 
   it("moves down a column, across a row and confirms the selected button", () => {

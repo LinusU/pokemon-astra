@@ -182,6 +182,15 @@ export class MenuInput {
       next.bounds.bottom > viewport.top - 18;
     if (next && (visible(next.bounds) || (vertical && nearby) || battle)) {
       focus(next);
+    } else if (!battle && vertical && pressed && current && visible(current.bounds) && (direction === "down"
+      ? scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 1
+      : scroller.scrollTop <= 0)) {
+      // A fresh press past the last entry comes round to the first. Holding stops at the end.
+      const far = direction === "down" ? buttons[0] : buttons[buttons.length - 1];
+      if (far && far !== current) {
+        scroller.scrollTop = direction === "down" ? 0 : scroller.scrollHeight;
+        far.button.focus({ preventScroll: true });
+      }
     } else if (!battle && vertical) {
       const step = Math.max(24, scroller.clientHeight * 0.24);
       scroller.scrollTop += direction === "down" ? step : -step;
