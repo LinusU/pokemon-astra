@@ -82,7 +82,9 @@ async function phoneText(game: CrystalGame, label: string, fallback: string) {
   game.closeText();
 }
 
+/** Script_ReceivePhoneCall and the Pokégear's call: the last words stay up until A, then the line clicks off. */
 async function hangUp(game: CrystalGame) {
+  if (game.textOpen) await game.waitButton();
   game.sfx("SFX_HANG_UP");
   game.closeText();
 }
@@ -138,6 +140,5 @@ export async function momTriesToBuySomething(game: CrystalGame) {
     const at = TEXT[label];
     if (at !== undefined) await game.writeText(at);
   }
-  await game.waitButton();
   await hangUp(game);
 }
