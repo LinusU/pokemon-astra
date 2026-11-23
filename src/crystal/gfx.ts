@@ -230,6 +230,34 @@ export class CrystalGraphics {
     this.sprites.set(k, c);
     return c;
   }
+  /**
+   * A healing machine sprite tile (HealMachineGFX: 0 a light, 1 a Poké Ball) in
+   * the machine's own palette, its colors turned `turn` times by FlashPalettes.
+   */
+  healMachineTile(tile: number, flip: boolean, turn: number): HTMLCanvasElement {
+    const k = `heal:${tile}:${flip}:${turn}`;
+    let c = this.sprites.get(k);
+    if (!c) {
+      const colors = this.palette(SYM["HealMachineAnim.palettes"]);
+      const pal = colors.map((_, i) => colors[(i + turn) % 4]);
+      const offset = SYM["HealMachineAnim.HealMachineGFX"] + tile * 16;
+      c = canvas(8, 8);
+      const ctx = c.getContext("2d")!, image = ctx.createImageData(8, 8);
+      for (let y = 0; y < 8; y++) {
+        const lo = this.rom.u8(offset + y * 2), hi = this.rom.u8(offset + y * 2 + 1);
+        for (let x = 0; x < 8; x++) {
+          const v = ((lo >> (7 - x)) & 1) | (((hi >> (7 - x)) & 1) << 1);
+          if (!v) continue;
+          const i = (y * 8 + (flip ? 7 - x : x)) * 4;
+          [image.data[i], image.data[i + 1], image.data[i + 2]] = pal[v];
+          image.data[i + 3] = 255;
+        }
+      }
+      ctx.putImageData(image, 0, 0);
+      this.sprites.set(k, c);
+    }
+    return c;
+  }
   /** The default palette of an overworld sprite (PAL_OW_*). */
   spritePalette(sprite: number) {
     if (sprite <= 0 || sprite >= C("SPRITE_POKEMON")) return C("PAL_OW_RED");

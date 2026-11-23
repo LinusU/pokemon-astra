@@ -50,6 +50,11 @@ export class CrystalRenderer {
       if (x < -8 || y < -8 || x > 320 || y > 240) continue;
       c.drawImage(this.gfx.frame(t.kind, frame, pals[t.slot]), x, y);
     }
+    // A healing machine's lights and Poké Balls: later OAM entries than people, so drawn under them.
+    if (g.healMachine) {
+      const turn = g.healMachineFlash();
+      for (const s of g.healMachine.sprites) c.drawImage(this.gfx.healMachineTile(s.tile, s.flip, turn), s.x - camX, s.y - camY);
+    }
     // People, back to front.
     const objPals = this.gfx.objPalettes(time);
     const drawn: { y: number; draw: () => void }[] = [];

@@ -119,6 +119,8 @@ export class CrystalGame {
     else delete this.save.vars.flash;
   }
   shake = 0;
+  /** HealMachineAnim's lights and Poké Balls while a healing machine is in use, in map pixels. */
+  healMachine?: { sprites: { x: number; y: number; tile: number; flip: boolean }[]; since: number };
   renderer?: { render(now: number): void };
   inBattle?: { trainer: boolean; klass?: number };
   battleCue?: string;
@@ -872,6 +874,29 @@ export class CrystalGame {
     Object.assign(m, { x, y, from: undefined, free: undefined });
     if (facing) m.facing = facing;
   }
+  /**
+   * HealMachineAnim: the machine's two lights (not in the Hall of Fame) and a
+   * Poké Ball for each party Pokémon, at the cartridge's sprite positions. Those
+   * are screen pixels with the player's square at (64, 64), and OAM's (8, 16) on top.
+   */
+  showHealMachine(kind: number) {
+    const hof = kind === C("HEALMACHINE_HALL_OF_FAME");
+    const table = SYM[hof ? "HealMachineAnim.HOF_OAM" : "HealMachineAnim.PC_ElmsLab_OAM"];
+    // Elm's Lab moves the Pokémon Center's sprites to the player's left (bcpixel 2, 4).
+    const [dx, dy] = kind === C("HEALMACHINE_ELMS_LAB") ? [16, 32] : [0, 0];
+    const ox = this.me.x * 16 - 72 + dx, oy = this.me.y * 16 - 80 + dy;
+    const count = (hof ? 0 : 2) + Math.min(6, this.save.party.length);
+    const sprites = Array.from({ length: count }, (_, i) => {
+      const at = table + i * 4;
+      return { x: ox + this.rom.u8(at + 1), y: oy + this.rom.u8(at), tile: this.rom.u8(at + 2) & 1, flip: (this.rom.u8(at + 3) & 0x20) !== 0 };
+    });
+    this.healMachine = { sprites, since: this.clock };
+  }
+  /** How far the machine's palette has turned: FlashPalettes rotates it 8 times, 10 frames apart. */
+  healMachineFlash() {
+    const h = this.healMachine;
+    return h ? Math.min(8, Math.floor((this.clock - h.since) * 6)) % 4 : 0;
+  }
   follow(leader: number, follower: number) { this.following = { leader, follower }; }
   stopFollow() { this.following = undefined; }
   async showEmote(kind: number, slot: number, frames: number) {
@@ -951,6 +976,8 @@ export class CrystalGame {
       await this.say(`Something went wrong: ${error instanceof UnsupportedScript || error instanceof Error ? error.message : String(error)}`);
     } finally {
       this.closeText();
+      // The machine's sprites last until the scene that used it is over.
+      this.healMachine = undefined;
       this.mode = "world";
       this.persist();
     }

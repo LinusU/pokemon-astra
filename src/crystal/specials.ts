@@ -36,6 +36,9 @@ async function healParty(g: CrystalGame) {
   g.heal();
 }
 async function healMachineAnim(g: CrystalGame) {
+  // With no party there is nothing to put on the machine.
+  if (!g.save.party.length) return;
+  g.showHealMachine(g.scriptVar);
   g.sfx("SFX_HEALING_MACHINE");
   g.ctx.sound?.heal();
   await g.delay(80);
