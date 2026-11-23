@@ -20,20 +20,33 @@ export interface CrystalUi {
   readonly busy: boolean;
 }
 
-/** Splits long paragraphs between sentences so each page fits the box. */
+/** A paragraph's lines as one line: words split by a hyphen at a line's end join up ("some-/thing", "GOLDEN-/ROD", "#-/MON"), hyphenated words keep their hyphen ("BUG-/type"). */
+function joinLines(para: string) {
+  return para
+    .replace(/(POKé|[A-Z])- ?[\n\v](?=[A-Z])/g, "$1")
+    .replace(/([A-Z])- ?[\n\v](?=[a-z])/g, "$1-")
+    .replace(/([a-zé])- ?[\n\v](?=[a-z])/g, "$1")
+    // A dash that starts a line belongs to the word before it ("worry--take it").
+    .replace(/[\n\v](?=--)/g, "")
+    .replace(/[\n\v]/g, " ").replace(/\s+/g, " ").trim();
+}
+/**
+ * Crystal's two-line box often starts a paragraph in the middle of a
+ * sentence. Astra's box is larger, so a paragraph that doesn't end a sentence
+ * runs on into the next, and long ones split between sentences so each page
+ * fits the box.
+ */
 export function paginate(text: string, limit = 110): string[] {
-  const out: string[] = [];
+  const paras: string[] = [];
   for (const para of text.split("\f")) {
-    // A hyphen at a line's end: a word split in two joins up ("some-/thing", "GOLDEN-/ROD", "#-/MON"),
-    // while a hyphenated word keeps its hyphen ("BUG-/type").
-    const t = para
-      .replace(/(POKé|[A-Z])- ?[\n\v](?=[A-Z])/g, "$1")
-      .replace(/([A-Z])- ?[\n\v](?=[a-z])/g, "$1-")
-      .replace(/([a-zé])- ?[\n\v](?=[a-z])/g, "$1")
-      // A dash that starts a line belongs to the word before it ("worry--take it").
-      .replace(/[\n\v](?=--)/g, "")
-      .replace(/[\n\v]/g, " ").replace(/\s+/g, " ").trim();
+    const t = joinLines(para);
     if (!t) continue;
+    const last = paras.length - 1;
+    if (last >= 0 && !/[.!?…]["'』)]*$/.test(paras[last])) paras[last] = joinLines(`${paras[last]}\n${t}`);
+    else paras.push(t);
+  }
+  const out: string[] = [];
+  for (const t of paras) {
     if (t.length <= limit) { out.push(t); continue; }
     let page = "";
     for (const sentence of t.split(/(?<=[.!?…])\s+/)) {
