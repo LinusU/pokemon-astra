@@ -39,6 +39,9 @@ pub fn start(data: &'static GameData, setup: &BattleSetup, rng: u64, events: boo
     engine.write_bag(&setup.bag)?;
     engine.write_party(&setup.party, false)?;
     let launch = engine.launch_opponent(setup)?;
+    if matches!(setup.opponent, Opponent::Wild { .. }) && setup.options.battle_type != BATTLETYPE_NORMAL {
+        engine.mem.wb(W_BATTLE_TYPE, setup.options.battle_type);
+    }
     engine.start_battle(&launch)?;
     if let Opponent::Trainer { ai_flags: Some((moves, items)), .. } = setup.opponent {
         let class = engine.mem.rb(W_TRAINER_CLASS);

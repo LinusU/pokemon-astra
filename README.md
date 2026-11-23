@@ -74,7 +74,7 @@ Choose **New journey → Crystal** to play Johto and Kanto from the Pokémon Cry
 - **Crystal Legacy's engine changes:** a Repel that wears off offers another of the same kind, the Move Reminder and Egg Move Reminder teach forgotten moves with their own dialogue, HMs can't be left in the PC, and its expanded tilesets draw as Legacy draws them. Everything else Legacy changed (its story, trainers and rematches, wild Pokémon, marts, Kurt's instant Apricorn Balls) is in its scripts and data, so it plays as Legacy wrote it.
 - You move freely, diagonals included, as in the other adventures. **Option → Movement** switches to square-by-square steps. Hold B or Shift to run.
 
-Not included: link-cable trades and battles, mobile and Mystery Gift features, the Battle Tower, Crystal Legacy's hard mode, and Nayru's Pokédex (Astra's own Pokédex list is used). The Game Corner's slots and Card Flip and the Unown stone panels are Astra's own simpler versions. The radio plays music only, without its talk shows. Battle pictures come from your Crystal cartridge, so Legacy's redrawn Pokémon keep Crystal's look in battle. The Lake of Rage's red Gyarados battles in its usual colors, as the battle engine can't yet make a wild Pokémon shiny.
+Not included: link-cable trades and battles, mobile and Mystery Gift features, the Battle Tower, Crystal Legacy's hard mode, and Nayru's Pokédex (Astra's own Pokédex list is used). The Game Corner's slots and Card Flip and the Unown stone panels are Astra's own simpler versions. The radio plays music only, without its talk shows. Battle pictures come from your Crystal cartridge, so Legacy's redrawn Pokémon keep Crystal's look in battle.
 
 ## Controls and saves
 

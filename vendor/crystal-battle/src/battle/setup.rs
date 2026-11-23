@@ -146,11 +146,15 @@ pub struct Options {
     /// A fixed wild encounter stays for its turn instead of using the roaming flee table.
     #[serde(default)]
     pub stationary_wild: bool,
+    /// The `wBattleType` a wild battle starts with, as a script's `loadvar VAR_BATTLETYPE`
+    /// leaves it (the Lake of Rage's shiny Gyarados, a legendary that holds its item…).
+    #[serde(default)]
+    pub battle_type: u8,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Options { battle_scene: true, stationary_wild: false }
+        Options { battle_scene: true, stationary_wild: false, battle_type: 0 }
     }
 }
 

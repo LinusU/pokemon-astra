@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { CARTRIDGES } from "./crystal-fixtures";
 import { hasEngine, headlessGame } from "./crystal-harness";
-import { C, ITEM, MAP, MON, MOVE } from "../src/crystal/symbols";
+import { C, CONST, ITEM, MAP, MON, MOVE } from "../src/crystal/symbols";
 
 describe.skipIf(!hasEngine || !CARTRIDGES.length).each(CARTRIDGES)("Crystal's systems on %s", cart => {
   const adventure = cart === "crystal" ? "crystal" : "crystal-legacy";
@@ -281,6 +281,15 @@ describe.skipIf(!hasEngine || !CARTRIDGES.length).each(CARTRIDGES)("Crystal's sy
     const share = Math.floor(miltank.stats[0] / 5);
     expect(g.save.party[0].hp).toBe(miltank.stats[0] - share);
     expect(g.save.party[1].hp).toBe(Math.min(hurt.stats[0], 1 + share));
+  }, 60000);
+
+  it("meets the Lake of Rage's red Gyarados", async () => {
+    const h = await headlessGame(adventure);
+    const g = h.game;
+    // Crystal Legacy calls Crystal's BATTLETYPE_FORCESHINY BATTLETYPE_SHINY.
+    const shiny = CONST.BATTLETYPE_SHINY ?? CONST.BATTLETYPE_FORCESHINY;
+    const battle = g.engine.startBattle({ party: [g.makeMon(MON.TYRANITAR, 70)], opponent: { species: MON.GYARADOS, level: 30, battleType: shiny } });
+    expect(battle.snapshot().state.enemy.active.dvs).toBe(0xeaaa);
   }, 60000);
 
   it("buys from a Mart", async () => {

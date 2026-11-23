@@ -192,7 +192,11 @@ export async function startBattle(game: CrystalGame): Promise<number> {
       ({ species, level } = pick);
     } else ({ species, level } = setup);
     game.register(species, false);
-    opponent = { species, level, stationary: battleType !== C("BATTLETYPE_ROAMING") };
+    // The battle types the engine plays itself: the red Gyarados is shiny, Snorlax and the
+    // legendaries hold their items and can't be roared away.
+    const engineType = ["BATTLETYPE_SHINY", "BATTLETYPE_FORCESHINY", "BATTLETYPE_TRAP", "BATTLETYPE_FORCEITEM", "BATTLETYPE_CELEBI", "BATTLETYPE_SUICUNE"]
+      .some(name => CONST[name] === battleType);
+    opponent = { species, level, stationary: battleType !== C("BATTLETYPE_ROAMING"), ...(engineType ? { battleType } : {}) };
   }
   const bag = battleBag(game);
   const badges = game.badges();

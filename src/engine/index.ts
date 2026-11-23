@@ -72,7 +72,7 @@ export interface BattleOptions {
    * `trainer` alone the game data's own party for that class and id.
    */
   opponent:
-    | { species: number; level: number; stationary?: boolean }
+    | { species: number; level: number; stationary?: boolean; battleType?: number }
     | { party?: Pokemon[]; prizeMoney?: number; trainer?: { class: number; id: number } };
   balls?: [number, number][];
   items?: [number, number][];
@@ -384,7 +384,11 @@ export class Engine {
         balls: (options.balls ?? [[5, 10]]).filter(([, count]) => count > 0),
       },
       opponent: opp,
-      options: { battle_scene: true, stationary_wild: "species" in options.opponent && options.opponent.stationary === true },
+      options: {
+        battle_scene: true,
+        stationary_wild: "species" in options.opponent && options.opponent.stationary === true,
+        battle_type: ("species" in options.opponent && options.opponent.battleType) || 0,
+      },
       world: {
         time_of_day: options.timeOfDay ?? (options.night ? 2 : 1),
         // Astra’s wild letter habitat is independent of Johto’s four ruin puzzles.
