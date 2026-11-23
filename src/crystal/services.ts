@@ -199,9 +199,18 @@ function martVars(game: CrystalGame, item: number, n: number, money: number) {
   game.poke(RAM.hMoneyTemp + 2, money & 0xff);
 }
 async function buy(game: CrystalGame, stock: { item: number; price: number }[], type: string) {
+  // The bargain shop sells one of each item a visit (wBargainShopFlags), and closes for the day after a sale.
+  const bargain = type === "MARTTYPE_BARGAIN", sold = new Set<number>();
   for (;;) {
-    const pick = await game.choose(stock.map(s => `${itemTitle(game.rom.itemName(s.item))}  ¥${s.price}`), { title: `¥${game.save.money}`, cancel: true });
-    if (pick === undefined) return;
+    const pick = await game.choose(stock.map((s, i) => `${itemTitle(game.rom.itemName(s.item))}  ${sold.has(i) ? "SOLD OUT" : `¥${s.price}`}`), { title: `¥${game.save.money}`, cancel: true });
+    if (pick === undefined) {
+      if (bargain && sold.size && CONST.ENGINE_GOLDENROD_UNDERGROUND_MERCHANT_CLOSED !== undefined) game.setFlag(CONST.ENGINE_GOLDENROD_UNDERGROUND_MERCHANT_CLOSED, true);
+      return;
+    }
+    if (sold.has(pick)) {
+      await martText(game, "BargainShopSoldOutText", "You bought that already. I'm all sold out of it.");
+      continue;
+    }
     const { item, price } = stock[pick];
     const have = game.itemCount(item);
     const max = type === "MARTTYPE_BARGAIN" ? 1 : Math.min(99 - have, Math.floor(game.save.money / Math.max(1, price)));
@@ -220,6 +229,7 @@ async function buy(game: CrystalGame, stock: { item: number; price: number }[], 
       continue;
     }
     game.save.money -= price * n;
+    if (bargain) sold.add(pick);
     game.sfx("SFX_TRANSACTION");
     await martText(game, "MartThanksText", "Here you are. Thank you!");
   }
