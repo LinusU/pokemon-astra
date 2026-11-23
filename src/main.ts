@@ -1127,11 +1127,10 @@ function view(v: string, pageIndex = 0) {
     return;
   } else if (v === "map") {
     title = "Astra region";
-    body = `<header class="atlas-header"><h2>Astra region</h2><div><button data-zoom aria-pressed="false">Zoom +</button><button id="local-map">Local map</button><button id="back">Back</button></div></header>
+    body = `<header class="atlas-header"><h2>Astra region</h2><div class="atlas-key"><span><i class="pin-player"></i>You</span><span><i class="pin-goal">✦</i>Journal</span><span><i class="pin-town"></i>Town</span><span><i class="pin-site"></i>Site</span></div></header>
       <div class="atlas-paper"><canvas class="region-chart" role="img"></canvas></div>
-      <div class="atlas-key"><span><i class="pin-player"></i>You</span><span><i class="pin-goal">✦</i>Journal</span><span><i class="pin-town"></i>Town</span><span><i class="pin-site"></i>Site</span></div>
       <div class="atlas-readout"><button data-map-step="-1" aria-label="Previous place">◀</button><div aria-live="polite"><strong data-place></strong><small data-links></small></div><button data-map-step="1" aria-label="Next place">▶</button></div>
-      <button class="atlas-fly" data-travel="" hidden>Fly here</button>`;
+      <footer class="atlas-keys" aria-label="Map controls"><span><kbd>◂ ▸</kbd> Places</span><button data-zoom aria-pressed="false"></button><button id="local-map"><kbd>↓</kbd> Local map</button><button class="atlas-fly" data-travel="" hidden><kbd>A</kbd> Fly</button><button id="back"><kbd>B</kbd> Back</button></footer>`;
   } else if (v === "local-map") {
     mountFieldMap(layer, currentField(), save, directions(save, has), has,
       () => view("map"), () => view("fly"));

@@ -37,14 +37,11 @@
 }
 .field-key {
   display: flex;
-  justify-content: center;
   align-items: center;
   gap: 1em;
-  padding: 2px 0;
-  background: #ebe7c9;
-  border-block: 1px solid #a4ac8e;
-  font-size: clamp(15px, 2vw, 21px);
+  font-size: clamp(14px, 2vw, 20px);
   line-height: 1;
+  white-space: nowrap;
 }
 .field-key span { display: inline-flex; align-items: center; gap: 4px; }
 .field-key i { display: inline-block; width: 9px; height: 9px; }
@@ -66,18 +63,18 @@
 .field-readout span { color: #526352; }
 @media (max-width: 650px), (max-height: 550px) {
   .field-readout { gap: 5px; padding: 3px 5px; }
-  .field-key { padding: 1px; }
 }
 /* A pocket-sized screen has room for a map beside its notes. */
 @media (max-width: 650px), (max-height: 550px) {
   .panel.atlas-screen.local-sheet {
     display: grid;
-    grid-template: "head head" auto "chart detail" minmax(0, 1fr) "key detail" auto / 52% minmax(0, 1fr);
+    grid-template: "head head" auto "chart detail" minmax(0, 1fr) "keys keys" auto / 52% minmax(0, 1fr);
   }
   .local-sheet .atlas-header { grid-area: head; }
   .local-sheet .atlas-header h2 { font-size: clamp(16px, 4vw, 23px); }
   .local-sheet .field-paper { grid-area: chart; }
-  .local-sheet .field-key { grid-area: key; gap: .4em; font-size: 13px; flex-wrap: wrap; }
+  .local-sheet .field-key { gap: .5em; font-size: 13px; }
+  .local-sheet .atlas-keys { grid-area: keys; }
   .local-sheet .field-readout {
     grid-area: detail;
     display: grid;

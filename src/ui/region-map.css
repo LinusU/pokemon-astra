@@ -11,6 +11,10 @@
   background: #f3eacb;
   color: var(--map-ink);
   font-family: VT323, monospace;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 .atlas-screen > .eyebrow,
 .atlas-screen > #panel-title {
@@ -67,24 +71,53 @@
   gap: 6px;
 }
 .atlas-paper {
-  padding: 3px;
-  background: #d5cfaa;
+  flex: 1;
+  min-height: 0;
+  container-type: size;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #adc2aa;
 }
 .atlas-screen canvas.region-chart {
-  width: 100%;
+  width: min(100cqw, calc(100cqh * 384 / 231));
   height: auto;
   aspect-ratio: 384/231;
   cursor: crosshair;
   display: block;
 }
-.atlas-key {
-  justify-content: flex-end;
-  gap: 14px;
-  padding: 3px 12px;
-  border-top: 1px solid #b4b693;
-  border-bottom: 2px solid #88967e;
-  font-size: clamp(15px, 2vw, 20px);
+.atlas-header .atlas-key {
+  gap: 12px;
+  font-size: clamp(14px, 2vw, 20px);
+  white-space: nowrap;
 }
+/* The pad's commands, spelled out along the bottom as on the cartridge's map. */
+.atlas-keys {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 12px;
+  background: #304d4a;
+  color: #fff2cc;
+  border-top: 2px solid #263e40;
+  font-size: clamp(15px, 2.2vw, 22px);
+  line-height: 1;
+  white-space: nowrap;
+}
+.atlas-screen .atlas-keys button,
+.atlas-screen .atlas-keys button:is(:hover, :focus-visible, [aria-current="true"]) {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+  color: inherit;
+  font-size: inherit;
+}
+.atlas-keys kbd { padding: 0 4px; background: #e8ddba; color: #304d4a; font: inherit; }
+.atlas-keys [hidden] { display: none; }
 .atlas-key span {
   display: inline-flex;
   align-items: center;
@@ -138,12 +171,6 @@
   line-height: 1;
   color: #5e7160;
 }
-.atlas-fly {
-  margin: 0 0 6px 8px;
-}
-.atlas-fly[hidden] {
-  display: none;
-}
 @media (max-width: 600px), (max-height: 500px) {
   .overlay:has(.atlas-screen) {
     padding: 1%;
@@ -154,37 +181,11 @@
   .atlas-screen button {
     padding: 3px 7px;
   }
-  .atlas-key {
-    padding: 1px 8px;
-    gap: 10px;
-    justify-content: center;
-  }
+  .atlas-header .atlas-key { gap: 7px; }
+  .atlas-keys { padding: 2px 5px; gap: 4px; }
   .atlas-readout {
     min-height: 36px;
     padding: 3px 5px;
     gap: 6px;
-  }
-}
-@media (max-width: 650px), (max-height: 550px) {
-  .panel.atlas-screen {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-  }
-  .atlas-paper {
-    flex: 1;
-    min-height: 0;
-    container-type: size;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    background: #adc2aa;
-  }
-  .atlas-screen canvas.region-chart {
-    width: min(100cqw, calc(100cqh * 384 / 231));
-    height: auto;
-  }
-  .atlas-fly {
-    align-self: flex-start;
   }
 }

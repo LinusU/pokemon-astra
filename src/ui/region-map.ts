@@ -1,3 +1,4 @@
+import { setMenuController } from "./menu-controller";
 import { chartAreas, regionPosition, routeIds, townIds } from "../game/region";
 import { WORLD } from "../world";
 import { routes, settlements, surveyTrail, traceTrail, type Point, type Town } from "../world/atlas";
@@ -696,27 +697,34 @@ export function mountRegionChart(panel: HTMLElement, save: Save, objective?: Poi
       selected !== save.map
     );
     fly.dataset.travel = selected;
-    fly.textContent = "Fly to " + WORLD[selected].name;
+    fly.setAttribute("aria-label", "Fly to " + WORLD[selected].name);
+    zoomButton.innerHTML = `<kbd>↑</kbd> Zoom ${zoom === 1 ? "+" : "−"}`;
+    zoomButton.setAttribute("aria-pressed", String(zoom > 1));
     canvas.setAttribute(
       "aria-label",
       "Astra region. You are in " + WORLD[save.map].name + ". Selected " + title.textContent,
     );
   }
-  for (const b of panel.querySelectorAll<HTMLButtonElement>("[data-map-step]")) {
-    b.onclick = () => {
-      selected =
-        chartAreas[
-          (chartAreas.indexOf(selected) + Number(b.dataset.mapStep) + chartAreas.length) % chartAreas.length
-        ];
-      draw();
-    };
-  }
-  zoomButton.onclick = () => {
-    zoom = zoom === 1 ? 2 : 1;
-    zoomButton.textContent = zoom === 1 ? "Zoom +" : "Zoom −";
-    zoomButton.setAttribute("aria-pressed", String(zoom > 1));
+  const step = (offset: number) => {
+    selected = chartAreas[(chartAreas.indexOf(selected) + offset + chartAreas.length) % chartAreas.length];
     draw();
   };
+  const toggleZoom = () => {
+    zoom = zoom === 1 ? 2 : 1;
+    draw();
+  };
+  for (const b of panel.querySelectorAll<HTMLButtonElement>("[data-map-step]"))
+    b.onclick = () => step(Number(b.dataset.mapStep));
+  zoomButton.onclick = toggleZoom;
+  // The pad works the map itself: places, zoom and the local sheet, with A to fly.
+  setMenuController(panel, action => {
+    const fly = panel.querySelector<HTMLButtonElement>(".atlas-fly")!;
+    if (action === "left" || action === "right") step(action === "left" ? -1 : 1);
+    else if (action === "up") toggleZoom();
+    else if (action === "down") panel.querySelector<HTMLButtonElement>("#local-map")?.click();
+    else if (fly.hidden) toggleZoom();
+    else fly.click();
+  });
   canvas.onclick = (event) => {
     const box = canvas.getBoundingClientRect();
     const id = locateArea(

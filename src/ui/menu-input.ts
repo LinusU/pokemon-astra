@@ -161,23 +161,6 @@ export class MenuInput {
     if (!direction) return;
 
     const vertical = direction === "down" || direction === "up";
-    if (vertical && current?.button.dataset?.mapStep) {
-      const note = scroller.querySelector<HTMLElement>("[data-map-note]");
-      if (note && note.scrollHeight > note.clientHeight) {
-        const before = note.scrollTop;
-        note.scrollTop += (direction === "down" ? 1 : -1) * Math.max(18, note.clientHeight / 2);
-        if (note.scrollTop !== before) return;
-      }
-    }
-    if (!vertical && current?.button.dataset?.mapStep) {
-      const step = direction === "left" ? "-1" : "1";
-      const arrow = buttons.find(({ button }) => button.dataset.mapStep === step);
-      if (arrow) {
-        focus(arrow);
-        arrow.button.click();
-      }
-      return;
-    }
     // An option row changes its value with left and right, as the cartridge's Option screen does.
     if (!vertical && current?.button.closest?.(".preference-grid")) {
       current.button.dataset.step = direction === "left" ? "-1" : "1";

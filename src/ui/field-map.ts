@@ -1,3 +1,4 @@
+import { setMenuController } from "./menu-controller";
 import { bearings, type directions } from "../game/journal";
 import { exitOpen, fieldActions } from "../game/navigation";
 import { PALETTES } from "../game/field-palette";
@@ -124,11 +125,10 @@ function terrain(map: WorldMap) {
 
 export function mountFieldMap(layer: HTMLElement, map: WorldMap, save: Save, goal: Goal, has: Access, back: () => void, fly: () => void) {
   const stops = localStops(map, save, goal, has);
-  const root = panel(layer, map.name, `<header class="atlas-header"><h2>${escapeHtml(map.name)}</h2><div>
-      ${save.abilities.includes("fly") ? '<button data-fly>Fly</button>' : ""}<button id="back">Region</button></div></header>
+  const root = panel(layer, map.name, `<header class="atlas-header"><h2>${escapeHtml(map.name)}</h2><div class="field-key"><span><i class="field-you"></i>You</span><span><i class="field-journal">✦</i>Journal</span><span><i class="field-exit"></i>Exit</span></div></header>
     <div class="field-paper"><span class="field-north" aria-hidden="true">▲<br>N</span><canvas class="field-map" role="img"></canvas></div>
-    <div class="field-key"><span><i class="field-you"></i>You</span><span><i class="field-journal">✦</i>Journal</span><span><i class="field-exit"></i>Exit</span></div>
-    <div class="field-readout"><button data-map-step="-1" aria-label="Previous map entry">◀</button><div data-map-note aria-live="polite"><small></small><strong></strong><span></span></div><button data-map-step="1" aria-label="Next map entry">▶</button></div>`, "atlas-screen local-sheet");
+    <div class="field-readout"><button data-map-step="-1" aria-label="Previous map entry">◀</button><div data-map-note aria-live="polite"><small></small><strong></strong><span></span></div><button data-map-step="1" aria-label="Next map entry">▶</button></div>
+    <footer class="atlas-keys" aria-label="Map controls"><span><kbd>◂ ▸</kbd> Places</span>${save.abilities.includes("fly") ? '<button data-fly><kbd>A</kbd> Fly</button>' : ""}<button id="back"><kbd>B</kbd> Region</button></footer>`, "atlas-screen local-sheet");
   const canvas = root.querySelector<HTMLCanvasElement>(".field-map")!;
   const base = terrain(map), c = canvas.getContext("2d")!;
   canvas.width = base.width; canvas.height = base.height;
@@ -180,10 +180,17 @@ export function mountFieldMap(layer: HTMLElement, map: WorldMap, save: Save, goa
     }
     draw();
   };
+  const step = (offset: number) => { index = (index + offset + stops.length) % stops.length; draw(); };
   for (const button of root.querySelectorAll<HTMLButtonElement>("[data-map-step]"))
-    button.onclick = () => { index = (index + Number(button.dataset.mapStep) + stops.length) % stops.length; draw(); };
+    button.onclick = () => step(Number(button.dataset.mapStep));
   root.querySelector<HTMLButtonElement>("#back")!.onclick = back;
   root.querySelector<HTMLButtonElement>("[data-fly]")?.addEventListener("click", fly);
-  root.querySelector<HTMLButtonElement>('[data-map-step="1"]')!.focus({preventScroll: true});
+  // The pad turns the entries and reads a long note; nothing on this sheet needs a cursor.
+  setMenuController(root, action => {
+    if (action === "left" || action === "right") return step(action === "left" ? -1 : 1);
+    if (action === "a") return void root.querySelector<HTMLButtonElement>("[data-fly]")?.click();
+    const note = root.querySelector<HTMLElement>("[data-map-note]")!;
+    note.scrollTop += (action === "down" ? 1 : -1) * Math.max(18, note.clientHeight / 2);
+  });
   draw();
 }
