@@ -359,6 +359,29 @@ describe.skipIf(!hasEngine || !CARTRIDGES.length).each(SUITES)("Crystal's system
     expect(h.ui.log.join(" ")).not.toContain("We hope to see you again.");
   }, 60000);
 
+  it("names each new area as the player enters it", async () => {
+    const h = await headlessGame(adventure);
+    const g = h.game;
+    const go = async (name: string, x: number, y: number) => {
+      const [group, number] = MAP[name];
+      await g.warpTo(group, number, x, y);
+    };
+    // The bedroom is in New Bark Town already.
+    await go("NEW_BARK_TOWN", 13, 6);
+    await go("ROUTE_29", 50, 8);
+    // Gates have no sign, and the route beyond gets one.
+    await go("ROUTE_29_ROUTE_46_GATE", 4, 4);
+    await go("ROUTE_46", 7, 32);
+    // Inside a town's buildings is still the town.
+    await go("CHERRYGROVE_POKECENTER_1F", 3, 5);
+    await go("CHERRYGROVE_CITY", 29, 4);
+    // The Radio Tower never gets a sign; the city does again on the way out.
+    await go("GOLDENROD_CITY", 24, 14);
+    await go("RADIO_TOWER_1F", 2, 7);
+    await go("GOLDENROD_CITY", 24, 14);
+    expect(h.ui.places).toEqual(["Route 29", "Route 46", "Cherrygrove City", "Goldenrod City", "Goldenrod City"]);
+  }, 60000);
+
   it("leaves the player where the teacher brings them back", async () => {
     const h = await headlessGame(adventure);
     const g = h.game;

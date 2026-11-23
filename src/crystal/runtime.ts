@@ -11,7 +11,7 @@ import type { MusicScene } from "../game/music";
 import type { MenuInput } from "../ui/menu-input";
 import { BODY_RADIUS, bodyTouches, heldHeading, walkFreely, walkSpeed } from "../game/free-movement";
 import { JourneyConflict, type JourneyStore } from "../game/storage";
-import { C, CONST, ENGINE_RAM, ITEM, MON, RAM, SYM, TEXT, cartridgeInUse, constName, mapName, ramName } from "./symbols";
+import { C, CONST, ENGINE_RAM, ITEM, MAP, MON, RAM, SYM, TEXT, cartridgeInUse, constName, mapName, ramName } from "./symbols";
 import { CrystalRom, type BgEvent, type CrystalMap, type ObjectEvent, type TextOp } from "./rom";
 import { CrystalWorld, FACINGS, STEP, opposite, type Facing, type LiveMap } from "./world";
 import { crystalSummary, type CrystalMon, type CrystalSave } from "./save";
@@ -654,6 +654,26 @@ export class CrystalGame {
     if (this.hasFlag("ENGINE_ALWAYS_ON_BIKE")) this.save.state = "bike";
     if (this.save.state === "surf" && options.arrival === "warp") this.save.state = "normal";
     this.ctx.sound?.refreshMusic();
+    this.mapNameSign(options.arrival === "continue");
+  }
+  /** The landmark the last map name sign check was made in (wPrevLandmark); -1 for a gate. */
+  private prevLandmark = -1;
+  /**
+   * InitMapNameSign: entering a new landmark shows its name. Not on continuing,
+   * within one landmark or out of a LANDMARK_SPECIAL map, and gates and a few
+   * landmarks (.CheckSpecialMap) never get a sign.
+   */
+  private mapNameSign(continuing: boolean) {
+    const [group, number] = this.save.map;
+    const parkGate = ["ROUTE_35_NATIONAL_PARK_GATE", "ROUTE_36_NATIONAL_PARK_GATE"].some(n => MAP[n]?.[0] === group && MAP[n]?.[1] === number);
+    const here = parkGate || this.map.environment === C("GATE") ? -1 : this.map.landmark;
+    const before = this.prevLandmark;
+    this.prevLandmark = here;
+    if (continuing || here === before || before === C("LANDMARK_SPECIAL") || here === -1) return;
+    const unsigned = ["LANDMARK_SPECIAL", "LANDMARK_RADIO_TOWER", "LANDMARK_LAV_RADIO_TOWER", "LANDMARK_UNDERGROUND_PATH", "LANDMARK_INDIGO_PLATEAU", "LANDMARK_POWER_PLANT"];
+    if (unsigned.some(name => CONST[name] === here)) return;
+    const name = this.rom.landmarkName(here);
+    if (name) this.ui.place(titleCase(name));
   }
   private defaultFacing(event: ObjectEvent): Facing {
     const f = this.rom.u8(SYM.SpriteMovementData + event.movement * 6 + 1);

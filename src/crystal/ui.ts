@@ -15,10 +15,15 @@ export interface CrystalUi {
   yesNo(): Promise<boolean>;
   /** A list of choices; resolves with the index, or undefined when cancelled. */
   choose(options: string[], options2?: { title?: string; cancel?: boolean; columns?: number }): Promise<number | undefined>;
+  /** Shows the name of the area the player has just entered, for a moment. */
+  place(name: string): void;
   /** Called every frame with the player's input. */
   frame(input: Input, now: number): void;
   readonly busy: boolean;
 }
+
+/** How long an area's name stays up, in milliseconds, its slide in and out included. */
+export const PLACE_SIGN_MS = 2600;
 
 /** A paragraph's lines as one line: words split by a hyphen at a line's end join up ("some-/thing", "GOLDEN-/ROD", "#-/MON"), hyphenated words keep their hyphen ("BUG-/type"). */
 function joinLines(para: string) {
@@ -72,6 +77,19 @@ export class DomUi implements CrystalUi {
   private chooseCancel = true;
   constructor(private layer: HTMLElement, private input: Input, private menuInput: MenuInput) {}
   get busy() { return !!(this.resolve || this.yesNoResolve || this.chooseResolve); }
+
+  private placeTimer?: number;
+  place(name: string) {
+    this.layer.querySelector(".crystal-place")?.remove();
+    window.clearTimeout(this.placeTimer);
+    const sign = document.createElement("div");
+    sign.className = "crystal-place";
+    sign.setAttribute("role", "status");
+    sign.style.setProperty("--place-ms", `${PLACE_SIGN_MS}ms`);
+    sign.textContent = name;
+    this.layer.append(sign);
+    this.placeTimer = window.setTimeout(() => sign.remove(), PLACE_SIGN_MS);
+  }
 
   private box(page: string, arrow: boolean) {
     let box = this.layer.querySelector<HTMLElement>(".crystal-text");
@@ -178,6 +196,9 @@ export class DomUi implements CrystalUi {
 /** Answers everything at once: text is read, YES or the first choice is taken (or `answers` in order). */
 export class HeadlessUi implements CrystalUi {
   readonly log: string[] = [];
+  /** The area names shown, in order. */
+  readonly places: string[] = [];
+  place(name: string) { this.places.push(name); }
   answers: (boolean | number | undefined)[] = [];
   /** Questions left before every answer is NO or cancel, so menus that loop come to an end. */
   budget = Infinity;
