@@ -1137,7 +1137,12 @@ export class BattlePresenter {
           ? a.Move?.slot === slot
           : a.Item?.id === this.bagItem && a.Item.target === target && a.Item.move_slot === slot);
         const detail = describeMove(id, mon.dvs, mon.pp[slot]);
-        return `<button data-index="${index}" data-move-detail="${escapeHtml(detail)}"${index < 0 ? " disabled" : ""}>${escapeHtml(this.o.move(id).name)}</button>`;
+        // Keep unusable moves focusable so muscle memory never lands on a
+        // different move; selecting one explains why it can't be used.
+        const unusable = index >= 0 ? ""
+          : target !== undefined ? " disabled"
+          : ` data-unusable="${(mon.pp[slot] & 63) === 0 ? "No PP is left for this move!" : "This move is disabled!"}"`;
+        return `<button data-index="${index}" data-move-detail="${escapeHtml(detail)}"${unusable}>${escapeHtml(this.o.move(id).name)}</button>`;
       });
     } else if (s.site === "OfferSwitch") {
       const keep = actions.findIndex(a => a.OfferSwitch?.keep);
@@ -1166,7 +1171,7 @@ export class BattlePresenter {
     controls.scrollTop = 0;
     const command = previousGroup || (standard && !this.category ? this.lastCommand : "");
     const selected = controls.querySelector<HTMLButtonElement>(`[data-group="${command}"]:enabled, [data-index="${preferred}"]:enabled`)
-      ?? controls.querySelector<HTMLButtonElement>("button:not(:disabled)");
+      ?? controls.querySelector<HTMLButtonElement>("button:not(:disabled):not([data-unusable])");
     selected?.focus({ preventScroll: true });
     controls.querySelectorAll<HTMLButtonElement>("[data-group]").forEach(
       (b) =>
@@ -1186,6 +1191,10 @@ export class BattlePresenter {
     for (const button of controls.querySelectorAll<HTMLButtonElement>("[data-index]")) {
       const index = Number(button.dataset.index);
       button.onclick = () => {
+        if (button.dataset.unusable) {
+          copy.textContent = button.dataset.unusable;
+          return;
+        }
         if (!learning) return this.act(index);
         const slot = actions[index].LearnMove.slot;
         const candidate = learn ? this.o.move(learn.mv, learningMon.dvs) : { name: "the new move" };

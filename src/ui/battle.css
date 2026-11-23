@@ -193,7 +193,8 @@
   font-size: 0.66em;
   color: #4a624d;
 }
-.battle-controls button:disabled {
+.battle-controls button:disabled,
+.battle-controls button[data-unusable] {
   color: #6d786d;
   opacity: 0.65;
   cursor: default;
