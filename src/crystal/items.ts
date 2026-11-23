@@ -78,12 +78,12 @@ export async function useItem(game: CrystalGame, item: number): Promise<ItemResu
 
 /** HappinessChanges (data/events/happiness_changes.asm): the change below 100 happiness, below 200, and above. */
 const HAPPINESS_CRYSTAL = {
-  levelUp: [5, 3, 2], vitamin: [5, 3, 2], bitterPowder: [-5, -5, -10], energyRoot: [-10, -10, -15], revivalHerb: [-15, -15, -20],
+  levelUp: [5, 3, 2], vitamin: [5, 3, 2], learnMove: [1, 1, 0], bitterPowder: [-5, -5, -10], energyRoot: [-10, -10, -15], revivalHerb: [-15, -15, -20],
   olderCut: [[1, 1, 1], [3, 3, 1], [5, 5, 2]], youngerCut: [[1, 1, 1], [3, 3, 1], [10, 10, 4]], grooming: [3, 3, 1],
 };
-/** Crystal Legacy raises the level-up and haircut changes. */
+/** Crystal Legacy raises the level-up, learned-move and haircut changes. */
 const HAPPINESS_LEGACY: typeof HAPPINESS_CRYSTAL = {
-  ...HAPPINESS_CRYSTAL, levelUp: [10, 6, 4],
+  ...HAPPINESS_CRYSTAL, levelUp: [10, 6, 4], learnMove: [1, 1, 1],
   olderCut: [[5, 5, 5], [5, 5, 5], [5, 5, 5]], youngerCut: [[5, 5, 5], [7, 7, 7], [10, 10, 9]],
 };
 export function happinessChanges(game: CrystalGame) {
@@ -204,8 +204,10 @@ async function teachMachine(game: CrystalGame, item: number, moveName: string): 
   if (slot === undefined) return;
   const { teachMove } = await import("./moves");
   if (!(await teachMove(game, slot, move))) return;
-  // TMs are used up; HMs last.
-  if (itemConst(item)?.startsWith("TM_")) game.takeItem(item);
+  // TMs are used up and please the Pokémon a little; HMs last.
+  if (!itemConst(item)?.startsWith("TM_")) return;
+  changeHappiness(game.save.party[slot], happinessChanges(game).learnMove);
+  game.takeItem(item);
 }
 
 /** BikeFunction: towns, routes, caves and gates, standing on land; Cycling Road keeps the player on it. */
