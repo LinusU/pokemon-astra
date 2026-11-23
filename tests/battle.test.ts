@@ -3,6 +3,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { battleMessage, battleMonAtSendOut, escapeAnnounced } from "../src/ui/battle";
 import { findMoveVisual, nativeConditionVisual } from "../src/ui/move-visuals";
 import { Engine } from "../src/engine";
+import { cartridgeBytes, hasLegacy } from "./crystal-fixtures";
 
 describe("battle presentation", () => {
   const move = (id: number) => ({ name: id === 85 ? "Thunderbolt" : "Tackle" });
@@ -551,4 +552,14 @@ it("names the specific stat and sharp change from native events", () => {
   const item = () => "Potion";
   expect(battleMessage({ StatFell: { target: { name: "Pidgey" }, stat: 3, sharply: true } }, move, item)).toBe("Pidgey's Speed fell sharply!");
   expect(battleMessage({ StatRose: { user: { name: "Pidgey" }, stat: 1, sharply: false } }, move, item)).toBe("Pidgey's Attack rose!");
+});
+
+describe.skipIf(!hasLegacy || !existsSync("public/astra_native.wasm"))("Crystal Legacy trainer parties", () => {
+  it("loads the party of the trainer named by class and id", async () => {
+    const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});
+    const engine = new Engine(instance.exports as never, cartridgeBytes("legacy"));
+    // Class 2 is Whitney: her first party leads with Clefairy, not Falkner's Pidgey.
+    const battle = engine.startBattle({ party: [engine.makePokemon(58, 30)], opponent: { trainer: { class: 2, id: 1 } }, seed: 1 });
+    expect(battle.snapshot().state.enemy.active.species).toBe(35);
+  });
 });

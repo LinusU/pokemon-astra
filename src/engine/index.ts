@@ -359,8 +359,8 @@ export class Engine {
         ? { Wild: { species: options.opponent.species, level: options.opponent.level } }
         : {
             Trainer: {
-              class: 1,
-              id: 1,
+              class: options.opponent.trainer?.class ?? 1,
+              id: options.opponent.trainer?.id ?? 1,
               party: options.opponent.party,
               items: null,
               ai_flags: null,
