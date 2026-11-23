@@ -201,7 +201,7 @@ async function nameRater(g: CrystalGame) {
 
 async function nameRival(g: CrystalGame) {
   const { askName } = await import("./menu");
-  const name = await askName(g, "Your rival's name?", g.save.rival || "SILVER");
+  const name = await askName(g, "Your rival's name?", 7);
   if (name) g.save.rival = name;
 }
 

@@ -6,7 +6,7 @@ import type { Input } from "../game/input";
 import type { MusicScene } from "../game/music";
 import { createJourney, get, JourneyStore, set, type JourneyEntry } from "../game/storage";
 import type { MenuInput } from "../ui/menu-input";
-import { escapeHtml, panel } from "../ui/shell";
+import { escapeHtml, panel, type PanelCursor } from "../ui/shell";
 import type { YellowAdventure } from "./save";
 import type { Cartridge } from "./symbols";
 
@@ -172,17 +172,27 @@ export async function newYellowJourney(host: YellowHost, adventure: YellowAdvent
   await useAdventure(adventure);
   const [{ YellowRom }, { freshYellowSave, yellowSummary }] = await Promise.all([import("./rom"), import("./save")]);
   const rom = new YellowRom(bytes);
-  const p = panel(host.layer, "Welcome to the world of Pokémon!",
-    `<p>First, what is your name? And your rival's?</p>
-    <label class="yellow-intro">Your name<input id="name" maxlength="7" value="RED" autocomplete="off"></label>
-    <label class="yellow-intro">Rival's name<input id="rival" maxlength="7" value="BLUE" autocomplete="off"></label>
-    <div class="buttons"><button id="begin">Begin journey</button><button class="secondary" id="back">Back</button></div>`,
-    "opening-panel arrival-card yellow-intro");
-  p.querySelector<HTMLButtonElement>("#back")!.onclick = back;
-  p.querySelector<HTMLButtonElement>("#begin")!.onclick = async () => {
-    const clean = (id: string, fallback: string) =>
-      (p.querySelector<HTMLInputElement>(id)!.value.toUpperCase().replace(/[^A-Z0-9 ]/g, "").trim() || fallback).slice(0, 7);
-    const save = freshYellowSave(rom, adventure, clean("#name", "RED"), clean("#rival", "BLUE"));
+  const names = { name: "RED", rival: "BLUE" };
+  const cursor: PanelCursor = {};
+  const intro = () => {
+    const p = panel(host.layer, "Welcome to the world of Pokémon!",
+      `<p>First, what is your name? And your rival's?</p>
+      <button class="name-entry" id="name">Your name<strong>${escapeHtml(names.name)}</strong></button>
+      <button class="name-entry" id="rival">Rival's name<strong>${escapeHtml(names.rival)}</strong></button>
+      <div class="buttons"><button id="begin">Begin journey</button><button class="secondary" id="back">Back</button></div>`,
+      "opening-panel arrival-card yellow-intro", cursor);
+    for (const key of ["name", "rival"] as const) p.querySelector<HTMLButtonElement>("#" + key)!.onclick = async () => {
+      const { askForName } = await import("../ui/naming");
+      const name = await askForName(host.layer, { title: key === "name" ? "Your name?" : "Rival's name?", max: 7, fallback: names[key] });
+      if (name) names[key] = name;
+      intro();
+    };
+    p.querySelector<HTMLButtonElement>("#back")!.onclick = back;
+    p.querySelector<HTMLButtonElement>("#begin")!.onclick = begin;
+    if (!cursor.key) p.querySelector<HTMLButtonElement>("#name")!.focus({ preventScroll: true });
+  };
+  const begin = async () => {
+    const save = freshYellowSave(rom, adventure, names.name, names.rival);
     save.settings.music = soundSetting(host.sound.mode);
     let id: string;
     try {
@@ -192,6 +202,7 @@ export async function newYellowJourney(host: YellowHost, adventure: YellowAdvent
     }
     await start(host, { id, adventure, created: Date.now(), updated: Date.now() }, rom);
   };
+  intro();
 }
 
 export async function continueYellowJourney(host: YellowHost, entry: JourneyEntry & { adventure: YellowAdventure }) {

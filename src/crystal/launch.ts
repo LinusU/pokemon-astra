@@ -6,7 +6,7 @@ import type { Input } from "../game/input";
 import type { MusicScene } from "../game/music";
 import { createJourney, get, JourneyStore, set, type JourneyEntry } from "../game/storage";
 import type { MenuInput } from "../ui/menu-input";
-import { escapeHtml, panel } from "../ui/shell";
+import { escapeHtml, panel, type PanelCursor } from "../ui/shell";
 import type { CrystalAdventure } from "./save";
 import type { CrystalCartridge } from "./symbols";
 
@@ -116,26 +116,31 @@ export async function newCrystalJourney(host: CrystalHost, adventure: CrystalAdv
   const [{ CrystalRom }, { freshCrystalSave, crystalSummary }, { C, MAP, ITEM }] = await Promise.all([import("./rom"), import("./save"), import("./symbols")]);
   const rom = new CrystalRom(bytes);
   const title = adventure === "crystal" ? "Pokémon Crystal" : "Pokémon Crystal Legacy";
-  const p = panel(host.layer, title,
-    `<p>Hello! Sorry to keep you waiting! Welcome to the world of POKéMON! Are you a boy or a girl? And what is your name?</p>
-    <div class="buttons crystal-gender"><button id="boy" aria-pressed="true">Boy</button><button id="girl" aria-pressed="false">Girl</button></div>
-    <label class="yellow-intro">Your name<input id="name" maxlength="7" value="GOLD" autocomplete="off"></label>
-    <p class="cartridge-note">Johto runs on your device's clock: morning, day and night come and go as they do for you.</p>
-    <div class="buttons"><button id="begin">Begin journey</button><button class="secondary" id="back">Back</button></div>`,
-    "opening-panel arrival-card yellow-intro");
-  let gender: 0 | 1 = 0;
-  const pick = (g: 0 | 1) => {
-    gender = g;
-    p.querySelector("#boy")!.setAttribute("aria-pressed", String(g === 0));
-    p.querySelector("#girl")!.setAttribute("aria-pressed", String(g === 1));
-    const name = p.querySelector<HTMLInputElement>("#name")!;
-    if (name.value === "GOLD" || name.value === "KRIS") name.value = g ? "KRIS" : "GOLD";
+  let gender: 0 | 1 = 0, chosen: string | undefined;
+  const cursor: PanelCursor = {};
+  const playerName = () => chosen ?? (gender ? "KRIS" : "GOLD");
+  const intro = () => {
+    const p = panel(host.layer, title,
+      `<p>Hello! Sorry to keep you waiting! Welcome to the world of POKéMON! Are you a boy or a girl? And what is your name?</p>
+      <div class="buttons crystal-gender"><button id="boy" aria-pressed="${gender === 0}">Boy</button><button id="girl" aria-pressed="${gender === 1}">Girl</button></div>
+      <button class="name-entry" id="name">Your name<strong>${escapeHtml(playerName())}</strong></button>
+      <p class="cartridge-note">Johto runs on your device's clock: morning, day and night come and go as they do for you.</p>
+      <div class="buttons"><button id="begin">Begin journey</button><button class="secondary" id="back">Back</button></div>`,
+      "opening-panel arrival-card yellow-intro", cursor);
+    const pick = (g: 0 | 1) => { gender = g; intro(); };
+    p.querySelector<HTMLButtonElement>("#boy")!.onclick = () => pick(0);
+    p.querySelector<HTMLButtonElement>("#girl")!.onclick = () => pick(1);
+    p.querySelector<HTMLButtonElement>("#name")!.onclick = async () => {
+      const { askForName } = await import("../ui/naming");
+      const name = await askForName(host.layer, { title: "Your name?", max: 7, fallback: playerName() });
+      if (name) chosen = name;
+      intro();
+    };
+    p.querySelector<HTMLButtonElement>("#back")!.onclick = back;
+    p.querySelector<HTMLButtonElement>("#begin")!.onclick = begin;
   };
-  p.querySelector<HTMLButtonElement>("#boy")!.onclick = () => pick(0);
-  p.querySelector<HTMLButtonElement>("#girl")!.onclick = () => pick(1);
-  p.querySelector<HTMLButtonElement>("#back")!.onclick = back;
-  p.querySelector<HTMLButtonElement>("#begin")!.onclick = async () => {
-    const name = (p.querySelector<HTMLInputElement>("#name")!.value.toUpperCase().replace(/[^A-Z0-9 ]/g, "").trim() || (gender ? "KRIS" : "GOLD")).slice(0, 7);
+  const begin = async () => {
+    const name = playerName();
     const save = freshCrystalSave(adventure, name, gender, "???");
     const [group, number] = MAP.PLAYERS_HOUSE_2F;
     Object.assign(save, { map: [group, number], x: 3, y: 3, facing: "up", spawn: { group, number } });
@@ -150,6 +155,7 @@ export async function newCrystalJourney(host: CrystalHost, adventure: CrystalAdv
     }
     await start(host, { id, adventure, created: Date.now(), updated: Date.now() }, rom);
   };
+  intro();
 }
 
 export async function continueCrystalJourney(host: CrystalHost, entry: JourneyEntry & { adventure: CrystalAdventure }) {

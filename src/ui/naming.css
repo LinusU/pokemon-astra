@@ -1,0 +1,90 @@
+.panel.naming-screen {
+  width: min(100%, 420px);
+  padding: 10px 14px;
+  font-family: "VT323", monospace;
+}
+.panel.naming-screen h2 { margin: 0 0 2px; }
+.panel .naming-name {
+  margin: 0 0 6px;
+  padding: 2px 8px;
+  border-block: 2px solid #9db59a;
+  font: 30px/1.1 "VT323", monospace;
+  letter-spacing: 0.22em;
+  white-space: pre;
+  text-align: center;
+}
+.panel .naming-name.naming-empty { color: #8c9a83; }
+.naming-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--columns), minmax(0, 1fr));
+  gap: 1px;
+}
+.panel .naming-grid button {
+  position: relative;
+  border: 0;
+  padding: 1px 0;
+  background: transparent;
+  color: #213b30;
+  font: 26px/1.15 "VT323", monospace;
+  text-align: center;
+}
+.panel .naming-grid button:is(:hover, :focus-visible) { outline: none; background: #ecdfb6; }
+.panel .naming-grid button[aria-current="true"] {
+  outline: none;
+  box-shadow: none;
+  background: #29483b;
+  color: #fff9dc;
+}
+.naming-keys {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 6px;
+  padding-top: 4px;
+  border-top: 2px solid #9db59a;
+  font-size: 20px;
+  line-height: 1;
+}
+.panel .naming-keys button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.panel .naming-keys button:is(:hover, :focus-visible) { outline: none; background: transparent; }
+.naming-keys kbd { padding: 0 5px; background: #29483b; color: #fff9dc; font: inherit; }
+@media (max-width: 600px), (max-height: 500px) {
+  .panel.naming-screen { padding: 4px 8px; }
+  .panel .naming-name { font-size: 22px; margin-bottom: 2px; }
+  .panel .naming-grid button { font-size: 19px; line-height: 1.05; }
+  .naming-keys { font-size: 16px; margin-top: 2px; padding-top: 2px; }
+}
+
+/* A name is chosen on the naming screen; the intro shows it as an entry of its own. */
+.panel .name-entry {
+  display: flex;
+  justify-content: space-between;
+  gap: 1em;
+  width: 100%;
+  margin: 3px 0;
+  border: 0;
+  border-bottom: 2px solid #9db59a;
+  padding: 2px 8px 2px 22px;
+  background: transparent;
+  color: #213b30;
+  font: 22px/1.1 "VT323", monospace;
+  text-align: left;
+  position: relative;
+}
+.panel .name-entry strong { font-weight: 400; letter-spacing: 0.1em; }
+.panel .name-entry[aria-current="true"] { outline: none; box-shadow: none; background: #dfdfb7; }
+.panel .name-entry[aria-current="true"]::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: calc(50% - 5px);
+  border-left: 7px solid currentColor;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+}

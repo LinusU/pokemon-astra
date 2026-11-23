@@ -43,25 +43,20 @@ export function choosePartyMon(game: CrystalGame, title: string, usable?: (m: Cr
 }
 
 /** Asks for a name, as the naming screen would. */
-export function askName(game: CrystalGame, title: string, initial: string, max = 10): Promise<string | undefined> {
-  if (!game.ctx.layer) return Promise.resolve(initial);
+export function askName(game: CrystalGame, title: string, max = 10): Promise<string | undefined> {
+  if (!game.ctx.layer) return Promise.resolve(undefined);
   return game.modal(() => new Promise<string | undefined>(resolve => {
     game.closeText();
     const host = document.createElement("div");
     host.className = "crystal-overlay";
     game.layer.append(host);
-    const p = panel(host, title, `<label class="yellow-intro">Name<input id="name" maxlength="${max}" value="${escapeHtml(initial)}" autocomplete="off"></label><div class="buttons"><button id="confirm">OK</button><button class="secondary" id="back">Cancel</button></div>`);
-    const input = p.querySelector<HTMLInputElement>("#name")!;
-    input.focus();
-    input.select();
-    const done = (v: string | undefined) => { host.remove(); resolve(v); };
-    p.querySelector<HTMLButtonElement>("#confirm")!.onclick = () => done(input.value.toUpperCase().replace(/[^A-Z0-9 .'-]/g, "").trim().slice(0, max) || undefined);
-    p.querySelector<HTMLButtonElement>("#back")!.onclick = () => done(undefined);
-    input.onkeydown = e => { if (e.key === "Enter") p.querySelector<HTMLButtonElement>("#confirm")!.click(); };
+    void import("../ui/naming").then(({ mountNaming }) => mountNaming(host, {
+      title, max, onDone: name => { host.remove(); resolve(name); },
+    }));
   }));
 }
 export async function rename(game: CrystalGame, mon: CrystalMon) {
-  const name = await askName(game, "Nickname", mon.nickname || game.monName(mon.species));
+  const name = await askName(game, `${game.monName(mon.species)}'s nickname?`);
   if (!name) return false;
   mon.nickname = name;
   return true;

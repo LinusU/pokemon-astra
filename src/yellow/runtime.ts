@@ -1456,14 +1456,8 @@ export class YellowGame implements Game {
     if (!mon) return false;
     const previous = this.mode;
     this.mode = "menu";
-    const name = await new Promise<string | undefined>(resolve => {
-      const p = panel(this.ctx.layer, "Nickname", `<label class="yellow-intro">New name<input id="nickname" maxlength="10" value="${escapeHtml(mon.nickname)}" autocomplete="off"></label><div class="buttons"><button id="confirm">OK</button><button class="secondary" id="back">Cancel</button></div>`);
-      const input = p.querySelector<HTMLInputElement>("#nickname")!;
-      input.focus();
-      input.select();
-      p.querySelector<HTMLButtonElement>("#confirm")!.onclick = () => resolve(input.value.toUpperCase().replace(/[^A-Z0-9 .'-]/g, "").trim().slice(0, 10) || undefined);
-      p.querySelector<HTMLButtonElement>("#back")!.onclick = () => resolve(undefined);
-    });
+    const { askForName } = await import("../ui/naming");
+    const name = await askForName(this.ctx.layer, { title: `${titleCase(this.ctx.engine.species(mon.species).name)}'s nickname?`, max: 10 });
     this.ctx.layer.replaceChildren();
     this.mode = previous === "menu" ? "script" : previous;
     if (!name) return false;

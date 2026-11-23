@@ -6,6 +6,7 @@ import { journalController } from "./journal";
 import { dexController } from "./pokedex";
 import { cartridgeMapController } from "./cartridge-map";
 import { bagController } from "./bag";
+import { menuController } from "./menu-controller";
 
 const directions = ["up", "down", "left", "right"] as const;
 type Direction = (typeof directions)[number];
@@ -61,7 +62,7 @@ export class MenuInput {
     battle: boolean,
   ) {
     const map = cartridgeMapController(layer);
-    const controller = map ?? bagController(layer) ?? dexController(layer) ?? journalController(layer) ?? pcController(layer) ?? summaryController(layer) ?? martController(layer);
+    const controller = map ?? bagController(layer) ?? dexController(layer) ?? journalController(layer) ?? pcController(layer) ?? summaryController(layer) ?? martController(layer) ?? menuController(layer);
     const party = layer.querySelector<HTMLElement>(".party-screen");
     const scroller =
       layer.querySelector<HTMLElement>(
