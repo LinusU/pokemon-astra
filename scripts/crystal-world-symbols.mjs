@@ -56,6 +56,7 @@ const WANTED = [
   "SeenByTrainerScript", "TalkToTrainerScript", "FindItemInBallScript", "PlayerObjectTemplate", "FruitTreeScript", "TradeTexts",
   "EggMovePointers", "MoveNames", "PokemonNames", "TMHMMoves", "Moves", "TilesetJohtoPalMap", "SpriteMons", "TimeFishGroups",
   "TileCollisionStdScripts", "TrainerClassDVs", "RoamMaps", "TrainerEncounterMusic", "SpawnPoints", "Flypoints",
+  "HealMachineAnim.HealMachineGFX", "HealMachineAnim.palettes", "HealMachineAnim.PC_ElmsLab_OAM", "HealMachineAnim.HOF_OAM",
 ];
 /** Tables that only some versions have. */
 const OPTIONAL = [
