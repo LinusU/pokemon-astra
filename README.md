@@ -128,7 +128,7 @@ npx vite-node scripts/yellow-coverage.ts   # Yellow map logic that still lacks a
 npx vite-node scripts/yellow-coverage.ts pokeyellow.gbc yellow-legacy.bps   # the same for Yellow Legacy
 CRYSTAL_FUZZ=1 npx vitest run tests/crystal-fuzz.test.ts   # run every Crystal map script headless
 CRYSTAL_RENDER=out npx vitest run tests/crystal-render.test.ts   # draw a few Crystal places to PNG
-CRYSTAL_WALKTHROUGH=1 npx vitest run tests/crystal-walkthrough.test.ts   # play Crystal Legacy's story headless, to Kanto
+CRYSTAL_WALKTHROUGH=1 npx vitest run tests/crystal-walkthrough.test.ts   # play Crystal Legacy's story headless, to Red
 ```
 
 The Crystal adventures' tables are generated with `node scripts/crystal-world-symbols.mjs ../pokecrystal --out symbols-crystal.ts --source "pret/pokecrystal"` from a pret/pokecrystal checkout built as the supported cartridge, and with `node scripts/crystal-world-symbols.mjs ../Pokemon_Crystal_Legacy --out symbols-legacy.ts --source "Crystal Legacy V1.3.1 (github.com/cRz-Shadows/Pokemon_Crystal_Legacy)"` from a build of Crystal Legacy's V1.3.1 tag (rgbds 0.5.2), which matches the patched cartridge byte for byte. They hold ROM offsets, RAM addresses, names and constant values only. Crystal tests run when the Crystal ROM is present, and the Crystal Legacy tests when the official V1.3.1 "USA 1.0" patch is there too as `crystal-legacy.bps`.
