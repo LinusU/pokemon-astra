@@ -61,7 +61,9 @@ function walker(h: Harness) {
       const target = typeof o === "string" ? this.find(o, near) : o;
       const sides = (Object.entries(STEP) as [Facing, [number, number]][])
         .map(([dir, [dx, dy]]) => ({ x: target.x - dx, y: target.y - dy, face: dir }))
-        .filter(s => g.world.inside(g.map, s.x, s.y));
+        .filter(s => g.world.inside(g.map, s.x, s.y))
+        // The nearest side first: the player may already stand beside them.
+        .sort((a, b) => Math.abs(a.x - g.me.x) + Math.abs(a.y - g.me.y) - Math.abs(b.x - g.me.x) - Math.abs(b.y - g.me.y));
       let last: unknown;
       for (const s of sides) {
         // A counter between the player and a clerk: talk across it.
@@ -125,6 +127,10 @@ function walker(h: Harness) {
         return;
       }
       throw Error(`Can't reach ${at.x},${at.y} on ${where()}`);
+    },
+    /** Marks the map's trainers as beaten, for puzzles (ice, warp floors) the walker can't walk. */
+    skipTrainers() {
+      for (const o of g.objects) if (o.event.type === C("OBJECTTYPE_TRAINER") && o.event.script >= 0x4000) g.setEvent(readTrainerHeader(g, o.event.script).flag, true);
     },
     /** Talks to every trainer on the map who hasn't been beaten yet (jumping to those in other parts of the map). */
     async beatTrainers() {
@@ -488,6 +494,42 @@ describe.skipIf(!run || !hasEngine || !hasLegacy)("Crystal Legacy's story", () =
       for (const o of g.objects.filter(o => o.visible && g.spriteOf(o) === C("SPRITE_ELECTRODE") && o.event.type === C("OBJECTTYPE_SCRIPT") && o.x < 12)) await w.talk(o);
       w.flush("Electrodes");
       expect(w.ev("EVENT_CLEARED_ROCKET_HIDEOUT")).toBe(true);
+
+      // ------------------------------------------------------------ Pryce
+      w.strengthen(65);
+      await w.warp("MAHOGANY_GYM", 4, 15, "up");
+      w.skipTrainers();
+      await w.warp("MAHOGANY_GYM", 5, 4, "up");
+      await w.talk("PRYCE");
+      w.flush("Pryce");
+      expect(g.hasFlag("ENGINE_GLACIERBADGE")).toBe(true);
+      expect(g.hasFlag("ENGINE_ROCKETS_IN_RADIO_TOWER")).toBe(true);
+
+      // ------------------------------------------------------------ The Radio Tower takeover
+      await w.warp("GOLDENROD_CITY", 15, 7, "down");
+      for (let i = 0; i < 8 && g.save.specialCall; i++) await h.step(i % 2 ? "up" : "down");
+      w.flush("Elm's call about the broadcast");
+      await w.warp("RADIO_TOWER_5F", 1, 3, "left");
+      await w.to(0, 3);
+      w.flush("Fake director");
+      expect(w.has("BASEMENT_KEY")).toBe(true);
+      await w.warp("GOLDENROD_UNDERGROUND", 18, 7, "up");
+      await w.inspect("up");
+      w.flush("Basement door");
+      expect(w.ev("EVENT_USED_BASEMENT_KEY")).toBe(true);
+      await w.warp("GOLDENROD_UNDERGROUND_WAREHOUSE", 12, 9, "up");
+      await w.talk("GENTLEMAN");
+      w.flush("Director");
+      expect(w.has("CARD_KEY")).toBe(true);
+      await w.warp("RADIO_TOWER_3F", 14, 3, "up");
+      await w.inspect("up");
+      w.flush("Card Key door");
+      expect(w.ev("EVENT_USED_THE_CARD_KEY_IN_THE_RADIO_TOWER")).toBe(true);
+      await w.warp("RADIO_TOWER_5F", 16, 7, "up");
+      await w.to(16, 5);
+      w.flush("Radio Tower boss");
+      expect(w.ev("EVENT_CLEARED_RADIO_TOWER")).toBe(true);
+      expect(w.has("CLEAR_BELL")).toBe(true);
     } finally {
       w.flush("end");
       if (process.env.CRYSTAL_WALKTHROUGH_LOG) writeFileSync(process.env.CRYSTAL_WALKTHROUGH_LOG, w.log.join("\n"));
