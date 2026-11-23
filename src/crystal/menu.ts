@@ -101,6 +101,21 @@ function pocketOf(game: CrystalGame, id: number): BagPocket {
   return "items";
 }
 
+/**
+ * The Pack's item submenu, built from the item's attributes as
+ * ItemBallsKey_LoadSubmenu and the TM/HM pocket do: TOSS (and GIVE) only when
+ * the item can be thrown away, REGISTER (Crystal's SEL) when it can go on the
+ * Select button, USE unless its field menu is ITEMMENU_NOUSE. TMs and HMs
+ * always offer USE.
+ */
+export function itemActions(game: CrystalGame, id: number): string[] {
+  const { property, field, pocket } = game.rom.itemAttributes(id);
+  const tossable = !(property & 0x80), selectable = !(property & 0x40);
+  if (pocket === C("TM_HM")) return tossable ? ["USE", "GIVE"] : ["USE"];
+  if (!tossable) return selectable ? ["USE", "REGISTER"] : ["USE"];
+  return [...field ? ["USE"] : [], "GIVE", "TOSS", ...selectable ? ["REGISTER"] : []];
+}
+
 /** The start menu. Resolves with an action to run on the map, or nothing. */
 export function openCrystalMenu(game: CrystalGame): Promise<(() => Promise<void>) | void> {
   return new Promise(resolve => {
@@ -185,11 +200,12 @@ export function openCrystalMenu(game: CrystalGame): Promise<(() => Promise<void>
           items, state: bagState, pockets: ["items", "balls", "key", "tms"], confirm: false,
           onUse: item => void (async () => {
             const id = +item.key;
-            const choice = await game.choose(["USE", "GIVE", "REGISTER", "TOSS"], { title: item.name, cancel: true });
-            if (choice === undefined) return view("bag");
-            if (choice === 2) { save.vars.registered = id; return message(`${item.name} was registered.`, () => view("bag")); }
-            if (choice === 3) {
-              if (game.rom.itemPocket(id) === C("KEY_ITEM") || game.rom.itemPocket(id) === C("TM_HM") && !game.rom.itemPrice(id)) return message("That's too important to toss!", () => view("bag"));
+            const actions = itemActions(game, id);
+            const pick = actions.length === 1 ? 0 : await game.choose(actions, { title: item.name, cancel: true });
+            if (pick === undefined) return view("bag");
+            const choice = actions[pick];
+            if (choice === "REGISTER") { save.vars.registered = id; return message(`${item.name} was registered.`, () => view("bag")); }
+            if (choice === "TOSS") {
               // TossItem: how many, then a last check.
               const { quantity } = await import("./services");
               const n = await quantity(game, `Toss out how many ${item.name}?`, save.items[id] ?? 0);
@@ -201,9 +217,7 @@ export function openCrystalMenu(game: CrystalGame): Promise<(() => Promise<void>
               game.takeItem(id, n);
               return message(`Threw away ${item.name}.`, () => view("bag"));
             }
-            if (choice === 1) {
-              const pocket = game.rom.itemPocket(id);
-              if (pocket === C("KEY_ITEM") || pocket === C("TM_HM")) return message("This item can't be held.", () => view("bag"));
+            if (choice === "GIVE") {
               const slot = await choosePartyMon(game, "Give to which POKéMON?", m => !m.egg);
               if (slot === undefined) return view("bag");
               const mon = save.party[slot], name = mon.nickname || game.monName(mon.species);
