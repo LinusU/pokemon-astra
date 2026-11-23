@@ -39,7 +39,7 @@ import { campaignObjective, directions } from "./game/journal";
 import { mountFieldMap } from "./ui/field-map";
 import { mountBag, itemInfo, type BagState } from "./ui/bag";
 import { battleStatus, mountParty } from "./ui/party";
-import { mountPokedex, type DexState } from "./ui/pokedex";
+import { mountPokedex, astraDex, type DexState } from "./ui/pokedex";
 import { mountJournal, type JournalState } from "./ui/journal";
 import { MenuInput } from "./ui/menu-input";
 import { MEDICINE, isMedicine, useMedicine } from "./game/medicine";
@@ -1113,7 +1113,8 @@ function view(v: string, pageIndex = 0) {
     return;
   } else if (v === "dex") {
     mountPokedex(layer, {
-      save, state: fieldDexState, species: id => engine.species(id), entry: id => engine.dexEntry(id), sprite, cry, onCancel: menu,
+      ...astraDex(save, id => engine.species(id)),
+      state: fieldDexState, species: id => engine.species(id), entry: id => engine.dexEntry(id), sprite, cry, onCancel: menu,
     });
     return;
   } else if (v === "journal") {

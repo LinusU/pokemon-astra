@@ -1,6 +1,7 @@
 /** The Crystal adventures' start menu, party, Pack and naming screens. */
 import { mountParty } from "../ui/party";
 import { mountPartnerSummary } from "../ui/partner-summary";
+import { cartridgeDex, mountPokedex, type DexState } from "../ui/pokedex";
 import { mountBag, type BagPocket, type BagState } from "../ui/bag";
 import { escapeHtml, panel, type PanelCursor } from "../ui/shell";
 import { cycleOption, optionStep } from "../ui/options";
@@ -17,6 +18,7 @@ const KANTO = ["Boulder", "Cascade", "Thunder", "Rainbow", "Soul", "Marsh", "Vol
 let selection = "party";
 const bagState: BagState = {};
 const optionCursor: PanelCursor = {};
+const dexState: DexState = {};
 
 function rows(game: CrystalGame, usable?: (m: CrystalMon) => boolean, note?: (m: CrystalMon) => string | undefined) {
   return game.save.party.map((mon, slot) => ({
@@ -254,16 +256,15 @@ export function openCrystalMenu(game: CrystalGame): Promise<(() => Promise<void>
         await game.modal(() => openPokegear(game));
       });
       if (v === "dex") {
-        const list = save.seen.slice().sort((a, b) => a - b).map(n => `<li><img alt="" src="${game.ctx.sprite!(n)}"><span>№${String(n).padStart(3, "0")} ${escapeHtml(engine.species(n).name)}</span><em>${save.caught.includes(n) ? "Caught" : "Seen"}</em><button data-area="${n}" aria-label="Show ${escapeHtml(engine.species(n).name)} habitat">Area</button></li>`);
-        const p = panel(game.layer, "Pokédex", `<p>Seen ${save.seen.length} · Owned ${save.caught.length}</p><ul class="yellow-dex">${list.join("") || "<li>No Pokémon yet.</li>"}</ul><div class="buttons"><button id="back">Back</button></div>`, "yellow-dex-panel");
-        for (const b of p.querySelectorAll<HTMLButtonElement>("[data-area]")) b.onclick = async () => {
-          const species = Number(b.dataset.area);
-          const purpose = { kind: "area" as const, species };
-          const title = `${engine.species(species).name} · Pokédex Area`;
-          const { openCrystalMap } = await import("./town-map");
-          await openCrystalMap(game, purpose, title);
-        };
-        p.querySelector<HTMLButtonElement>("#back")!.onclick = main;
+        mountPokedex(game.layer, {
+          dex: cartridgeDex(251, save.seen, save.caught), state: dexState,
+          species: id => engine.species(id), entry: id => engine.dexEntry(id),
+          sprite: id => game.ctx.sprite!(id), cry: id => game.cry(id), onCancel: main,
+          area: async species => {
+            const { openCrystalMap } = await import("./town-map");
+            await openCrystalMap(game, { kind: "area", species }, `${engine.species(species).name} · Pokédex Area`);
+          },
+        });
         return;
       }
       if (v === "card") {
