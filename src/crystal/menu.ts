@@ -15,15 +15,15 @@ const KANTO = ["Boulder", "Cascade", "Thunder", "Rainbow", "Soul", "Marsh", "Vol
 let selection = "party";
 const bagState: BagState = {};
 
-function rows(game: CrystalGame, usable?: (m: CrystalMon) => boolean) {
+function rows(game: CrystalGame, usable?: (m: CrystalMon) => boolean, note?: (m: CrystalMon) => string | undefined) {
   return game.save.party.map((mon, slot) => ({
     name: mon.egg ? "EGG" : mon.nickname || game.engine.species(mon.species).name, sprite: game.ctx.sprite!(mon.egg ? 253 : mon), egg: mon.egg,
-    level: mon.level, status: mon.status, hp: mon.hp, maxHp: mon.stats[0], note: slot === 0 ? "Lead" : undefined, disabled: usable ? !usable(mon) : false,
+    level: mon.level, status: mon.status, hp: mon.hp, maxHp: mon.stats[0], note: note ? note(mon) : slot === 0 ? "Lead" : undefined, disabled: usable ? !usable(mon) : false,
   }));
 }
 
 /** Picks a party Pokémon; headless (tests), the first that fits. */
-export function choosePartyMon(game: CrystalGame, title: string, usable?: (m: CrystalMon) => boolean): Promise<number | undefined> {
+export function choosePartyMon(game: CrystalGame, title: string, usable?: (m: CrystalMon) => boolean, note?: (m: CrystalMon) => string | undefined): Promise<number | undefined> {
   if (!game.ctx.layer || !game.ctx.sprite) {
     const i = game.save.party.findIndex(m => !usable || usable(m));
     return Promise.resolve(i < 0 ? undefined : i);
@@ -34,7 +34,7 @@ export function choosePartyMon(game: CrystalGame, title: string, usable?: (m: Cr
     host.className = "crystal-overlay";
     game.layer.append(host);
     mountParty(host, {
-      title, confirm: "Choose", rows: rows(game, usable),
+      title, confirm: "Choose", rows: rows(game, usable, note),
       onSelect: slot => { host.remove(); resolve(slot); },
       onBack: () => { host.remove(); resolve(undefined); },
     });

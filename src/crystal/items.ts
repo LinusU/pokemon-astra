@@ -200,9 +200,12 @@ async function stone(game: CrystalGame, item: number): Promise<ItemResult> {
 async function teachMachine(game: CrystalGame, item: number, moveName: string): Promise<ItemResult> {
   const move = MOVE[moveName] ?? MOVE[moveName.replace(/_M$/, "")];
   if (!move) return "It won't have any effect.";
-  const slot = await pickMon(game, `Teach ${game.engine.move(move).name.toUpperCase()}?`);
+  const { teachMove, canLearn } = await import("./moves");
+  const { choosePartyMon } = await import("./menu");
+  // The TM/HM party menu tags each Pokémon ABLE, NOT ABLE or LEARNED.
+  const slot = await choosePartyMon(game, `Teach ${game.engine.move(move).name.toUpperCase()}?`, undefined,
+    m => m.egg || !canLearn(game, m.species, move) ? "Not able" : m.moves.includes(move) ? "Learned" : "Able");
   if (slot === undefined) return;
-  const { teachMove } = await import("./moves");
   if (!(await teachMove(game, slot, move))) return;
   // TMs are used up and please the Pokémon a little; HMs last.
   if (!itemConst(item)?.startsWith("TM_")) return;
