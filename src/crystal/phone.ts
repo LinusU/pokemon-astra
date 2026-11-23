@@ -48,7 +48,8 @@ export async function specialCall(game: CrystalGame) {
 
 /** A contact calls now and then, from their own caller script. */
 export async function randomCall(game: CrystalGame) {
-  const callers = game.save.phone.map(i => contact(game, i)).filter(c => c.klass && c.callerTime);
+  // GetAvailableCallers: contacts who call at this time of day, from somewhere else.
+  const callers = game.save.phone.map(i => contact(game, i)).filter(c => c.callerTime & game.timeOfDayFlag());
   if (!callers.length) return false;
   const c = callers[Math.floor(Math.random() * callers.length)];
   if (c.group === game.map.group && c.number === game.map.number) return false;
