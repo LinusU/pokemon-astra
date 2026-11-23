@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { CARTRIDGES } from "./crystal-fixtures";
+import { CARTRIDGES, SUITES } from "./crystal-fixtures";
 import { hasEngine, headlessGame } from "./crystal-harness";
 import { C, CONST, ITEM, MAP, MON, MOVE } from "../src/crystal/symbols";
 
-describe.skipIf(!hasEngine || !CARTRIDGES.length).each(CARTRIDGES)("Crystal's systems on %s", cart => {
+describe.skipIf(!hasEngine || !CARTRIDGES.length).each(SUITES)("Crystal's systems on %s", cart => {
   const adventure = cart === "crystal" ? "crystal" : "crystal-legacy";
   it("runs a Bug-Catching Contest from entry to prize", async () => {
     // 17 November 2026 is a Tuesday, a contest day.

@@ -5,7 +5,7 @@
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { describe, it } from "vitest";
-import { CARTRIDGES } from "./crystal-fixtures";
+import { CARTRIDGES, SUITES } from "./crystal-fixtures";
 import { hasEngine, headlessGame } from "./crystal-harness";
 import { FakeCanvas, installCanvas, png } from "./canvas-shim";
 import { CrystalRenderer } from "../src/crystal/render";
@@ -17,7 +17,7 @@ const PLACES: [string, number, number, number][] = [
   ["VIOLET_CITY", 18, 18, 12], ["SPROUT_TOWER_1F", 9, 14, 12], ["GOLDENROD_CITY", 24, 20, 12], ["UNION_CAVE_1F", 6, 20, 12],
   ["ECRUTEAK_CITY", 18, 22, 19], ["OLIVINE_CITY", 13, 20, 12], ["GOLDENROD_POKECENTER_1F", 3, 6, 12], ["SAFFRON_CITY", 18, 22, 12],
 ];
-describe.skipIf(!out || !hasEngine || !CARTRIDGES.length).each(CARTRIDGES)("Crystal pictures on %s", cart => {
+describe.skipIf(!out || !hasEngine || !CARTRIDGES.length).each(SUITES)("Crystal pictures on %s", cart => {
   it("draws places", async () => {
     installCanvas();
     mkdirSync(out!, { recursive: true });

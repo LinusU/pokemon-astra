@@ -25,3 +25,5 @@ export const CARTRIDGES = [
   ...(hasCrystal ? [["crystal"] as const] : []),
   ...(hasLegacy ? [["legacy"] as const] : []),
 ];
+/** The cartridges to name suites after: a placeholder for a skipped suite when there are none, as Vitest fails a file without suites. */
+export const SUITES = CARTRIDGES.length ? CARTRIDGES : [["crystal"] as const];

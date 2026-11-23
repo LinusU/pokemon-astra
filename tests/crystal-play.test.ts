@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { CARTRIDGES } from "./crystal-fixtures";
+import { CARTRIDGES, SUITES } from "./crystal-fixtures";
 import { hasEngine, headlessGame } from "./crystal-harness";
 import { C, MON } from "../src/crystal/symbols";
 
-describe.skipIf(!hasEngine || !CARTRIDGES.length).each(CARTRIDGES)("A new %s journey", cart => {
+describe.skipIf(!hasEngine || !CARTRIDGES.length).each(SUITES)("A new %s journey", cart => {
   const adventure = cart === "crystal" ? "crystal" : "crystal-legacy";
   it("starts in the player's room and meets Mom downstairs", async () => {
     const h = await headlessGame(adventure);

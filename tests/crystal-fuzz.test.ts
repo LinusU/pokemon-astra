@@ -4,14 +4,14 @@
  *   CRYSTAL_FUZZ=1 npx vitest run tests/crystal-fuzz.test.ts
  */
 import { describe, expect, it } from "vitest";
-import { CARTRIDGES } from "./crystal-fixtures";
+import { CARTRIDGES, SUITES } from "./crystal-fixtures";
 import { hasEngine, headlessGame } from "./crystal-harness";
 import { C, MON } from "../src/crystal/symbols";
 import { runScript } from "../src/crystal/script";
 import { readTrainerHeader } from "../src/crystal/script";
 
 const run = !!process.env.CRYSTAL_FUZZ;
-describe.skipIf(!run || !hasEngine || !CARTRIDGES.length).each(CARTRIDGES)("Every script on %s", cart => {
+describe.skipIf(!run || !hasEngine || !CARTRIDGES.length).each(SUITES)("Every script on %s", cart => {
   it("runs without errors", async () => {
     const h = await headlessGame(cart === "crystal" ? "crystal" : "crystal-legacy");
     const g = h.game;
