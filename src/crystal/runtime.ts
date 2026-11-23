@@ -9,6 +9,7 @@ import type { Input } from "../game/input";
 import type { GameAudio } from "../game/audio";
 import type { MusicScene } from "../game/music";
 import type { MenuInput } from "../ui/menu-input";
+import { evolutionInput } from "../ui/evolution";
 import { BODY_RADIUS, bodyTouches, heldHeading, walkFreely, walkSpeed } from "../game/free-movement";
 import { JourneyConflict, type JourneyStore } from "../game/storage";
 import { C, CONST, ENGINE_RAM, ITEM, MAP, MON, RAM, SYM, TEXT, cartridgeInUse, constName, mapName, ramName } from "./symbols";
@@ -1028,7 +1029,9 @@ export class CrystalGame {
       }
     }
     const input = this.ctx.input;
-    if (this.mode === "battle") {
+    if (evolutionInput(this.ctx.layer, input)) {
+      // The evolution scene holds the controls until it is continued.
+    } else if (this.mode === "battle") {
       if (input.hit("b")) this.battleLaunch?.back();
       else this.ctx.menuInput?.update(this.layer, input, now, true);
     } else if (this.ui.busy) this.ui.frame(input, now);

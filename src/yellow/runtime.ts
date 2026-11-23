@@ -8,6 +8,7 @@ import type { Input } from "../game/input";
 import { BODY_RADIUS, WALK_SPEED, bodyTouches, heldHeading, walkFreely, walkSpeed } from "../game/free-movement";
 import type { GameAudio } from "../game/audio";
 import type { MenuInput } from "../ui/menu-input";
+import { evolutionInput } from "../ui/evolution";
 import type { MusicScene } from "../game/music";
 import { escapeHtml, panel } from "../ui/shell";
 import { BattleLaunch, type FinishedBattle } from "../ui/battle-launch";
@@ -656,7 +657,9 @@ export class YellowGame implements Game {
         r?.();
       }
     }
-    if (this.mode === "text") {
+    if (evolutionInput(this.ctx.layer, input)) {
+      // The evolution scene holds the controls until it is continued.
+    } else if (this.mode === "text") {
       if (input.hit("a") || input.hit("b")) this.advanceText();
     } else if (this.mode === "menu") {
       if (this.showcaseNext) {

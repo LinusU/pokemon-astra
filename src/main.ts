@@ -46,7 +46,7 @@ import { MEDICINE, isMedicine, useMedicine } from "./game/medicine";
 import { GameAudio } from "./game/audio";
 import { battleTheme, fieldMusic, trainerIntroMusic, victoryTheme, type MusicScene } from "./game/music";
 import { BattleLaunch, type FinishedBattle } from "./ui/battle-launch";
-import { playEvolution } from "./ui/evolution";
+import { evolutionInput, playEvolution } from "./ui/evolution";
 import { createJourney, deleteJourney, download, JourneyConflict, JourneyStore, listJourneys, peekJourney, type AdventureId, type JourneyEntry, type JourneySummary } from "./game/storage";
 import { mountJourneyList, type AdventureInfo } from "./ui/journeys";
 import { continueYellowJourney, hasYellowCartridge, isYellowAdventure, newYellowJourney, readYellowBackup, type YellowHost, type YellowRunner } from "./yellow/launch";
@@ -1670,6 +1670,7 @@ function evolvePartyMember(index: number, species: number, next: () => void, con
     to: sprite({ species, dvs: current.dvs }),
     name,
     evolvedName: engine.species(species).name,
+    confirmLabel: input.confirmLabel,
     reveal: () => {
       save.party[index] = evolved;
       consume?.();
@@ -1927,10 +1928,8 @@ function frame(now: number) {
     layer.querySelector<HTMLButtonElement>("#cancel, #back")?.click();
   } else if (mode === "menu" && input.hit("menu")) close();
   else if (mode === "battle" && input.hit("b")) battleLaunch?.back();
-  else if (mode === "evolution-result") {
-    if (input.hit("a") || input.hit("b"))
-      layer.querySelector<HTMLButtonElement>(".evolution-continue")?.click();
-  } else if (!["world", "loading", "saving", "dialogue", "evolution"].includes(mode)) {
+  else if (mode === "evolution-result") evolutionInput(layer, input);
+  else if (!["world", "loading", "saving", "dialogue", "evolution"].includes(mode)) {
     menuInput.update(layer, input, now, mode === "battle");
   }
   if (wasWorld) {

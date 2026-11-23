@@ -1,3 +1,4 @@
+import type { Input } from "../game/input";
 import { escapeHtml } from "./shell";
 import "./evolution.css";
 
@@ -9,6 +10,7 @@ type Evolution = {
   reveal: () => void;
   ready: () => void;
   next: () => void;
+  confirmLabel: string;
 };
 
 export async function playEvolution(layer: HTMLElement, evolution: Evolution) {
@@ -28,7 +30,7 @@ export async function playEvolution(layer: HTMLElement, evolution: Evolution) {
       </div>
       <div class="evolution-caption">
         <p role="status">${escapeHtml(evolution.name)} is evolving…</p>
-        <button class="evolution-continue" disabled>Continue <span aria-hidden="true">▸</span></button>
+        <span class="advance" hidden>${escapeHtml(evolution.confirmLabel)} ▸</span>
       </div>
     </section>`;
 
@@ -36,7 +38,7 @@ export async function playEvolution(layer: HTMLElement, evolution: Evolution) {
   const before = stage.querySelector<HTMLImageElement>(".evolution-before")!;
   const after = stage.querySelector<HTMLImageElement>(".evolution-after")!;
   const status = stage.querySelector<HTMLElement>('[role="status"]')!;
-  const button = stage.querySelector<HTMLButtonElement>(".evolution-continue")!;
+  const arrow = stage.querySelector<HTMLElement>(".advance")!;
   before.src = evolution.from;
   after.src = evolution.to;
   // Decode both sprites before the silhouette swap so it always has a target.
@@ -57,7 +59,14 @@ export async function playEvolution(layer: HTMLElement, evolution: Evolution) {
   await settling;
   evolution.ready();
   stage.dataset.phase = "complete";
-  button.disabled = false;
-  button.addEventListener("click", evolution.next, { once: true });
-  if (document.activeElement === document.body) button.focus({ preventScroll: true });
+  arrow.hidden = false;
+  stage.addEventListener("click", evolution.next, { once: true });
+}
+
+/** Holds the controls while an evolution plays; A or B continues once it has finished. */
+export function evolutionInput(layer: HTMLElement | undefined, input: Pick<Input, "hit">) {
+  const scene = layer?.querySelector<HTMLElement>(".evolution-scene");
+  if (!scene) return false;
+  if (scene.dataset.phase === "complete" && (input.hit("a") || input.hit("b"))) scene.click();
+  return true;
 }

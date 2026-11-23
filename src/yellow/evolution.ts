@@ -32,6 +32,7 @@ export function evolveTo(game: YellowGame, slot: number, species: number) {
       to: game.ctx.sprite({ species, dvs: current.dvs }),
       name,
       evolvedName: engine.species(species).name,
+      confirmLabel: game.ctx.input.confirmLabel,
       reveal: () => {
         game.save.party[slot] = evolved;
         game.register(species, true);

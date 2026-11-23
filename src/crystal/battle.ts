@@ -430,6 +430,7 @@ export async function evolveTo(game: CrystalGame, slot: number, species: number)
       to: game.ctx.sprite!({ species, dvs: current.dvs }),
       name,
       evolvedName: game.engine.species(species).name,
+      confirmLabel: game.ctx.input.confirmLabel,
       reveal: () => {
         game.save.party[slot] = evolved;
         game.register(species, true);

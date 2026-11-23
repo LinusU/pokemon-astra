@@ -194,7 +194,7 @@
   justify-content: space-between;
   gap: 6px 14px;
   margin: 0 4% 3%;
-  padding: 0.35em 0.55em;
+  padding: 0.35em 0.55em 1.1em;
   border: 3px double #7dac9d;
   background: #142938;
   box-shadow: 0 4px #0c1723;
@@ -205,26 +205,14 @@
   overflow-wrap: anywhere;
 }
 
-.evolution-continue {
-  flex: none;
-  padding: 0.18em 0.45em;
-  color: #162c2b;
-  background: #bde9ce;
-  border: 2px solid #def6d7;
+.evolution-caption .advance {
+  bottom: 0.1em;
+  right: 0.45em;
+  color: #bde9ce;
 }
 
-.evolution-continue:disabled {
-  visibility: hidden;
-}
-
-.evolution-continue:hover {
-  background: #e0f6ce;
-}
-
-@container (max-width: 440px) {
-  .evolution-caption { flex-wrap: wrap; }
-  .evolution-caption p { flex-basis: 100%; }
-  .evolution-continue { margin-left: auto; }
+.evolution-scene[data-phase="complete"] {
+  cursor: pointer;
 }
 
 @keyframes evolution-charge {
