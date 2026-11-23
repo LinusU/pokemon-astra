@@ -310,6 +310,39 @@ export async function npcTrade(game: CrystalGame, index: number) {
  * player's, Prof. Oak's once the Pokédex is in hand, and the Hall of Fame
  * after the credits. The player's own PC at home opens the item PC directly.
  */
+/**
+ * PokecenterNurseScript, made as quick as Astra's own Pokémon Centers: the
+ * Poké Balls go on the machine with the healing jingle, the nurse says the
+ * Pokémon are healed and goodbye, each waiting for A, and the balls come off.
+ * Pokérus is still found here, as on the cartridge.
+ */
+export async function pokecenterNurse(game: CrystalGame) {
+  game.heal();
+  if (game.save.party.length) {
+    game.showHealMachine(C("HEALMACHINE_POKECENTER"));
+    game.ctx.sound?.heal();
+  }
+  // checkphonecall, ENGINE_CAUGHT_POKERUS and CheckPokerus.
+  const pokerus = !game.save.specialCall && !game.hasFlag("ENGINE_CAUGHT_POKERUS") && game.save.party.some(m => m.pokerus);
+  // Crystal Legacy marks its first full welcome as given.
+  if (game.legacy) game.setEvent(C("EVENT_WELCOMED_TO_POKECOM_CENTER"), true);
+  if (pokerus) {
+    // Crystal Legacy sets the event before checking it, so it always shows the POKéCOM version.
+    await game.engineText(TEXT[game.legacy ? "PokeComNursePokerusText" : "NursePokerusText"]);
+    game.setFlag(C("ENGINE_CAUGHT_POKERUS"), true);
+    game.save.specialCall = C("SPECIALCALL_POKERUS");
+  } else {
+    // Crystal has no short version: its last page is the same words.
+    if (TEXT.NurseReturnPokemonShortText !== undefined) await game.engineText(TEXT.NurseReturnPokemonShortText);
+    else await game.say(game.textOf(TEXT.NurseReturnPokemonText).split("\f").at(-1)!);
+    await game.engineText(TEXT.NurseGoodbyeText);
+  }
+  game.closeText();
+  game.healMachine = undefined;
+  // Crystal Legacy turns the player to face the door.
+  if (game.legacy) game.me.facing = "down";
+}
+
 export async function pokemonCenterPC(game: CrystalGame, home = false) {
   game.sfx("SFX_BOOT_PC");
   await engineText(game, home ? "PlayersPCTurnOnText" : "PokecenterPCTurnOnText", `${game.save.name} turned on the PC.`, false);

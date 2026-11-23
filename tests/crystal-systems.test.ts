@@ -319,6 +319,46 @@ describe.skipIf(!hasEngine || !CARTRIDGES.length).each(SUITES)("Crystal's system
     expect(g.save.money).toBe(3000 - g.rom.itemPrice(ITEM.POTION));
   }, 60000);
 
+  it("heals at a Pokémon Center in two lines, with the balls on the machine", async () => {
+    const h = await headlessGame(adventure);
+    const g = h.game;
+    const hurt = g.makeMon(MON.CYNDAQUIL, 5);
+    hurt.hp = 1;
+    g.save.party = [hurt, g.makeMon(MON.PIDGEY, 3)];
+    const [group, number] = MAP.CHERRYGROVE_POKECENTER_1F;
+    await g.warpTo(group, number, 3, 3, "up");
+    const nurse = g.objects.find(o => o.visible && o.event.sprite === C("SPRITE_NURSE"))!;
+    let shown: { x: number; y: number; tile: number }[] = [];
+    const show = g.showHealMachine.bind(g);
+    g.showHealMachine = kind => { show(kind); shown = g.healMachine!.sprites; };
+    const from = h.ui.log.length;
+    await g.runScript(() => g.talkTo(nurse));
+    expect(h.ui.log.slice(from)).toEqual(["Your POKéMON are fully healed.", "We hope to see you again."]);
+    expect(g.save.party[0].hp).toBe(g.save.party[0].stats[0]);
+    // Two lights, then a ball for each Pokémon, on the machine behind the counter to the nurse's left.
+    expect(shown.map(s => s.tile)).toEqual([0, 0, 1, 1]);
+    for (const s of shown) {
+      expect(s.x).toBeLessThan(nurse.x * 16);
+      expect(s.y).toBeLessThan(2 * 16);
+    }
+    expect(g.healMachine).toBeUndefined();
+  }, 60000);
+
+  it("tells the player about Pokérus at a Pokémon Center", async () => {
+    const h = await headlessGame(adventure);
+    const g = h.game;
+    const mon = g.makeMon(MON.CYNDAQUIL, 5);
+    mon.pokerus = 0x13;
+    g.save.party = [mon];
+    const [group, number] = MAP.CHERRYGROVE_POKECENTER_1F;
+    await g.warpTo(group, number, 3, 3, "up");
+    const nurse = g.objects.find(o => o.visible && o.event.sprite === C("SPRITE_NURSE"))!;
+    await g.runScript(() => g.talkTo(nurse));
+    expect(g.hasFlag("ENGINE_CAUGHT_POKERUS")).toBe(true);
+    expect(g.save.specialCall).toBe(C("SPECIALCALL_POKERUS"));
+    expect(h.ui.log.join(" ")).not.toContain("We hope to see you again.");
+  }, 60000);
+
   it("leaves the player where the teacher brings them back", async () => {
     const h = await headlessGame(adventure);
     const g = h.game;

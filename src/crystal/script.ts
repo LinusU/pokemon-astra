@@ -95,6 +95,14 @@ function std(s: Script) {
   return { name, at: s.game.rom.far(table) };
 }
 
+/** Standard scripts Astra runs its own way. Resolves whether `name` was one. */
+async function nativeStd(g: CrystalGame, name: string | undefined) {
+  if (name !== "PokecenterNurseScript") return false;
+  const { pokecenterNurse } = await import("./services");
+  await pokecenterNurse(g);
+  return true;
+}
+
 /** A script object number as a map object slot: 0 is the player. */
 function object(s: Script, n: number) {
   if (n === 0) return 0;
@@ -119,8 +127,15 @@ const COMMANDS: Record<string, Command> = {
   iftrue: (s, g) => { const to = s.pointer(); if (g.scriptVar) s.pos = to; },
   ifgreater: (s, g) => { const v = s.byte(), to = s.pointer(); if (g.scriptVar > v) s.pos = to; },
   ifless: (s, g) => { const v = s.byte(), to = s.pointer(); if (g.scriptVar < v) s.pos = to; },
-  jumpstd: s => { s.pos = std(s).at; },
-  callstd: s => call(s, std(s).at),
+  jumpstd: async (s, g) => {
+    const { name, at } = std(s);
+    if (await nativeStd(g, name)) return end(s);
+    s.pos = at;
+  },
+  callstd: async (s, g) => {
+    const { name, at } = std(s);
+    if (!(await nativeStd(g, name))) call(s, at);
+  },
   callasm: async (s, g) => {
     const at = s.far();
     const name = asmName(at);
