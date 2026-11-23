@@ -17,3 +17,15 @@ describe("Crystal dialogue pages", () => {
     expect(paginate("Wait!\fI know!")).toEqual(["Wait!", "I know!"]);
   });
 });
+
+describe("Crystal names in title case", () => {
+  it("keeps small words and possessives lowercase", async () => {
+    const { titleCase } = await import("../src/crystal/runtime");
+    expect(titleCase("LAKE OF RAGE")).toBe("Lake of Rage");
+    expect(titleCase("DRAGON'S DEN")).toBe("Dragon's Den");
+    expect(titleCase("MT.MORTAR")).toBe("Mt. Mortar");
+    expect(titleCase("S.S. AQUA")).toBe("S.S. Aqua");
+    expect(titleCase("POKéMON MANSION")).toBe("Pokémon Mansion");
+    expect(titleCase("ROUTE 46")).toBe("Route 46");
+  });
+});

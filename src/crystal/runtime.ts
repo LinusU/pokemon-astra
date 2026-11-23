@@ -1573,8 +1573,10 @@ export function towards(from: { x: number; y: number }, to: { x: number; y: numb
   if (Math.abs(dx) > Math.abs(dy)) return dx > 0 ? "right" : "left";
   return dy > 0 ? "down" : "up";
 }
+/** A cartridge name in title case: "LAKE OF RAGE" → "Lake of Rage", "DRAGON'S DEN" → "Dragon's Den", "MT.MORTAR" → "Mt. Mortar". */
 export function titleCase(s: string) {
-  return s.toLowerCase().replace(/(^|[\s.'-])([a-zé])/g, (_, a, b) => a + b.toUpperCase()).replace(/\bPokémon\b/i, "Pokémon");
+  return s.toLowerCase().replace(/(^|[\s.-])([a-zé])/g, (_, a, b) => a + b.toUpperCase())
+    .replace(/\bPokémon\b/i, "Pokémon").replace(/(?<=\S) Of (?=\S)/g, " of ").replace(/\bMt\.(?=\S)/g, "Mt. ");
 }
 function popcount(n: number) {
   let c = 0;
