@@ -607,6 +607,37 @@ describe.skipIf(!run || !hasEngine || !hasLegacy)("Crystal Legacy's story", () =
       await h.settle();
       w.flush("Arriving in Vermilion");
       expect(g.map.name).toBe("VERMILION_PORT");
+
+      // ------------------------------------------------------------ Kanto: the Power Plant's Machine Part
+      w.strengthen(90);
+      await w.warp("POWER_PLANT", 14, 12, "up");
+      await w.talk("FISHER", { x: 14, y: 10 });
+      w.flush("Power Plant manager");
+      expect(w.ev("EVENT_MET_MANAGER_AT_POWER_PLANT")).toBe(true);
+      await w.warp("CERULEAN_GYM", 4, 14, "up");
+      w.flush("The grunt runs out of Cerulean Gym");
+      await w.warp("ROUTE_24", 8, 9, "up");
+      await w.talk("ROCKET", { x: 8, y: 7 });
+      w.flush("The grunt on Route 24");
+      await w.warp("CERULEAN_GYM", 3, 9, "up");
+      await w.inspect("up");
+      w.flush("Machine Part");
+      expect(w.has("MACHINE_PART")).toBe(true);
+      await w.warp("POWER_PLANT", 14, 12, "up");
+      await w.talk("FISHER", { x: 14, y: 10 });
+      w.flush("Power restored");
+      expect(w.ev("EVENT_RETURNED_MACHINE_PART")).toBe(true);
+      await w.warp("LAV_RADIO_TOWER_1F", 9, 3, "up");
+      await w.talk("GENTLEMAN", { x: 9, y: 1 });
+      w.flush("EXPN Card");
+      expect(g.hasFlag("ENGINE_EXPN_CARD")).toBe(true);
+
+      // ------------------------------------------------------------ Red on Mt. Silver
+      w.strengthen(100);
+      await w.warp("SILVER_CAVE_ROOM_3", 9, 12, "up");
+      await w.talk("RED");
+      w.flush("Red");
+      expect(w.ev("EVENT_DEFEATED_RED")).toBe(true);
     } finally {
       w.flush("end");
       if (process.env.CRYSTAL_WALKTHROUGH_LOG) writeFileSync(process.env.CRYSTAL_WALKTHROUGH_LOG, w.log.join("\n"));
