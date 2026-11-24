@@ -181,11 +181,10 @@ fn run(v: Value) -> Result<Value, String> {
                 return Err("Party is empty".into());
             }
             setup.party.truncate(6);
-            let b = Battle::start_with_training(
+            let b = Battle::start(
                 data(),
                 &setup,
                 v["seed"].as_u64().unwrap_or(1),
-                v["training_level"].as_u64().unwrap_or(0).min(100) as u8,
             )
             .map_err(|e| e.to_string())?;
             let encounter = Encounter {

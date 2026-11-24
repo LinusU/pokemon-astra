@@ -387,7 +387,7 @@ impl Engine {
         if !participated {
             return ExpAward::default();
         }
-        let exp = self.participation_exp(bc).max(self.training_exp(bc));
+        let exp = self.participation_exp(bc);
         ExpAward { exp, boosted: self.mem.rb(W_STRING_BUFFER2 + 2) != 0, split_level_up: false }
     }
 
@@ -407,31 +407,7 @@ impl Engine {
         self.apply_earned_exp(bc, cur, award.split_level_up)
     }
 
-    /// Training uses the member's growth curve and only brings them toward
-    /// local readiness after they participate in battle.
-    fn training_exp(&self, bc: u16) -> u16 {
-        let level = self.mem.rb(bc + u16::from(MON_LEVEL));
-        let enemy_level = self.mem.rb(W_ENEMY_MON_LEVEL);
-        let goal = self.training_level.min(enemy_level.saturating_add(9));
-        if level >= goal || self.battle_mode() == WILD_BATTLE
-            || self.mem.rb(W_GIVING_EXPERIENCE_TO_EXP_SHARE_HOLDERS) != 0
-        {
-            return 0;
-        }
-        let species = self.mem.rb(bc + u16::from(MON_SPECIES));
-        let exp_at = |level| self.data.experience_at_level(species, level) as i32;
-        let exp = bc + u16::from(MON_EXP);
-        let current = i32::from_be_bytes([0, self.mem.rb(exp), self.mem.rb(exp + 1), self.mem.rb(exp + 2)]);
-        let step = exp_at(level + 1) - exp_at(level);
-        let award = match goal - level {
-            7.. => exp_at(level + 2) - current,
-            3..=6 => step,
-            _ => step * 2 / 3,
-        };
-        award.min(exp_at(goal) - current).clamp(0, 65535) as u16
-    }
-
-    /// Original Crystal stat EXP and regular battle EXP calculation.
+    /// Crystal stat EXP and battle EXP calculation, with the selected game's level-cap rule.
     fn participation_exp(&mut self, bc: u16) -> u16 {
         let mut de = bc + u16::from(MON_STAT_EXP) + 1;
         for i in 0..u16::from(NUM_EXP_STATS) {

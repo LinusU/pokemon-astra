@@ -133,7 +133,7 @@ function chooseAction(
   catching: boolean,
   early: boolean,
   ballId: number,
-  league: boolean,
+  majorBattle: boolean,
 ): number {
   const { player, enemy } = snap.state;
   const active = player.active as Combatant;
@@ -143,7 +143,7 @@ function chooseAction(
   const indexed = legal.map((action, index) => ({ action, index }));
   const score = (mon: Combatant) => {
     const damage = threat(mon, target);
-    if (!league) return damage * 1.6 - threat(target, mon) * 0.8 + (mon.hp / mon.max_hp) * 5;
+    if (!majorBattle) return damage * 1.6 - threat(target, mon) * 0.8 + (mon.hp / mon.max_hp) * 5;
     const danger = threat(target, mon, true);
     const movesFirst = !(mon.status & 64) && mon.stats[2] > target.stats[2];
     const requiredTurns = target.hp / Math.max(1, damage) - Number(movesFirst);
@@ -195,11 +195,11 @@ function chooseAction(
       return weakened || !weakMove || turn > 3 ? ball : weakMove.index;
     }
   } else {
-    const danger = threat(target, active, league);
+    const danger = threat(target, active, majorBattle);
     const first = !(active.status & 64) && active.stats[2] > target.stats[2];
-    if (league && attacks[0]?.damage >= target.hp * 1.1 && (first || active.hp > danger))
+    if (majorBattle && attacks[0]?.damage >= target.hp * 1.1 && (first || active.hp > danger))
       return attacks[0].index;
-    if (league && party.filter((mon) => mon.hp > 0).length <= 3) {
+    if (majorBattle && party.filter((mon) => mon.hp > 0).length <= 3) {
       const revival = indexed.flatMap(({ action, index }) => {
         if (typeof action !== "object" || action.Item?.id !== MEDICINE.revive.id || action.Item.target == null)
           return [];
@@ -226,7 +226,7 @@ function chooseAction(
       if (revive) return revive.index;
     }
     const hpMissing = active.max_hp - active.hp;
-    if (league && active.status && hpMissing >= 40) {
+    if (majorBattle && active.status && hpMissing >= 40) {
       const fullRestore = item(({ id, target }) => id === MEDICINE.full_restore.id && target === player.active_slot);
       if (fullRestore >= 0) return fullRestore;
     }
@@ -334,7 +334,7 @@ function runCampaign(starter: number) {
     return true;
   }
 
-  function fight(opponent: BattleOptions["opponent"], catching = false) {
+  function fight(opponent: BattleOptions["opponent"], catching = false, majorBattle = false) {
     const battle = engine.startBattle({
       party: save.party,
       opponent,
@@ -370,7 +370,7 @@ function runCampaign(starter: number) {
         }
         return result.outcome;
       }
-      battle.act(chooseAction(snapshot, turn, catching, save.badges < 2, bestBall, save.badges === 8));
+      battle.act(chooseAction(snapshot, turn, catching, save.badges < 2, bestBall, majorBattle || save.badges === 8));
     }
     throw Error("Battle exceeded 170 decisions");
   }
@@ -430,8 +430,8 @@ function runCampaign(starter: number) {
       makeLead(lead);
     }
     const opponent = { party: roster, prizeMoney: trainer.reward };
-    let outcome = fight(opponent);
-    for (let retry = 0; requireVictory && save.badges < 8 && outcome !== "win" && retry < 3; retry++) {
+    let outcome = fight(opponent, false, requireVictory);
+    for (let retry = 0; requireVictory && save.badges < 8 && outcome !== "win" && retry < 10; retry++) {
       const lead = save.party[0];
       for (const previous of routePractice.slice(-2)) practice(previous);
       for (const key of ["super_potion", "hyper_potion", "revive"] as const)
@@ -439,7 +439,7 @@ function runCampaign(starter: number) {
           buy(key, 3, MEDICINE[key].price);
       save.party = save.party.map((mon) => engine.healPokemon(mon));
       makeLead(save.party.findIndex((mon) => mon.species === lead.species));
-      outcome = fight(opponent);
+      outcome = fight(opponent, false, requireVictory);
     }
     if (outcome === "win") {
       save.flags.push(object.setsFlag ?? object.id);
@@ -486,7 +486,9 @@ function runCampaign(starter: number) {
       if (species === 105 && save.party.some((mon) => mon.species === 51)) continue;
       const encounter = fieldHabitats(map, save).find((entry) => entry.species === species);
       if (!encounter) continue;
-      for (let attempt = 0; attempt < 2; attempt++) {
+      // Lapras covers both Flint and Orion, so give its low catch rate more tries.
+      const attempts = species === 131 ? 4 : 2;
+      for (let attempt = 0; attempt < attempts; attempt++) {
         const shop = ballStock.filter(([, , , badges]) => save.badges >= badges);
         if (route === 17 && additions.includes(species) && save.money < 1600 &&
             !shop.some(([, key]) => save.items[key] > 0)) {
@@ -565,13 +567,17 @@ function runCampaign(starter: number) {
   }
   save.party = selected;
   save.storage = roster.filter(mon => !selected.includes(mon));
-  // Use up to eight route rematches to build the endgame team, with each new
-  // recruit taking the lead on a route fight they can handle.
-  const trainees = [...save.party].sort((a, b) => b.level - a.level).slice(0, 5);
+  // Train the three highest-level team members for the League with route rematches.
+  const trainees = [...save.party].sort((a, b) => b.level - a.level).slice(0, 3).map(mon => mon.species);
   const lastTrainers = routePractice.slice(-4);
-  for (const [index, trainer] of [...lastTrainers, ...lastTrainers].entries()) {
-    const species = trainees[index % lastTrainers.length + 1]?.species;
-    practice(trainer, save.party.findIndex((mon) => mon.species === species));
+  for (let round = 0; round < 32; round++) {
+    const remaining = trainees.filter(species =>
+      save.party.some(mon => mon.species === species && mon.level < 54),
+    );
+    if (!remaining.length) break;
+    const species = remaining[round % remaining.length];
+    for (const trainer of lastTrainers)
+      practice(trainer, save.party.findIndex(mon => mon.species === species));
   }
   const kit = Object.entries(leagueSupplies) as [keyof typeof leagueSupplies, number][];
   // A blackout ends the entire League attempt. Re-register in Crown with the

@@ -87,13 +87,11 @@ pub struct Engine {
     pub location: u8,
     /// Sixth party member retained while a full-party capture is built in its slot.
     pub boxed_capture_displaced: Option<crate::battle::Pokemon>,
-    /// Optional host game training target. Zero uses Crystal's original EXP rules.
-    pub training_level: u8,
 }
 
 impl Engine {
     pub fn new(mem: Mem, rng: u64, flags: Flags) -> Self {
-        Engine { mem, rng, flags, pending: VecDeque::new(), rng_trace: None, decision_log: None, damage_regs: [0; 4], messages: None, message_log: Vec::new(), event_log: Vec::new(), trainer_class_patch: None, events: None, data: crate::data::GameData::crystal(), names: Default::default(), location: HARNESS_MAP_LOCATION, boxed_capture_displaced: None, training_level: 0 }
+        Engine { mem, rng, flags, pending: VecDeque::new(), rng_trace: None, decision_log: None, damage_regs: [0; 4], messages: None, message_log: Vec::new(), event_log: Vec::new(), trainer_class_patch: None, events: None, data: crate::data::GameData::crystal(), names: Default::default(), location: HARNESS_MAP_LOCATION, boxed_capture_displaced: None }
     }
 
     /// Trainer class `id`'s attributes, as the scenario patches them.

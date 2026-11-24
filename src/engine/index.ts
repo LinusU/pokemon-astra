@@ -112,8 +112,6 @@ type Exports = {
   sound_effect(p: number, n: number, id: number): number;
 };
 
-const TRAINING_LEVELS = [12, 18, 24, 30, 37, 43, 48, 53, 60];
-
 const textSymbols: Record<number, string> = {
   0x4e: "\n", 0x54: "POKé", 0x7f: " ", 0x9a: "(", 0x9b: ")", 0x9c: ":", 0xd3: "’r", 0xd4: "’s",
   0xd5: "’t", 0xe0: "’", 0xe3: "-", 0xe8: ".", 0xe9: "&", 0xf3: "/", 0xf4: ",",
@@ -407,7 +405,6 @@ export class Engine {
         setup,
         trainer_prize: "species" in options.opponent ? undefined : options.opponent.prizeMoney,
         seed: options.seed ?? Math.floor(Math.random() * 0xffffffff),
-        training_level: "Trainer" in opp ? TRAINING_LEVELS[popcount(options.badges ?? 0)] : 0,
       }),
     );
   }
@@ -722,11 +719,6 @@ export class Engine {
     );
     return new Float32Array(bytes.buffer, bytes.byteOffset, bytes.length / 4);
   }
-}
-function popcount(mask: number): number {
-  let count = 0;
-  for (let bits = mask & 255; bits; bits &= bits - 1) count++;
-  return count;
 }
 export class Battle {
   constructor(

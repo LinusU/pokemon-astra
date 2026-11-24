@@ -304,22 +304,19 @@ describe.skipIf(!romAvailable)("complete native battle decisions", () => {
       ],
     },
     {
-      name: "regular trainer EXP above the catch-up range",
+      name: "trainer EXP with no badges",
       species: 58, level: 12, opponent: { species: 10, level: 5 }, trainer: true,
       total: 2215, endLevel: 12, progress: 9,
       events: [{ ExpBar: { slot: 0, gained: 55, from: 0, to: 9 } }],
     },
     {
-      name: "trainer catch-up EXP landing on a level threshold",
-      species: 58, level: 5, opponent: { species: 10, level: 5 }, trainer: true,
-      total: 428, endLevel: 7, progress: 0,
-      events: [
-        { ExpBar: { slot: 0, gained: 272, from: 0, to: 100 } }, 6,
-        { ExpBar: { slot: 0, gained: 272, from: 0, to: 100 } }, 7,
-      ],
+      name: "standard trainer EXP for a same-level knockout with four badges",
+      species: 214, level: 24, opponent: { species: 10, level: 24 }, trainer: true, badges: 0x0f,
+      total: 17551, endLevel: 24, progress: 12,
+      events: [{ ExpBar: { slot: 0, gained: 271, from: 0, to: 12 } }],
     },
   ])("saves and animates $name", async ({
-    species, level, opponent, trainer, total, endLevel, progress, events,
+    species, level, opponent, trainer, badges, total, endLevel, progress, events,
   }) => {
     const { instance } = await WebAssembly.instantiate(readFileSync("public/astra_native.wasm"), {});
     const engine = new Engine(instance.exports as never, readFileSync("pokecrystal11.gbc"));
@@ -331,6 +328,7 @@ describe.skipIf(!romAvailable)("complete native battle decisions", () => {
     const battle = engine.startBattle({
       party: [mon],
       opponent: trainer ? { party: [engine.makePokemon(opponent.species, opponent.level)] } : opponent,
+      badges,
       seed: 5,
     });
     const move = battle.snapshot().legal.findIndex((action: any) => action.Move?.slot === 0);
@@ -544,10 +542,10 @@ describe.skipIf(!romAvailable)("complete native battle decisions", () => {
     }
     const result = battle.snapshot().result;
     expect(result?.outcome).toBe("win");
-    // The cartridge's two batches for the lead were 158 and 13.
-    expect(gained.get(lead.nickname)).toEqual([171]);
+    // The lead gets 27 participation EXP and 13 EXP as an Exp. Share holder.
+    expect(gained.get(lead.nickname)).toEqual([40]);
     expect(gained.get(reserve.nickname)).toEqual([13]);
-    expect(result?.party[0].exp).toBe(lead.exp + 171);
+    expect(result?.party[0].exp).toBe(lead.exp + 40);
     expect(result?.party[1].exp).toBe(reserve.exp + 13);
   });
 
