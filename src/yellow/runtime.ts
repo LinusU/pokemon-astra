@@ -5,7 +5,7 @@
 import type { Engine, Pokemon } from "../engine";
 import type { PokemonPortrait } from "../engine/appearance";
 import type { Input } from "../game/input";
-import { BODY_RADIUS, WALK_SPEED, bodyTouches, heldHeading, walkFreely, walkSpeed } from "../game/free-movement";
+import { BODY_RADIUS, WALK_SPEED, bodyEntersBlockedTile, heldHeading, walkFreely, walkSpeed, type Position } from "../game/free-movement";
 import type { GameAudio } from "../game/audio";
 import type { MenuInput } from "../ui/menu-input";
 import { dismissMenu } from "../ui/menu-controller";
@@ -869,7 +869,7 @@ export class YellowGame implements Game {
     const centre = { x: from.x + 0.5, y: from.y + 0.5 };
     // A new square ends the frame, so its events run before the player walks on.
     const moved = walkFreely(centre, heading, walkSpeed(input, { bike: !!this.save.bike }) * Math.min(dt, 0.05),
-      (x, y) => this.freeBlocked(x, y), p => Math.floor(p.x) !== me.x || Math.floor(p.y) !== me.y);
+      (x, y) => this.freeBlocked(centre, x, y), p => Math.floor(p.x) !== me.x || Math.floor(p.y) !== me.y);
     const pos = { x: centre.x - 0.5, y: centre.y - 0.5 };
     me.free = pos;
     me.moving = moved > 0;
@@ -915,12 +915,10 @@ export class YellowGame implements Game {
   }
 
   /** Whether the player's body, centred at (x, y), would overlap a wall, a person or a raised edge. */
-  private freeBlocked(x: number, y: number) {
+  private freeBlocked(from: Position, x: number, y: number) {
     const map = this.header, me = this.me;
     const surfing = !!this.save.surfing, here = this.world.tile(map, me.x, me.y);
-    return bodyTouches(x, y, (px, py) => {
-      const tx = Math.floor(px), ty = Math.floor(py);
-      if (tx === me.x && ty === me.y) return false;
+    return bodyEntersBlockedTile(from, x, y, (tx, ty) => {
       if (this.blocked(tx, ty)) return true;
       const open = surfing ? this.world.isWater(map, tx, ty) || this.world.passable(map, tx, ty) : this.world.passable(map, tx, ty);
       return !open || this.world.pairBlocked(map, here, this.world.tile(map, tx, ty), surfing);

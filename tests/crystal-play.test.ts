@@ -1,10 +1,43 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { CARTRIDGES, SUITES } from "./crystal-fixtures";
 import { hasEngine, headlessGame } from "./crystal-harness";
-import { C, MON } from "../src/crystal/symbols";
+import { C, MAP, MON } from "../src/crystal/symbols";
+import { CrystalGame } from "../src/crystal/runtime";
+import { readTrainerHeader } from "../src/crystal/script";
+import { BODY_RADIUS } from "../src/game/free-movement";
 
 describe.skipIf(!hasEngine || !CARTRIDGES.length).each(SUITES)("A new %s journey", cart => {
   const adventure = cart === "crystal" ? "crystal" : "crystal-legacy";
+  it("can walk clear of a trainer occupying the saved square on Route 35", async () => {
+    const h = await headlessGame(adventure);
+    const [group, number] = MAP.ROUTE_35;
+    const save = {
+      ...h.game.save, map: [group, number] as [number, number], x: 8, y: 20, facing: "up" as const,
+      settings: { ...h.game.save.settings, movement: "free" as const },
+    };
+    const game = new CrystalGame({ ...h.game.ctx, save });
+    for (const o of game.objects) {
+      if (o.event.type === C("OBJECTTYPE_TRAINER")) game.setEvent(readTrainerHeader(game, o.event.script).flag, true);
+    }
+    await game.begin();
+    expect(game.objects.some(o => o.visible && o.x === 8 && o.y === 20)).toBe(true);
+
+    let frame = 0;
+    const walk = async (dir: "up" | "down") => {
+      h.input.dir = dir;
+      for (let i = 0; i < 12; i++) {
+        game.frame(++frame * 50, 0.05);
+        await vi.waitFor(() => expect(game.mode).toBe("world"), { interval: 1 });
+      }
+    };
+    const trainerEdge = save.y - 0.5 - BODY_RADIUS;
+    await walk("up");
+    expect(game.me.free?.y).toBeLessThan(trainerEdge);
+    await walk("down");
+    expect(game.me.y).toBe(19);
+    expect(game.me.free?.y).toBeLessThan(trainerEdge);
+  });
+
   it("starts in the player's room and meets Mom downstairs", async () => {
     const h = await headlessGame(adventure);
     expect(h.game.map.name).toBe("PLAYERS_HOUSE_2F");

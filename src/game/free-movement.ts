@@ -57,6 +57,23 @@ export function bodyTouches(x: number, y: number, test: (x: number, y: number) =
     test(x - radius, y + radius) || test(x + radius, y + radius);
 }
 
+/** Lets a body leave a blocked tile it started on, including the part of the step after its centre crosses the edge. */
+export function bodyEntersBlockedTile(from: Position, x: number, y: number, blocked: (tx: number, ty: number) => boolean) {
+  const fromX = Math.floor(from.x), fromY = Math.floor(from.y);
+  return bodyTouches(x, y, (px, py) => {
+    const tx = Math.floor(px), ty = Math.floor(py);
+    if (tx === fromX && ty === fromY) return false;
+    if (!blocked(tx, ty)) return false;
+    const tileX = tx + 0.5, tileY = ty + 0.5;
+    const dx = Math.abs(from.x - tileX), dy = Math.abs(from.y - tileY);
+    if (dx > 0.5 + BODY_RADIUS || dy > 0.5 + BODY_RADIUS) return true;
+    // The body already overlaps this tile. Let it clear the edge or slide along it.
+    const clearX = tx !== fromX && Math.abs(x - tileX) >= dx;
+    const clearY = ty !== fromY && Math.abs(y - tileY) >= dy;
+    return !clearX && !clearY;
+  });
+}
+
 /**
  * Walks a body `distance` squares along a heading in short collision steps,
  * sliding along walls on diagonals. Walking straight at a doorway or gap the

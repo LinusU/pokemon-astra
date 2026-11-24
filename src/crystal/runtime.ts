@@ -11,7 +11,7 @@ import type { MusicScene } from "../game/music";
 import type { MenuInput } from "../ui/menu-input";
 import { dismissMenu } from "../ui/menu-controller";
 import { evolutionInput } from "../ui/evolution";
-import { BODY_RADIUS, bodyTouches, heldHeading, walkFreely, walkSpeed } from "../game/free-movement";
+import { BODY_RADIUS, bodyEntersBlockedTile, heldHeading, walkFreely, walkSpeed, type Position } from "../game/free-movement";
 import { JourneyConflict, type JourneyStore } from "../game/storage";
 import { C, CONST, ENGINE_RAM, ITEM, MAP, MON, RAM, SYM, TEXT, cartridgeInUse, constName, mapName, ramName } from "./symbols";
 import { CrystalRom, type BgEvent, type CrystalMap, type ObjectEvent, type TextOp } from "./rom";
@@ -1210,7 +1210,7 @@ export class CrystalGame {
     const from = me.free ?? { x: me.x, y: me.y };
     const centre = { x: from.x + 0.5, y: from.y + 0.5 };
     const moved = walkFreely(centre, heading, walkSpeed(input, { bike: this.save.state === "bike" }) * Math.min(dt, 0.05),
-      (x, y) => this.freeBlocked(x, y), p => Math.floor(p.x) !== me.x || Math.floor(p.y) !== me.y);
+      (x, y) => this.freeBlocked(centre, x, y), p => Math.floor(p.x) !== me.x || Math.floor(p.y) !== me.y);
     const pos = { x: centre.x - 0.5, y: centre.y - 0.5 };
     me.free = pos;
     me.moving = moved > 0;
@@ -1253,11 +1253,9 @@ export class CrystalGame {
     void import("./field").then(f => f.pushBoulder(this, o));
     return true;
   }
-  private freeBlocked(x: number, y: number) {
+  private freeBlocked(from: Position, x: number, y: number) {
     const me = this.me;
-    return bodyTouches(x, y, (px, py) => {
-      const tx = Math.floor(px), ty = Math.floor(py);
-      if (tx === me.x && ty === me.y) return false;
+    return bodyEntersBlockedTile(from, x, y, (tx, ty) => {
       if (this.objects.some(o => o.visible && o.x === tx && o.y === ty)) return true;
       return !this.passable(tx, ty, Math.abs(tx - me.x) + Math.abs(ty - me.y) === 1 ? me : undefined);
     });
