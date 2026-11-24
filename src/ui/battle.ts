@@ -923,7 +923,9 @@ export class BattlePresenter {
     this.next();
   }
   back() {
-    if (this.waiting || !this.choosing) return;
+    // B turns the page as A does; it only backs out of a menu.
+    if (this.waiting) return this.advance();
+    if (!this.choosing) return;
     if (this.snapshot.site === "LearnMove") {
       this.root.querySelector<HTMLButtonElement>("[data-reconsider], .battle-keep")?.click();
       return;
