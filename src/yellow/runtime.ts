@@ -679,8 +679,12 @@ export class YellowGame implements Game {
         else this.ctx.menuInput.update(top, input, now, false);
       }
     } else if (this.mode === "battle") {
-      if (input.hit("b")) this.battleLaunch?.back();
-      else this.ctx.menuInput.update(this.ctx.layer, input, now, true);
+      if (input.hit("b")) {
+        // In the Safari Zone B turns the page as A does.
+        const next = this.layer.querySelector<HTMLButtonElement>(".yellow-safari [data-next]");
+        if (next) next.click();
+        else this.battleLaunch?.back();
+      } else this.ctx.menuInput.update(this.ctx.layer, input, now, true);
     }
     this.updateMovers(dt);
     if (this.mode === "world") this.control(dt);
