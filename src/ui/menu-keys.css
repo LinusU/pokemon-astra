@@ -1,0 +1,25 @@
+/* The strip along the bottom of a screen that says what the pad and buttons do there. */
+.menu-keys {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  padding-top: 4px;
+  border-top: 2px solid #9db59a;
+  font: 18px/1 "VT323", monospace;
+  white-space: nowrap;
+}
+.panel .menu-keys button,
+.panel .menu-keys button:is(:hover, :focus-visible, [aria-current="true"]) {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+  color: inherit;
+  font: inherit;
+}
+.menu-keys kbd { padding: 0 4px; background: #29483b; color: #fff9dc; font: inherit; }
+.menu-keys [hidden] { display: none; }

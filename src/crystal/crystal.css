@@ -67,8 +67,11 @@
 }
 .crystal-pokepic { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); padding: 8px; border: 4px double #284c3b; background: #f7efd3; z-index: 2; }
 .crystal-pokepic img { width: 112px; height: 112px; image-rendering: pixelated; display: block; }
-.crystal-gear-tabs { display: flex; gap: 4px; margin-bottom: 6px; }
-.crystal-gear-tabs button.active { background: #f2c94c; color: #3b2f0c; }
+.crystal-gear-tabs { display: flex; gap: 4px; margin-bottom: 6px; border-bottom: 2px solid #9db59a; }
+.panel .crystal-gear-tabs button,
+.panel .crystal-gear-tabs button:is(:hover, :focus-visible, [aria-current="true"]) { flex: 1; margin: 0; border: 0; border-radius: 0; padding: 2px 4px; background: transparent; box-shadow: none; outline: none; color: #5c7262; font: 20px/1.1 "VT323", monospace; }
+.panel .crystal-gear-tabs button.active { background: #29483b; color: #fff9dc; }
+.crystal-gear-card { min-height: 7em; }
 .crystal-clock { font-family: "VT323", monospace; font-size: 24px; text-align: center; }
 .crystal-clock strong { font-size: 44px; }
 .crystal-puzzle { display: grid; grid-template-columns: repeat(4, 48px); gap: 3px; justify-content: center; }
