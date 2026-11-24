@@ -46,7 +46,7 @@ export function mountSlots<S extends string>(host: HTMLElement, options: SlotsOp
     <p class="slots-message" aria-live="polite"></p>
     <footer class="menu-keys"><span class="slots-bet"><button id="less" aria-label="Bet less">◂</button> Bet <strong></strong> <button id="more" aria-label="Bet more">▸</button></span><button id="go"><kbd>A</kbd> <span></span></button><button id="back"><kbd>B</kbd> Quit</button></footer>`;
   host.replaceChildren(root);
-  const pos = reels.map(() => 0);
+  const pos = reels.map(reel => Math.floor(Math.random() * reel.length));
   const strips = [...root.querySelectorAll<HTMLElement>(".slots-reel")];
   const one = <E extends HTMLElement>(selector: string) => root.querySelector<E>(selector)!;
   let bet = Math.min(1, options.coins()), spinning = -1, timer = 0, message = "Bet how many coins?";
