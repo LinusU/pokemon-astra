@@ -3,6 +3,7 @@
  * Alph's Unown puzzles, played with Astra's panels.
  */
 import { escapeHtml, panel } from "../ui/shell";
+import { mountSlots } from "../ui/slots";
 import type { CrystalGame } from "./runtime";
 
 function overlay(game: CrystalGame) {
@@ -12,33 +13,33 @@ function overlay(game: CrystalGame) {
   return host;
 }
 
-const REELS = ["7", "POKé BALL", "CHERRY", "PIKACHU", "SQUIRTLE", "STARYU"];
-const PAYOUT: Record<string, number> = { "7": 300, "POKé BALL": 50, PIKACHU: 15, SQUIRTLE: 15, STARYU: 15, CHERRY: 6 };
+type Reel = "7" | "BALL" | "CHERRY" | "PIKACHU" | "SQUIRTLE" | "STARYU";
+const REELS: Reel[][] = [
+  ["7", "PIKACHU", "SQUIRTLE", "BALL", "CHERRY", "STARYU", "7", "SQUIRTLE", "PIKACHU", "BALL", "CHERRY", "SQUIRTLE", "STARYU", "PIKACHU", "CHERRY"],
+  ["7", "SQUIRTLE", "CHERRY", "STARYU", "PIKACHU", "BALL", "CHERRY", "SQUIRTLE", "STARYU", "CHERRY", "7", "PIKACHU", "BALL", "SQUIRTLE", "STARYU"],
+  ["7", "STARYU", "SQUIRTLE", "CHERRY", "PIKACHU", "STARYU", "BALL", "SQUIRTLE", "PIKACHU", "CHERRY", "STARYU", "7", "SQUIRTLE", "PIKACHU", "BALL"],
+];
+const PAYOUT: Record<Reel, number> = { "7": 300, BALL: 50, PIKACHU: 15, SQUIRTLE: 15, STARYU: 15, CHERRY: 6 };
+const LABEL: Record<Reel, string> = { "7": "7", BALL: "BALL", CHERRY: "♣", PIKACHU: "PIKA", SQUIRTLE: "SQUIRT", STARYU: "STARYU" };
 
-/** A slot machine: bet one to three coins on the middle row. */
+/** A slot machine: one to three coins a spin, each coin playing more lines. */
 export function slotMachine(game: CrystalGame): Promise<void> {
   if (!game.ctx.layer) return Promise.resolve();
   game.closeText();
   return new Promise(resolve => {
     const host = overlay(game);
-    let result = "Bet coins and spin!";
-    const spin = (bet: number) => {
-      if (game.save.coins < bet) { result = "Not enough coins."; return show(); }
-      game.save.coins -= bet;
-      const reels = [0, 1, 2].map(() => REELS[Math.floor(Math.random() * REELS.length)]);
-      game.sfx("SFX_STOP_SLOT");
-      const win = reels.every(r => r === reels[0]) ? PAYOUT[reels[0]] : reels.filter(r => r === "CHERRY").length >= 2 ? 6 : 0;
-      if (win) { game.save.coins = Math.min(9999, game.save.coins + win); game.sfx("SFX_PAY_DAY"); }
-      result = `${reels.join(" | ")}${win ? ` — You won ${win} coins!` : ""}`;
-      show();
-    };
-    const show = () => {
-      const p = panel(host, "Slot machine", `<p class="crystal-slots">${escapeHtml(result)}</p><p>Coins: ${game.save.coins}</p><div class="buttons"><button data-bet="1">Bet 1</button><button data-bet="2">Bet 2</button><button data-bet="3">Bet 3</button><button class="secondary" id="back">Quit</button></div>`, "crystal-game");
-      for (const b of p.querySelectorAll<HTMLButtonElement>("[data-bet]")) b.onclick = () => spin(+b.dataset.bet!);
-      p.querySelector<HTMLButtonElement>("#back")!.onclick = () => { host.remove(); resolve(); };
-      p.querySelector<HTMLButtonElement>("[data-bet]")?.focus({ preventScroll: true });
-    };
-    show();
+    const sounds = { spin: "SFX_SLOT_MACHINE_START", stop: "SFX_STOP_SLOT", win: "SFX_GET_COIN_FROM_SLOTS" };
+    mountSlots(host, {
+      reels: REELS, payout: PAYOUT, label: LABEL,
+      coins: () => game.save.coins,
+      pay: coins => { game.save.coins = Math.max(0, Math.min(9999, game.save.coins + coins)); },
+      sfx: sound => game.sfx(sounds[sound]),
+      slips: first => Math.random() < 0.2 && (first !== "7" || Math.random() < 0.3),
+      onDone: () => {
+        host.remove();
+        resolve();
+      },
+    });
   });
 }
 
