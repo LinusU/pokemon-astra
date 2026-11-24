@@ -1,0 +1,44 @@
+.slots-screen {
+  position: absolute;
+  inset: 4%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px;
+  border: 4px double #284c3b;
+  background: #f7efd3;
+  color: #213e33;
+  font-family: "VT323", monospace;
+  font-size: 20px;
+}
+.slots-reels { display: flex; gap: 8px; padding: 6px; background: #2b2b38; border-radius: 4px; }
+.slots-reel { display: flex; flex-direction: column; gap: 2px; width: 64px; background: #fffbe9; border: 2px solid #111; }
+.slots-reel.spinning { filter: blur(.6px); }
+.slots-reel .sym { display: grid; place-items: center; height: 32px; font-weight: 700; }
+/* The rows in play: the middle on one coin, all three from two. */
+.slots-reels[data-bet="1"] .sym:nth-child(2),
+.slots-reels:is([data-bet="2"], [data-bet="3"]) .sym { outline: 2px solid #d03030; outline-offset: -2px; }
+.sym-7 { color: #d03030; font-size: 28px; }
+.sym-bar { color: #fff; background: #222; margin: 4px; }
+.sym-cherry { color: #b8203a; }
+.sym-fish, .sym-squirtle { color: #2f6fb0; }
+.sym-bird, .sym-staryu { color: #8a5a20; }
+.sym-mouse, .sym-pikachu { color: #c79a00; }
+.sym-ball { color: #d03030; }
+.slots-coins, .slots-message { margin: 0; text-align: center; }
+.slots-screen .menu-keys { align-self: stretch; }
+.slots-screen .menu-keys button,
+.slots-screen .menu-keys button:is(:hover, :focus-visible, [aria-current="true"]) {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+  color: inherit;
+  font: inherit;
+}
+.slots-bet button { color: #9a6a24; }
+.slots-bet.locked button { visibility: hidden; }
