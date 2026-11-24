@@ -77,7 +77,14 @@
 .crystal-puzzle { display: grid; grid-template-columns: repeat(4, 48px); gap: 3px; justify-content: center; }
 .crystal-puzzle button { height: 48px; font-family: "VT323", monospace; font-size: 22px; }
 .crystal-puzzle button.empty { visibility: hidden; }
-.crystal-slots { font-family: "VT323", monospace; font-size: 24px; text-align: center; }
+.crystal-flip { display: grid; grid-template-columns: repeat(var(--columns), minmax(0, 1fr)); gap: 2px; }
+.panel .crystal-flip button { height: 26px; margin: 0; padding: 0; border: 2px solid #9db59a; border-radius: 3px; background: #fffbe9; color: #213b30; font: 18px/1 "VT323", monospace; }
+.panel .crystal-flip button.head { border-color: transparent; background: transparent; }
+.crystal-flip img { height: 24px; image-rendering: pixelated; }
+.panel .crystal-flip button.bet { background: #ecdfb6; }
+.panel .crystal-flip button[aria-current="true"] { outline: none; box-shadow: none; border-color: #29483b; background: #29483b; color: #fff9dc; }
+.panel .crystal-flip button.drawn::after { content: "★"; color: #d03030; }
+.crystal-flip-message { margin: 4px 0 0; min-height: 1.1em; font: 20px/1.1 "VT323", monospace; }
 .crystal-hof { list-style: none; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 0; }
 .crystal-hof li { display: flex; flex-direction: column; align-items: center; }
 .crystal-hof img { width: 56px; height: 56px; image-rendering: pixelated; }
