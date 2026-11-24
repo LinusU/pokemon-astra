@@ -8,6 +8,7 @@ import type { Input } from "../game/input";
 import { BODY_RADIUS, WALK_SPEED, bodyTouches, heldHeading, walkFreely, walkSpeed } from "../game/free-movement";
 import type { GameAudio } from "../game/audio";
 import type { MenuInput } from "../ui/menu-input";
+import { dismissMenu } from "../ui/menu-controller";
 import { evolutionInput } from "../ui/evolution";
 import type { MusicScene } from "../game/music";
 import { escapeHtml, panel } from "../ui/shell";
@@ -673,9 +674,10 @@ export class YellowGame implements Game {
       } else {
         const top = this.layer.querySelector<HTMLElement>(".cartridge-map-overlay") ?? this.layer;
         if (input.hit("b")) {
-          const back = top.querySelector<HTMLButtonElement>("[data-bag-cancel], #back, #close");
+          const back = top.querySelector<HTMLButtonElement>("[data-bag-cancel], #back");
           if (back) back.click();
-        } else if (input.hit("menu")) top.querySelector<HTMLButtonElement>("#close")?.click();
+          else dismissMenu(top);
+        } else if (input.hit("menu")) dismissMenu(top);
         else this.ctx.menuInput.update(top, input, now, false);
       }
     } else if (this.mode === "battle") {

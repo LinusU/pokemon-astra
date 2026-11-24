@@ -3,6 +3,16 @@ import type { Action } from "../game/input";
 export type MenuControl = Extract<Action, "up" | "down" | "left" | "right" | "a">;
 type Controller = { input: (action: MenuControl) => void };
 const controllers = new WeakMap<Element, Controller>();
+const dismissHandlers = new WeakMap<Element, () => void>();
+
+export function setMenuDismiss(panel: HTMLElement, dismiss: () => void) {
+  dismissHandlers.set(panel, dismiss);
+}
+
+export function dismissMenu(layer: HTMLElement) {
+  const panel = layer.querySelector(":scope > .overlay > .panel");
+  if (panel) dismissHandlers.get(panel)?.();
+}
 
 /**
  * Gives a screen the D-pad and A outright, as a Game Boy screen has them:

@@ -1056,11 +1056,10 @@ function menu() {
     ["map", "Map"],
     ["journal", "Journal"],
     ["settings", "Options"],
-    ["close", "Exit"],
   ].filter(
     ([key]) =>
       save.flags.includes("partner") ||
-      ["map", "settings", "close"].includes(key) ||
+      ["map", "settings"].includes(key) ||
       (key === "bag" && Object.values(save.items).some((n) => n > 0)),
   );
   if (!options.some(([key]) => key === journeySelection))
@@ -1081,8 +1080,7 @@ function menu() {
     button.onfocus = () => { journeySelection = v; };
     button.onclick = () => {
       journeySelection = v;
-      if (v === "close") close();
-      else view(v);
+      view(v);
     };
   }
 }

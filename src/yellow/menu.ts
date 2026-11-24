@@ -3,6 +3,7 @@ import { mountPartnerSummary } from "../ui/partner-summary";
 import { cartridgeDex, mountPokedex, type DexState } from "../ui/pokedex";
 import { mountBag, type BagPocket, type BagState } from "../ui/bag";
 import { escapeHtml, panel, type PanelCursor } from "../ui/shell";
+import { setMenuDismiss } from "../ui/menu-controller";
 import { cycleOption, optionStep } from "../ui/options";
 import { download } from "../game/storage";
 import { SOUND_MODE_LABEL, soundSetting } from "../game/audio";
@@ -32,11 +33,12 @@ export function openYellowMenu(game: YellowGame): Promise<(() => Promise<void>) 
       const options: [string, string][] = [
         ...(game.ev("EVENT_GOT_POKEDEX") ? [["dex", "Pokédex"] as [string, string]] : []),
         ...(save.party.length ? [["party", "Pokémon"] as [string, string]] : []),
-        ["bag", "Item"], ["card", save.name], ["save", "Save"], ["options", "Option"], ["journeys", "Journeys"], ["close", "Exit"],
+        ["bag", "Item"], ["card", save.name], ["save", "Save"], ["options", "Option"], ["journeys", "Journeys"],
       ];
       if (!options.some(([k]) => k === selection)) selection = options[0][0];
       const p = panel(game.layer, "Menu", `<nav class="journey-list" aria-label="Start menu">${options.map(([k, label]) =>
-        `<button data-view="${k}"${k === "close" ? ' id="close"' : ""}>${escapeHtml(label)}</button>`).join("")}</nav>`, "journey-menu yellow-menu");
+        `<button data-view="${k}">${escapeHtml(label)}</button>`).join("")}</nav>`, "journey-menu yellow-menu");
+      setMenuDismiss(p, close);
       p.querySelector<HTMLButtonElement>(`[data-view="${selection}"]`)?.focus({ preventScroll: true });
       for (const b of p.querySelectorAll<HTMLButtonElement>("[data-view]")) {
         const v = b.dataset.view!;
@@ -51,7 +53,6 @@ export function openYellowMenu(game: YellowGame): Promise<(() => Promise<void>) 
     };
     const view = (v: string, index = 0) => {
       const { save, engine } = game;
-      if (v === "close") return close();
       if (v === "party") {
         game.layer.replaceChildren();
         mountParty(game.layer, {

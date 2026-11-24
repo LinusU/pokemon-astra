@@ -4,6 +4,7 @@ import { mountPartnerSummary } from "../ui/partner-summary";
 import { cartridgeDex, mountPokedex, type DexState } from "../ui/pokedex";
 import { mountBag, type BagPocket, type BagState } from "../ui/bag";
 import { escapeHtml, panel, type PanelCursor } from "../ui/shell";
+import { setMenuDismiss } from "../ui/menu-controller";
 import { cycleOption, optionStep } from "../ui/options";
 import { download } from "../game/storage";
 import { SOUND_MODE_LABEL, soundSetting } from "../game/audio";
@@ -129,11 +130,12 @@ export function openCrystalMenu(game: CrystalGame): Promise<(() => Promise<void>
         ...(save.party.length ? [["party", "Pokémon"] as [string, string]] : []),
         ...(contest ? [] : [["bag", "Pack"] as [string, string]]),
         ...(game.hasFlag("ENGINE_POKEGEAR") ? [["gear", "Pokégear"] as [string, string]] : []),
-        ["card", save.name], contest ? ["quit", "Quit"] : ["save", "Save"], ["options", "Option"], ...(contest ? [] : [["journeys", "Journeys"] as [string, string]]), ["close", "Exit"],
+        ["card", save.name], contest ? ["quit", "Quit"] : ["save", "Save"], ["options", "Option"], ...(contest ? [] : [["journeys", "Journeys"] as [string, string]]),
       ];
       if (!options.some(([k]) => k === selection)) selection = options[0][0];
       const p = panel(game.layer, "Menu", `<nav class="journey-list" aria-label="Start menu">${options.map(([k, label]) =>
-        `<button data-view="${k}"${k === "close" ? ' id="close"' : ""}>${escapeHtml(label)}</button>`).join("")}</nav>`, "journey-menu yellow-menu crystal-menu");
+        `<button data-view="${k}">${escapeHtml(label)}</button>`).join("")}</nav>`, "journey-menu yellow-menu crystal-menu");
+      setMenuDismiss(p, close);
       p.querySelector<HTMLButtonElement>(`[data-view="${selection}"]`)?.focus({ preventScroll: true });
       for (const b of p.querySelectorAll<HTMLButtonElement>("[data-view]")) {
         const v = b.dataset.view!;
@@ -149,7 +151,6 @@ export function openCrystalMenu(game: CrystalGame): Promise<(() => Promise<void>
     const run = (action: () => Promise<void>) => { game.layer.replaceChildren(); resolve(action); };
     const view = (v: string, index = 0) => {
       const { save, engine } = game;
-      if (v === "close") return close();
       if (v === "party") {
         game.layer.replaceChildren();
         mountParty(game.layer, {

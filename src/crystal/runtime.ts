@@ -9,6 +9,7 @@ import type { Input } from "../game/input";
 import type { GameAudio } from "../game/audio";
 import type { MusicScene } from "../game/music";
 import type { MenuInput } from "../ui/menu-input";
+import { dismissMenu } from "../ui/menu-controller";
 import { evolutionInput } from "../ui/evolution";
 import { BODY_RADIUS, bodyTouches, heldHeading, walkFreely, walkSpeed } from "../game/free-movement";
 import { JourneyConflict, type JourneyStore } from "../game/storage";
@@ -1039,8 +1040,11 @@ export class CrystalGame {
       // The topmost overlay, such as a party chooser over the Pack, takes the input.
       const overlays = this.layer.querySelectorAll<HTMLElement>(":scope > .crystal-overlay, :scope > .cartridge-map-overlay");
       const top = overlays[overlays.length - 1] ?? this.layer;
-      if (input.hit("b")) top.querySelector<HTMLButtonElement>("[data-bag-cancel], #back, #close")?.click();
-      else if (input.hit("menu")) top.querySelector<HTMLButtonElement>("#close")?.click();
+      if (input.hit("b")) {
+        const back = top.querySelector<HTMLButtonElement>("[data-bag-cancel], #back");
+        if (back) back.click();
+        else dismissMenu(top);
+      } else if (input.hit("menu")) dismissMenu(top);
       else this.ctx.menuInput?.update(top, input, now, false);
     }
     this.updateMovers(dt);
