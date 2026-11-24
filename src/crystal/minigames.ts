@@ -125,6 +125,14 @@ export function cardFlip(game: CrystalGame): Promise<void> {
   });
 }
 
+/** Which tile slides into the gap at `blank` when the pad is pressed, if there is one that way. */
+export function slideFrom(blank: number, action: Exclude<MenuControl, "a">) {
+  if (action === "up") return blank + 4 < 16 ? blank + 4 : undefined;
+  if (action === "down") return blank >= 4 ? blank - 4 : undefined;
+  if (action === "left") return blank % 4 < 3 ? blank + 1 : undefined;
+  return blank % 4 ? blank - 1 : undefined;
+}
+
 /** An Unown stone panel: slide the 15 pieces into order. Sets the script variable when solved. */
 export function unownPuzzle(game: CrystalGame): Promise<void> {
   if (!game.ctx.layer) { game.scriptVar = 1; return Promise.resolve(); }
@@ -132,28 +140,33 @@ export function unownPuzzle(game: CrystalGame): Promise<void> {
   return new Promise(resolve => {
     const host = overlay(game);
     const tiles = [...Array(15).keys()].map(i => i + 1).concat(0);
+    const DIRECTIONS = ["up", "down", "left", "right"] as const;
     // A solvable shuffle: random moves from the solved state.
-    let blank = 15;
     for (let i = 0; i < 200; i++) {
-      const options = [blank - 4, blank + 4, blank % 4 ? blank - 1 : -1, blank % 4 < 3 ? blank + 1 : -1].filter(n => n >= 0 && n < 16);
-      const n = options[Math.floor(Math.random() * options.length)];
-      [tiles[blank], tiles[n]] = [tiles[n], tiles[blank]];
-      blank = n;
+      const blank = tiles.indexOf(0), from = slideFrom(blank, DIRECTIONS[Math.floor(Math.random() * 4)]);
+      if (from !== undefined) [tiles[blank], tiles[from]] = [tiles[from], tiles[blank]];
     }
     const solved = () => tiles.every((t, i) => t === (i === 15 ? 0 : i + 1));
-    const show = () => {
-      const p = panel(host, "Stone panel", `<div class="crystal-puzzle">${tiles.map((t, i) => `<button data-tile="${i}" ${t ? "" : 'class="empty"'}>${t || ""}</button>`).join("")}</div><div class="buttons"><button class="secondary" id="back">Quit</button></div>`, "crystal-game");
-      for (const b of p.querySelectorAll<HTMLButtonElement>("[data-tile]")) b.onclick = () => {
-        const i = +b.dataset.tile!, e = tiles.indexOf(0);
-        if (![e - 4, e + 4, e % 4 ? e - 1 : -1, e % 4 < 3 ? e + 1 : -1].includes(i)) return;
-        [tiles[e], tiles[i]] = [tiles[i], tiles[e]];
-        game.sfx("SFX_POUND");
-        if (solved()) { host.remove(); game.scriptVar = 1; resolve(); return; }
-        show();
-      };
-      p.querySelector<HTMLButtonElement>("#back")!.onclick = () => { host.remove(); game.scriptVar = 0; resolve(); };
-      p.querySelector<HTMLButtonElement>("[data-tile]")?.focus({ preventScroll: true });
+    const p = panel(host, "Stone panel", `<div class="crystal-puzzle">${tiles.map((_, i) => `<button data-tile="${i}"></button>`).join("")}</div>
+      <footer class="menu-keys"><span><kbd>✚</kbd> Slide a piece into the gap</span><button id="back"><kbd>B</kbd> Quit</button></footer>`, "crystal-game");
+    const buttons = [...p.querySelectorAll<HTMLButtonElement>("[data-tile]")];
+    const paint = () => {
+      for (const [i, button] of buttons.entries()) {
+        button.textContent = tiles[i] ? String(tiles[i]) : "";
+        button.classList.toggle("empty", !tiles[i]);
+      }
     };
-    show();
+    const slide = (from: number | undefined) => {
+      const blank = tiles.indexOf(0);
+      if (from === undefined || !DIRECTIONS.some(d => slideFrom(blank, d) === from)) return;
+      [tiles[blank], tiles[from]] = [tiles[from], tiles[blank]];
+      game.sfx("SFX_POUND");
+      if (solved()) { host.remove(); game.scriptVar = 1; resolve(); return; }
+      paint();
+    };
+    for (const [i, button] of buttons.entries()) button.onclick = () => slide(i);
+    p.querySelector<HTMLButtonElement>("#back")!.onclick = () => { host.remove(); game.scriptVar = 0; resolve(); };
+    setMenuController(p, action => { if (action !== "a") slide(slideFrom(tiles.indexOf(0), action)); });
+    paint();
   });
 }

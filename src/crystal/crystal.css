@@ -77,6 +77,7 @@
 .crystal-puzzle { display: grid; grid-template-columns: repeat(4, 48px); gap: 3px; justify-content: center; }
 .crystal-puzzle button { height: 48px; font-family: "VT323", monospace; font-size: 22px; }
 .crystal-puzzle button.empty { visibility: hidden; }
+.panel .crystal-puzzle button[aria-current="true"] { outline: none; box-shadow: none; }
 .crystal-flip { display: grid; grid-template-columns: repeat(var(--columns), minmax(0, 1fr)); gap: 2px; }
 .panel .crystal-flip button { height: 26px; margin: 0; padding: 0; border: 2px solid #9db59a; border-radius: 3px; background: #fffbe9; color: #213b30; font: 18px/1 "VT323", monospace; }
 .panel .crystal-flip button.head { border-color: transparent; background: transparent; }
