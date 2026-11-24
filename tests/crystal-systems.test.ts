@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { GameAudio } from "../src/game/audio";
 import { CARTRIDGES, SUITES } from "./crystal-fixtures";
 import { hasEngine, headlessGame } from "./crystal-harness";
 import { C, CONST, ITEM, MAP, MON, MOVE } from "../src/crystal/symbols";
@@ -221,8 +222,26 @@ describe.skipIf(!hasEngine || !CARTRIDGES.length).each(SUITES)("Crystal's system
     await g.runScript(() => g.talkTo(mom));
     expect(g.hasFlag("ENGINE_MOM_SAVING_MONEY")).toBe(true);
     const money = g.save.money;
+    await g.warpTo(...MAP.ROUTE_30, 5, 30);
+    const areaMusic = g.musicScene();
+    const refreshMusic = vi.fn(() => g.musicScene());
+    g.ctx.sound = { refreshMusic } as unknown as GameAudio;
+    g.ctx.layer = { replaceChildren() {} } as HTMLElement;
+    g.ctx.sprite = () => "";
+    g.autoBattle = true;
+    const say = vi.spyOn(g, "say");
+    const introMusic = C("MUSIC_YOUNGSTER_ENCOUNTER");
+    g.playMusic(introMusic);
     g.battleSetup = { kind: "trainer", klass: C("YOUNGSTER"), id: C("JOEY1") };
-    expect(await g.startBattle()).toBe(C("WIN"));
+    vi.stubGlobal("window", { setTimeout });
+    try {
+      expect(await g.startBattle()).toBe(C("WIN"));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(refreshMusic.mock.results.map(r => r.value)).toEqual([introMusic, C("MUSIC_JOHTO_TRAINER_BATTLE"), areaMusic]);
+    expect(refreshMusic.mock.invocationCallOrder.at(-1)).toBeLessThan(say.mock.invocationCallOrder[0]);
+    expect(say).toHaveBeenCalledWith("Sent some to MOM!");
     expect(g.save.momMoney).toBeGreaterThan(0);
     expect(g.save.money - money).toBe(g.save.momMoney * 3);
   }, 60000);

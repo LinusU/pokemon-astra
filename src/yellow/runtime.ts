@@ -1546,6 +1546,7 @@ export class YellowGame implements Game {
     this.battleLaunch = launch;
     this.mode = "battle";
     this.inBattle = { trainer: !!options.trainer, klass: options.klass };
+    if (options.trainer) this.musicOverride = undefined;
     this.ctx.sound.refreshMusic();
     return new Promise(resolve => {
       const finish = (outcome: BattleOutcome) => {
@@ -1595,6 +1596,7 @@ export class YellowGame implements Game {
     const caught = battle.end === "caught", lost = battle.end === "loss";
     this.ctx.layer.replaceChildren();
     this.mode = "script";
+    if (options.trainer) this.ctx.sound.refreshMusic();
     if (caught) {
       const mon = result.party[result.caught!];
       if (mon && !mon.ot_name) mon.ot_name = this.save.name;

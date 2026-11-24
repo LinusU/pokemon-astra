@@ -209,6 +209,8 @@ export async function startBattle(game: CrystalGame): Promise<number> {
   };
   const canLose = battleType === C("BATTLETYPE_CANLOSE");
   const finished = await runBattle(game, start, trainerName, setup.kind === "trainer" ? setup.klass : undefined, battleType);
+  if (setup.kind === "trainer") game.playMusic(undefined);
+  else game.ctx.sound?.refreshMusic();
   if (!finished) return C("DRAW");
   const result = await applyResult(game, finished, bag, canLose, battleType, setup.kind === "trainer");
   // A trainer's parting words.
@@ -266,7 +268,6 @@ async function runBattle(game: CrystalGame, start: BattleOptions, trainerName: s
     game.battleCue = undefined;
     game.mode = previous === "battle" ? "script" : previous;
     game.ctx.layer.replaceChildren();
-    game.ctx.sound.refreshMusic();
   }
 }
 
