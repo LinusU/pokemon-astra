@@ -53,6 +53,7 @@ export interface Mover {
   moving?: boolean;
   onPath?: () => void;
   emote?: { kind: number; until: number };
+  treeShakeSince?: number;
   /** Hidden by a movement script (hide_object), but still there. */
   invisible?: boolean;
   fixedFacing?: boolean;
@@ -74,6 +75,7 @@ export type BattleSetup =
   | { kind: "trainer"; klass: number; id: number; winLoss?: [number, number] };
 
 const WALK_SECONDS = 1 / 4.2;
+const TREE_SHAKE_FRAMES = 24;
 
 export class CrystalGame {
   readonly rom: CrystalRom;
@@ -932,6 +934,17 @@ export class CrystalGame {
     this.shake = frames / 60;
     await this.delay(frames);
     this.shake = 0;
+  }
+  async shakeTree(m: Mover) {
+    m.treeShakeSince = this.clock;
+    await this.delay(TREE_SHAKE_FRAMES);
+    m.treeShakeSince = undefined;
+  }
+  treeShakeFrame(m: Mover) {
+    if (m.treeShakeSince === undefined) return;
+    const elapsed = (this.clock - m.treeShakeSince) * 60;
+    // SetFacingWeirdTree cycles through four poses, four frames per pose.
+    if (elapsed < TREE_SHAKE_FRAMES) return Math.floor((elapsed + 1) / 4) % 4;
   }
   async applyMovement(slot: number, at: number) {
     const { applyMovement } = await import("./movement");

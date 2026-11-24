@@ -83,7 +83,7 @@ export async function applyMovement(game: CrystalGame, slot: number, at: number)
         game.shake = 0;
         break;
       }
-      case 0x56: await game.delay(16); break; // tree_shake
+      case 0x56: await game.shakeTree(m); break; // tree_shake
       default: return;
     }
   }

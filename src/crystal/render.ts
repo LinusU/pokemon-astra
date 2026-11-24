@@ -65,7 +65,7 @@ export class CrystalRenderer {
       const leg = m.from ? Math.floor(m.walkFrame / WALK_SECONDS) : Math.floor(m.stride ?? 0);
       drawn.push({
         y: at.y, draw: () => {
-          const img = this.gfx.sprite(sprite, m.facing, walking, leg, pal, palKey);
+          const img = this.gfx.sprite(sprite, m.facing, walking, leg, pal, palKey, g.treeShakeFrame(m));
           if (!img) return;
           const x = Math.round(at.x - camX), y = Math.round(at.y - camY - 4 - at.lift);
           c.drawImage(img, x, y);

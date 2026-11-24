@@ -215,9 +215,16 @@ export class CrystalGraphics {
    * facings with a walking frame each; right is the left frame mirrored, and
    * up/down walking alternates feet by mirroring.
    */
-  sprite(sprite: number, facing: Facing, walking: boolean, leg: number, pal: Rgb[], palKey: string): HTMLCanvasElement | undefined {
+  sprite(sprite: number, facing: Facing, walking: boolean, leg: number, pal: Rgb[], palKey: string, treeShakeFrame?: number): HTMLCanvasElement | undefined {
+    const shakingTree = treeShakeFrame !== undefined && sprite === C("SPRITE_SUDOWOODO");
+    if (shakingTree) {
+      facing = "down";
+      walking = false;
+      leg = 0;
+    }
     leg %= 2;
-    const k = `${sprite}:${facing}:${walking}:${leg}:${palKey}`;
+    const tilted = shakingTree && treeShakeFrame % 2 === 1;
+    const k = `${sprite}:${facing}:${walking}:${leg}:${palKey}${tilted ? `:tree:${treeShakeFrame}` : ""}`;
     if (this.sprites.has(k)) return this.sprites.get(k);
     let c: HTMLCanvasElement | undefined;
     if (sprite >= C("SPRITE_POKEMON") && sprite < (CONST.SPRITE_VARS ?? 0xf0)) c = this.monIcon(sprite, walking, pal);
@@ -226,7 +233,11 @@ export class CrystalGraphics {
       const base = this.rom.at(this.rom.u8(entry + 3), this.rom.u16(entry));
       const type = this.rom.u8(entry + 4);
       let offset = 0, flip = false;
-      if (type !== C("STILL_SPRITE")) {
+      if (tilted) {
+        // FacingWeirdTree1 and FacingWeirdTree3 use tiles 4–7 in opposite orientations.
+        offset = 64;
+        flip = treeShakeFrame === 3;
+      } else if (type !== C("STILL_SPRITE")) {
         offset = { down: 0, up: 64, left: 128, right: 128 }[facing];
         flip = facing === "right";
         if (walking && type === C("WALKING_SPRITE")) {
