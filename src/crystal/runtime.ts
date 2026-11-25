@@ -33,6 +33,7 @@ export interface CrystalContext {
   canvas?: HTMLCanvasElement;
   sound?: GameAudio;
   sprite?: (mon: PokemonPortrait | number, back?: boolean) => string;
+  frontSpriteOffset?: (mon: PokemonPortrait) => number;
   spriteEntrance?: (mon: PokemonPortrait, back: boolean) => PortraitEntrance | undefined;
   cry?: (species: number) => void;
   store?: JourneyStore;

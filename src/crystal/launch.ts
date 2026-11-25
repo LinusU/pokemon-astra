@@ -20,6 +20,7 @@ export interface CrystalHost {
   sound: GameAudio;
   saveWarning: HTMLElement;
   sprite: (mon: PokemonPortrait | number, back?: boolean) => string;
+  frontSpriteOffset?: (mon: PokemonPortrait) => number;
   spriteEntrance?: (mon: PokemonPortrait, back: boolean) => PortraitEntrance | undefined;
   cry: (species: number) => void;
   activate: (game: CrystalRunner | undefined) => void;
@@ -185,7 +186,7 @@ async function start(host: CrystalHost, entry: JourneyEntry & { adventure: Cryst
   host.layer.replaceChildren();
   game = new CrystalGame({
     engine: host.engine, rom, input: host.input, menuInput: host.menuInput, layer: host.layer, canvas: host.canvas,
-    sound: host.sound, sprite: host.sprite, spriteEntrance: host.spriteEntrance, cry: host.cry, store, save: data, saveWarning: host.saveWarning,
+    sound: host.sound, sprite: host.sprite, frontSpriteOffset: host.frontSpriteOffset, spriteEntrance: host.spriteEntrance, cry: host.cry, store, save: data, saveWarning: host.saveWarning,
     exit: () => {
       game?.stop();
       host.activate(undefined);

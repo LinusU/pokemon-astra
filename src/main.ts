@@ -147,6 +147,9 @@ function sprite(mon: PokemonPortrait | number, back = false) {
   }
   return spriteCache.get(key)!;
 }
+function frontSpriteOffset(mon: PokemonPortrait) {
+  return emerald?.frontOffset(pokemonAppearance(mon)) ?? 0;
+}
 function spriteEntrance(mon: PokemonPortrait, back: boolean): PortraitEntrance | undefined {
   if (!emerald) return;
   const appearance = pokemonAppearance(mon);
@@ -261,7 +264,7 @@ const ADVENTURE_LIST: AdventureInfo[] = [
 ];
 function yellowHost(): YellowHost {
   return {
-    engine, input, menuInput, layer, canvas, sound, saveWarning, sprite, spriteEntrance, cry,
+    engine, input, menuInput, layer, canvas, sound, saveWarning, sprite, frontSpriteOffset, spriteEntrance, cry,
     activate: game => {
       yellow = game;
       mode = game ? "yellow" : "title";
@@ -1532,7 +1535,7 @@ function startBattle(species: number, level: number, o?: WorldObject, fishing = 
             ),
           }
         : { species, level, stationary: o?.kind === "legendary" };
-    battleLaunch = new BattleLaunch({ engine, layer, sound, sprite, spriteEntrance, cry }, {
+    battleLaunch = new BattleLaunch({ engine, layer, sound, sprite, frontSpriteOffset, spriteEntrance, cry }, {
       start: {
       party: save.party,
       opponent,

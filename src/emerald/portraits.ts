@@ -8,6 +8,8 @@ const FRAME_BYTES = SIDE * SIDE / 2;
 
 // Offsets for the English Emerald ROM identified above. See pokeemerald's
 // pokemon_graphics tables and sSpeciesToBackAnimSet in pokemon_animation.c.
+const FRONT_COORDINATES = 0x300d38;
+const ENEMY_ELEVATION = 0x305dcc;
 const FRONT_PICTURES = 0x30a18c;
 const BACK_PICTURES = 0x3028b8;
 const PALETTES = 0x303678;
@@ -72,6 +74,14 @@ export class EmeraldPortraits {
       }
     }
     return bytes;
+  }
+
+  frontOffset({ species, form }: PortraitAppearance) {
+    if (species < 1 || species > 251) return 0;
+    const id = species === 201 && form > 0 ? 412 + form : species;
+    // Emerald stores the front picture's bottom padding separately from its
+    // elevation. Grounded species use the padding alone.
+    return this.rom[FRONT_COORDINATES + id * 4 + 1] - this.rom[ENEMY_ELEVATION + species];
   }
 
   picture({ species, form, shiny }: PortraitAppearance, back: boolean) {

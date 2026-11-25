@@ -43,6 +43,7 @@ type Options = {
   snapshot: BattleSnapshot;
   act: (index: number) => BattleSnapshot;
   sprite: (mon: PokemonPortrait, back?: boolean) => string;
+  frontSpriteOffset?: (mon: PokemonPortrait) => number;
   spriteEntrance?: (mon: PokemonPortrait, back: boolean) => PortraitEntrance | undefined;
   species: (id: number) => { name: string; types?: number[] };
   move: (id: number, dvs?: number) => { name: string; type?: number; pp?: number; power?: number; description?: string };
@@ -569,7 +570,12 @@ export class BattlePresenter {
       if (image.dataset.species !== String(mon.species) || image.dataset.dvs !== traits) {
         image.dataset.dvs = traits;
         image.dataset.species = String(mon.species);
-        image.src = this.o.sprite(this.portrait(side), side === "player");
+        const portrait = this.portrait(side);
+        image.src = this.o.sprite(portrait, side === "player");
+        if (side === "enemy" && this.o.frontSpriteOffset) {
+          const offset = this.o.frontSpriteOffset(portrait);
+          image.style.setProperty("--front-offset", `${offset * 100 / 64}%`);
+        }
         image.alt = this.o.species(mon.species).name;
       }
       const status = battleStatus(mon.status);

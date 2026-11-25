@@ -19,6 +19,7 @@ export interface BattleHost {
   layer: HTMLElement;
   sound: GameAudio;
   sprite: (mon: PokemonPortrait, back?: boolean) => string;
+  frontSpriteOffset?: (mon: PokemonPortrait) => number;
   spriteEntrance?: (mon: PokemonPortrait, back: boolean) => PortraitEntrance | undefined;
   cry: (species: number) => void;
 }
@@ -125,6 +126,7 @@ export class BattleLaunch {
           snapshot: s,
           act: index => battle.act(index),
           sprite: host.sprite,
+          frontSpriteOffset: host.frontSpriteOffset,
           spriteEntrance: host.spriteEntrance,
           species: id => engine.species(id),
           move: (id, dvs) => engine.move(id, dvs),
