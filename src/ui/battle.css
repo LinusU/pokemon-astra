@@ -249,10 +249,11 @@
   animation: battle-withdraw calc(450ms * var(--battle-speed, 1)) forwards;
 }
 .battle-enemy.appear {
-  animation: battle-appear calc(500ms * var(--battle-speed, 1));
+  transform-origin: center bottom;
+  animation: battle-appear var(--reveal-duration) both;
 }
 .battle-player.appear {
-  --switch-duration: calc(500ms * var(--battle-speed, 1));
+  --switch-duration: var(--reveal-duration);
 }
 .battle-player.withdraw {
   --switch-duration: calc(450ms * var(--battle-speed, 1));
@@ -322,11 +323,12 @@
   75%, 100% { transform: scale(1); opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
+  .battle-enemy.appear,
   .battle-player.appear img {
-    animation-name: player-switch-fade;
+    animation-name: battle-switch-fade;
   }
   .battle-player.withdraw img {
-    animation-name: player-switch-fade;
+    animation-name: battle-switch-fade;
     animation-direction: reverse;
   }
   .battle-player:is(.appear, .withdraw)::before,
@@ -334,7 +336,7 @@
     display: none;
   }
 }
-@keyframes player-switch-fade {
+@keyframes battle-switch-fade {
   from { opacity: 0; }
   to { opacity: 1; }
 }

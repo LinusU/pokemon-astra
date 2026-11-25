@@ -16,7 +16,7 @@ npm run dev
 
 Open the URL Vite prints. On first launch, choose or drop **Pokémon Crystal (English), version 1.0**. The file name is not important; the supported ROM's SHA-1 is `f4cd194bdee0d04ca4eac29e09b8e4e9d818c133`. The ROM is read in the browser and stored in IndexedDB. It is never uploaded, included in the app bundle, or required by the production server. The supplied workspace ROM is used only for local verification.
 
-On the opening screen, **ROM manager** shows the cartridges available in this browser and lets you add them before starting a journey. Optionally select **Add Emerald** and choose an unmodified English Pokémon Emerald ROM (.gba, SHA-1 `f3ae088181bf583e55daf962a92bb46f4f1d07b7`). Every journey then uses Emerald Pokémon portraits, including shiny palettes and Unown forms. In battle, front sprites play Emerald's frame sequences and back sprites use short motions based on Emerald's species animation assignments. Select **Remove Emerald** to restore Crystal portraits. Crystal is still required to play.
+On the opening screen, **ROM manager** shows the cartridges available in this browser and lets you add them before starting a journey. Optionally select **Add Emerald** and choose an unmodified English Pokémon Emerald ROM (.gba, SHA-1 `f3ae088181bf583e55daf962a92bb46f4f1d07b7`). Every journey then uses Emerald Pokémon portraits, including shiny palettes and Unown forms. In battle, front sprites play shortened versions of Emerald's frame sequences and back sprites use short motions based on Emerald's species animation assignments. Select **Remove Emerald** to restore Crystal portraits. Crystal is still required to play.
 
 ```sh
 npm run build

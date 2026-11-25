@@ -702,8 +702,7 @@ export class BattlePresenter {
     if (event.Frontpic !== undefined) {
       this.o.cry(event.Frontpic);
       if (this.root.classList.contains("conceal-enemy")) {
-        this.conceal("enemy", false);
-        this.animate("enemy", "appear", 500);
+        this.reveal("enemy");
       } else {
         this.next();
       }
@@ -755,8 +754,7 @@ export class BattlePresenter {
             anchor: "user", count: 7,
           }, { event: a });
         } else {
-          this.conceal(user, false);
-          this.animate(user, "appear", 500, a);
+          this.reveal(user, a);
         }
         return;
       }
@@ -836,8 +834,12 @@ export class BattlePresenter {
       this.next();
     }, event && ((duration) => this.playAnimationSound(user, event, duration)));
   }
+  private reveal(side: Battler, event?: SoundAnimation) {
+    this.conceal(side, false);
+    this.animate(side, "appear", side === "enemy" ? 240 : 500, event);
+  }
   private animate(side: Battler, effect: string, duration: number, event?: SoundAnimation) {
-    const el = this.root.querySelector(`.battle-${side}`)!;
+    const el = this.root.querySelector<HTMLElement>(`.battle-${side}`)!;
     if (effect !== "appear" && (
       this.root.classList.contains(`conceal-${side}`) ||
       el.classList.contains("faint") ||
@@ -858,13 +860,14 @@ export class BattlePresenter {
       }
     }
     const speed = Math.max(0.25, this.o.speed);
+    if (effect === "appear") el.style.setProperty("--reveal-duration", `${duration / speed}ms`);
     if (event) this.playAnimationSound(side, event, duration / speed);
     el.classList.add(effect);
     this.delay(duration, () => {
       if (effect !== "faint" && effect !== "withdraw")
         el.classList.remove(effect);
       if (!entrance) return this.next();
-      this.stopEntrance = playPortraitEntrance(el.querySelector("img")!, entrance, speed, () => {
+      this.stopEntrance = playPortraitEntrance(el.querySelector("img")!, entrance, side === "player", speed, () => {
         this.stopEntrance = undefined;
         this.next();
       });
