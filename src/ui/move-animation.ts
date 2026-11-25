@@ -39,14 +39,14 @@ export function drawMove(
   reduced = false,
 ) {
   const { width, height } = ctx.canvas;
+  const direction = opponent.x >= from.x ? 1 : -1;
+  const aim = miss ? offset(opponent, direction * 27, -22) : opponent;
   const at = visual.anchor === "field" ? { x: width / 2, y: height / 2 }
-    : visual.anchor === "user" ? from : opponent;
+    : visual.anchor === "user" ? from : aim;
   const [light, fill, ink] = colors[visual.palette];
   const size = (visual.scale ?? 1) * 26;
   const count = visual.count ?? 1;
   const along = angleOf(from, at);
-  const end = miss ? offset(between(from, at, 1.2), 0, -20) : at;
-  const direction = opponent.x >= from.x ? 1 : -1;
   const impact = contactTime(visual);
   const glyph = (p: Point, scale: number, opacity = 1, angle = 0, motif = visual.motif) => {
     ctx.globalAlpha = clamp(opacity);
@@ -87,7 +87,7 @@ export function drawMove(
       break;
     }
     case "discharge":
-      drawDischarge(ctx, visual, end, t, miss, reduced);
+      drawDischarge(ctx, visual, at, t, miss, reduced);
       break;
     case "flood":
       drawSurf(ctx, t, direction > 0);
@@ -100,7 +100,7 @@ export function drawMove(
       for (let i = 0; i < count; i++) {
         const f = clamp((t - .12 - i * .065) * 1.85);
         const reach = size * .81;
-        const center = offset(end, (i - (count - 1) / 2) * size * .28, 0);
+        const center = offset(at, (i - (count - 1) / 2) * size * .28, 0);
         const slant = param % 2 ? -direction : direction;
         const edge = clamp(f * 2.9);
         const tail = clamp((f - .3) * 1.6);
@@ -126,7 +126,7 @@ export function drawMove(
     }
     case "rush": {
       const dash = clamp((t - .09) / .36);
-      const reach = between(from, end, dash * dash);
+      const reach = between(from, at, dash * dash);
       for (let i = 0; i < count; i++) {
         const spread = (i - (count - 1) / 2) * 4;
         const tip = offset(reach, -direction * (i % 3) * 4, spread);
@@ -139,13 +139,13 @@ export function drawMove(
         ctx.lineTo(tip.x, tip.y);
         ctx.stroke();
       }
-      glyph(reach, .6 + .4 * dash, peak(t), along);
+      glyph(reach, .6 + .4 * dash, peak(t), visual.motif === "rock" ? direction * t * TAU * 2 : along);
       if (!miss) glyph(at, 1.3, peak((t - .38) / .57), 0, "spark");
       break;
     }
     case "inferno": {
       const flight = clamp(t / impact);
-      const head = between(from, end, flight);
+      const head = between(from, at, flight);
       for (let i = 0; i < 5; i++) {
         const a = i * TAU / 5 + t * 11;
         glyph(offset(head, Math.cos(a) * 9, Math.sin(a) * 9), .52, peak(flight));
@@ -154,9 +154,21 @@ export function drawMove(
       const bloom = clamp((t - .36) / .64);
       // The five strokes of Fire Blast open from the ember at contact.
       for (const [dx, dy] of [[0, -1], [-1, -.26], [1, -.26], [-.72, .85], [.72, .85]]) {
-        for (let i = 0; i < 4; i++) {
-          const r = size * (i + .6) / 3 * (1 - (1 - bloom) ** 3);
-          glyph(offset(at, dx * r, dy * r), .55 - i * .055, peak(bloom));
+        const stretch = (1 - (1 - bloom) ** 3) * size * 1.24;
+        ctx.globalAlpha = peak(bloom);
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(at.x, at.y);
+        ctx.lineTo(at.x + dx * stretch, at.y + dy * stretch);
+        ctx.strokeStyle = ink;
+        ctx.lineWidth = size * .26;
+        ctx.stroke();
+        ctx.strokeStyle = fill;
+        ctx.lineWidth = size * .20;
+        ctx.stroke();
+        for (let i = 0; i < 3; i++) {
+          const r = stretch * (i + .7) / 2.7;
+          glyph(offset(at, dx * r, dy * r), .48 - i * .06, peak(bloom));
         }
       }
       break;
@@ -164,7 +176,7 @@ export function drawMove(
     case "triad": {
       const travel = clamp((t - .12) / .45);
       const f = clamp((t - .53) / .47);
-      const center = between(from, end, travel);
+      const center = between(from, at, travel);
       const elements = [["fire", "red"], ["ice", "ice"], ["bolt", "gold"]] as const;
       const vertices = elements.map((_, i) => {
         const angle = -Math.PI / 2 + i * TAU / 3 + travel * TAU / 3;
@@ -250,15 +262,15 @@ export function drawMove(
       for (let i = 0; i < count; i++) {
         const f = (t - 0.20 * i / count) / travel;
         if (f < 0 || f >= 1) continue;
-        const p = between(from, end, f);
-        const lift = visual.pattern === "arc" ? -Math.min(46, (from.y + end.y) * .33) * peak(f) : 0;
+        const p = between(from, at, f);
+        const lift = visual.pattern === "arc" ? -Math.min(46, (from.y + at.y) * .33) * peak(f) : 0;
         const spread = (i - (count - 1) / 2) * 5 * peak(f);
         const directional = ["needle", "wing", "leaf", "glint", "dragon"].includes(visual.motif);
         const rotation = visual.pattern === "arc" ? f * TAU : directional ? along : 0;
         const tip = offset(p, 0, lift + spread);
         if (count <= 2) {
           const behind = Math.max(0, f - .055);
-          const trail = between(from, end, behind);
+          const trail = between(from, at, behind);
           glyph(offset(trail, 0, lift + spread), .55, .35 * peak(f), rotation);
         }
         glyph(tip, count > 2 ? 0.52 + 0.18 * (i % 2) : 0.86, 1, rotation);
@@ -270,16 +282,18 @@ export function drawMove(
       break;
     }
     case "boomerang": {
-      const turnsAt = miss ? end : at;
       const f = t <= 0.5 ? t * 2 : (1 - t) * 2;
-      const bend = Math.sin(t * TAU) * -27;
-      glyph(offset(between(from, turnsAt, f), 0, bend), 1, Math.min(1, peak(t) * 4), t * TAU * 2);
+      const exchange = visual.motif === "heart";
+      const bend = Math.sin(t * TAU) * (exchange ? -14 : -27);
+      glyph(offset(between(from, at, f), 0, bend), 1, Math.min(1, peak(t) * 4),
+        visual.motif === "bone" ? t * TAU * 2 : 0);
+      if (exchange && !miss) glyph(offset(between(at, from, f), 0, -bend), .7, peak(t), 0, "plus");
       if (!miss) glyph(at, 0.68, clamp(1 - Math.abs(t - 0.5) * 9), 0, "spark");
       break;
     }
     case "beam": {
-      const head = between(from, end, clamp(t / impact));
-      const tail = between(from, end, clamp((t - .66) / .34));
+      const head = between(from, at, clamp(t / impact));
+      const tail = between(from, at, clamp((t - .66) / .34));
       const normal = { x: -Math.sin(along), y: Math.cos(along) };
       const stream = (f: number, sway: number) => offset(between(tail, head, f), normal.x * sway, normal.y * sway);
       const { motif } = visual;
@@ -335,7 +349,7 @@ export function drawMove(
         ctx.beginPath();
         for (let j = 0; j <= 28; j++) {
           const f = tail + (head - tail) * j / 28;
-          const p = between(from, end, f);
+          const p = between(from, at, f);
           const sway = aurora ? (i - 1.5) * 3 + Math.sin(f * 8 - t * 10) * 4
             : Math.sin(f * 18 - t * 16 + i * TAU / 3) * 9;
           const y = p.y + sway * peak(f);
@@ -375,25 +389,52 @@ export function drawMove(
     case "orbit":
     case "link": {
       if (miss && visual.anchor !== "user") break;
-      for (let i = 0; i < Math.max(count, 3); i++) {
-        const turn = (t * (visual.pattern === "link" ? -0.8 : 0.8) + i / Math.max(count, 3)) * TAU;
-        const center = visual.pattern === "link" ? between(at, from, clamp(t * 1.3 - i * 0.06)) : at;
-        const radius = visual.pattern === "link" ? size * 0.6 * (1 - t) : size * (0.95 - t * 0.4);
-        glyph(offset(center, Math.cos(turn) * radius, Math.sin(turn) * radius * 0.63),
-          count === 1 ? 0.66 : 0.55, Math.min(1, peak(t) * 2), visual.motif === "wind" ? turn : 0);
+      const link = visual.pattern === "link";
+      const total = Math.max(count, 3);
+      for (let i = 0; i < total; i++) {
+        const travel = clamp((t - .21 * i / (total - 1)) / .79);
+        const turn = (t * (link ? -.95 : .85) + i / total) * TAU;
+        const center = link ? between(at, from, travel) : at;
+        const radius = link ? size * (.85 - travel * .74) : size * (1.16 - t * .46);
+        const arc = link ? -20 * peak(travel) : 0;
+        const position = (a: number) => offset(center, Math.cos(a) * radius, arc + Math.sin(a) * radius * .62);
+        const depth = (Math.sin(turn) + 1) / 2;
+        const visible = link ? peak(travel) : Math.min(1, peak(t) * 2);
+        glyph(position(turn - .28), .23, visible * .48, turn, "glint");
+        glyph(position(turn), .41 + depth * .31, visible * (.63 + .37 * depth), visual.motif === "wind" ? turn : 0);
       }
       break;
     }
     case "vortex": {
       if (miss && visual.anchor !== "user") break;
       const total = Math.max(count, 7);
+      const whirlpool = visual.motif === "drop";
+      const spiral = (u: number) => {
+        const angle = direction * (u * TAU * 2.4 + t * TAU * 1.4);
+        const radius = size * (.23 + u * 1.19) * (.5 + peak(t) * .62);
+        return offset(at, Math.cos(angle) * radius,
+          whirlpool ? 12 + Math.sin(angle) * radius * .36 - u * 5 : 22 - u * 52 + Math.sin(angle) * 5);
+      };
+      if (whirlpool || visual.motif === "wind" || visual.motif === "fire") {
+        ctx.globalAlpha = peak(t) * .73;
+        ctx.beginPath();
+        for (let i = 0; i <= 64; i++) {
+          const p = spiral(i / 64);
+          if (!i) ctx.moveTo(p.x, p.y);
+          else ctx.lineTo(p.x, p.y);
+        }
+        ctx.strokeStyle = fill;
+        ctx.lineWidth = whirlpool ? 4.5 : 2;
+        ctx.stroke();
+        ctx.strokeStyle = light;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
       for (let i = 0; i < total; i++) {
-        const spin = t * TAU * 1.5 + i * 2.4;
-        const vertical = i / (total - 1);
-        const radius = (0.42 + vertical * 1.1) * size * (0.65 + peak(t) * 0.45);
-        glyph(offset(at, Math.cos(spin) * radius, 21 - vertical * 55 + Math.sin(spin) * 7),
-          0.35 + 0.4 * vertical, peak(t) * (0.76 + Math.sin(spin) * 0.24),
-          visual.motif === "wind" || visual.motif === "petal" ? spin : 0);
+        const u = i / (total - 1);
+        const turn = direction * (u * TAU * 2.4 + t * TAU * 1.4);
+        glyph(spiral(u), .24 + .45 * u, peak(t) * (.8 + Math.sin(turn) * .2),
+          visual.motif === "wind" || visual.motif === "petal" ? turn : 0);
       }
       break;
     }
@@ -484,26 +525,40 @@ export function drawMove(
       break;
     }
     case "wave": {
-      // Curved fronts read as sound, breath, surf or a gust depending on the glyphs that ride them.
+      const sound = ["ring", "wind", "slash", "sleep"].includes(visual.motif);
       for (let i = 0; i < Math.max(3, count); i++) {
         const f = (t - .30 * i / Math.max(2, count - 1)) / .70;
         if (f <= 0 || f >= 1) continue;
-        const p = between(from, end, f);
+        const p = between(from, at, f);
         const radius = size * (0.35 + f * 1.0);
-        ctx.beginPath();
-        ctx.ellipse(p.x, p.y, radius, radius * 0.72, along, -1.1, 1.1);
-        ctx.globalAlpha = peak(f) * 0.85;
-        ctx.strokeStyle = i % 2 ? fill : light;
-        ctx.lineWidth = 2.4;
-        ctx.stroke();
-        glyph(offset(p, Math.sin(i * 3) * 10, Math.cos(i * 3) * 11), 0.58 + f * 0.2, peak(f));
+        if (sound) {
+          ctx.beginPath();
+          ctx.ellipse(p.x, p.y, radius, radius * .72, along, -1.1, 1.1);
+          ctx.globalAlpha = peak(f);
+          ctx.strokeStyle = i % 2 ? fill : ink;
+          ctx.lineWidth = 2.1;
+          ctx.stroke();
+        }
+        const bob = Math.sin(f * TAU * 1.35 + i) * (sound ? 5 : 13);
+        glyph(offset(p, Math.sin(i * 3) * 8, bob), .55 + f * .33, peak(f),
+          visual.motif === "dragon" ? along : bob * .019);
+
       }
       break;
     }
     case "shield": {
-      glyph(offset(at, 0, -4), 0.9 + peak(t) * 1.4, peak(t) * 0.56);
-      for (let i = -1; i <= 1; i++)
-        glyph(offset(at, i * size * 0.95, -peak(t) * 22), 0.28, peak(t), 0, "glint");
+      const pane = visual.motif === "screen" || visual.motif === "mirror";
+      const origin = offset(at, pane ? direction * size * .51 : 0, -4);
+      const open = clamp(t * 3.4);
+      glyph(origin, .45 + (1 - (1 - open) ** 2) * 1.7, peak(t) * .65);
+      // Light travels across a raised screen. Shells and domes catch it on the rim.
+      for (let i = 0; i < 3; i++) {
+        const f = clamp((t - .18 - i * .09) / .55);
+        const angle = f * Math.PI - Math.PI;
+        const x = pane ? (f - .5) * size * 1.4 : Math.cos(angle) * size * .9;
+        const y = pane ? (.5 - f) * size * 1.5 : Math.sin(angle) * size * .85;
+        glyph(offset(origin, x, y), .21 + .12 * peak(f), peak(f), 0, "glint");
+      }
       break;
     }
     case "echo": {
@@ -622,7 +677,13 @@ export function playMove(
         }
         ctx.globalAlpha = 1;
       }
-      drawMove(ctx, visual, center(attacker), center(defender), reduced ? (visual.pattern === "flood" ? .32 : .51) : t, options.miss, options.param, reduced);
+      // Hold a readable pose for reduced motion, including moves with multiple beats.
+      let phase = t;
+      if (reduced) {
+        phase = visual.pattern === "flood" ? .32 : .51;
+        if (visual.pattern === "hit") phase = .09 + .425 / (visual.count ?? 1);
+      }
+      drawMove(ctx, visual, center(attacker), center(defender), phase, options.miss, options.param, reduced);
     }
     frame = requestAnimationFrame(step);
   };

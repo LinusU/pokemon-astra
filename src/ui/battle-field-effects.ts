@@ -51,6 +51,20 @@ export function drawSurf(ctx: CanvasRenderingContext2D, t: number, rightward: bo
     ctx.lineTo(x + 13 + i % 8, y - 1);
     ctx.stroke();
   }
+  // Air pearls rise on the leading current while the crest is above the viewport.
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 17; i++) {
+    const x = (i * 61 + t * 32 + Math.sin(t * 6 + i) * 4) % width;
+    const y = (i * 41 + height - t * 63 + height) % height;
+    const r = 1.7 + i % 3;
+    ctx.globalAlpha = .65 * swell(t);
+    ctx.strokeStyle = "#99e7f4";
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, TAU);
+    ctx.stroke();
+    ctx.fillStyle = "#e0ffff";
+    ctx.fillRect(Math.round(x - r + 1), Math.round(y - r), 2, 1);
+  }
   ctx.restore();
 }
 

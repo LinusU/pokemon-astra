@@ -48,7 +48,9 @@ describe("battle presentation", () => {
     const table = source.match(/const MOVE_NAMES: &\[&str\] = &\[([\s\S]*?)\];/)![1];
     const names = Array.from(table.matchAll(/"([^"]+)"/g), (entry) => entry[1]);
     expect(names).toHaveLength(251);
-    expect(names.filter((name) => !findMoveVisual(name))).toEqual([]);
+    const profiles = names.map((name) => findMoveVisual(name));
+    expect(profiles).not.toContain(undefined);
+    expect(new Set(profiles.map((profile) => JSON.stringify(profile))).size).toBe(names.length);
   });
   it("gives contact moves and thrown objects distinct staging", () => {
     expect(findMoveVisual("Bite")).toMatchObject({ motif: "jaw", pattern: "hit" });
@@ -57,6 +59,8 @@ describe("battle presentation", () => {
     expect(findMoveVisual("Rock Slide")).toMatchObject({ motif: "rock", pattern: "fall" });
   });
   it("stages beams, field attacks, and charge turns separately", () => {
+    expect(findMoveVisual("ThunderShock")).toMatchObject({ pattern: "discharge" });
+    expect(findMoveVisual("Thunderbolt")).toMatchObject({ pattern: "discharge", count: 3 });
     expect(findMoveVisual("Thunder")).toMatchObject({ motif: "bolt", pattern: "column" });
     expect(findMoveVisual("Surf")).toMatchObject({ pattern: "flood", anchor: "field" });
     expect(findMoveVisual("Earthquake")).toMatchObject({ motif: "crack", anchor: "field" });
