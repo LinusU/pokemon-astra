@@ -74,7 +74,9 @@ import {
 } from "./world";
 import { pokemonAppearance, type PokemonPortrait } from "./engine/appearance";
 import type { Engine, Pokemon } from "./engine";
+import type { EmeraldPortraits, PortraitEntrance } from "./emerald/portraits";
 import { openCartridge } from "./ui/cartridge";
+import { mountRomManager, storedEmerald } from "./ui/rom-manager";
 import { removeDevelopmentWorker, setupOfflinePlay } from "./ui/offline";
 import "./styles.css";
 import "./ui/settings.css";
@@ -108,35 +110,67 @@ let engine: Engine,
 const has = (r?: Requirement) =>
   meetsRequirement(save, r, (id) => engine.species(id).types);
 const spriteCache = new Map<string, string>();
+const entranceCache = new Map<string, PortraitEntrance>();
+let emerald: EmeraldPortraits | undefined;
+function useEmerald(rom: EmeraldPortraits | undefined) {
+  if (rom === emerald) return;
+  emerald = rom;
+  spriteCache.clear();
+  entranceCache.clear();
+}
+function spriteUrl(pixels: ImageData, side: number, back: boolean) {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = side;
+  let bottom = pixels.height;
+  if (back) {
+    // Some back sprites end in transparent rows. Align the last visible row.
+    for (let alpha = pixels.data.length - 1; alpha >= 3; alpha -= 4) {
+      if (pixels.data[alpha] === 0) continue;
+      bottom = Math.floor(alpha / (pixels.width * 4)) + 1;
+      break;
+    }
+  }
+  canvas.getContext("2d")!.putImageData(pixels, Math.floor((side - pixels.width) / 2), side - bottom);
+  return canvas.toDataURL();
+}
 function sprite(mon: PokemonPortrait | number, back = false) {
   const appearance = pokemonAppearance(mon);
   const key = `${appearance.species}:${back}:${appearance.form}:${appearance.shiny}`;
   if (!spriteCache.has(key)) {
     try {
-      const pixels = engine.sprite(appearance.species, back, appearance),
-        c = document.createElement("canvas");
-      c.width = 56;
-      c.height = 56;
-      let bottom = pixels.height;
-      if (back) {
-        // Some back sprites end in transparent rows. Align the last visible row.
-        for (let alpha = pixels.data.length - 1; alpha >= 3; alpha -= 4) {
-          if (pixels.data[alpha] === 0) continue;
-          bottom = Math.floor(alpha / (pixels.width * 4)) + 1;
-          break;
-        }
-      }
-      c.getContext("2d")!.putImageData(
-        pixels,
-        Math.floor((56 - pixels.width) / 2),
-        56 - bottom,
-      );
-      spriteCache.set(key, c.toDataURL());
+      const picture = emerald?.picture(appearance, back);
+      const pixels = picture?.frame() ?? engine.sprite(appearance.species, back, appearance);
+      spriteCache.set(key, spriteUrl(pixels, picture ? 64 : 56, back));
     } catch {
       return "";
     }
   }
   return spriteCache.get(key)!;
+}
+function spriteEntrance(mon: PokemonPortrait, back: boolean): PortraitEntrance | undefined {
+  if (!emerald) return;
+  const appearance = pokemonAppearance(mon);
+  const key = `${appearance.species}:${back}:${appearance.form}:${appearance.shiny}`;
+  const cached = entranceCache.get(key);
+  if (cached) return cached;
+  const commands = back ? [] : emerald.frontFrames(appearance.species);
+  let entrance: PortraitEntrance = { motion: emerald.motion(mon, back) };
+  if (commands.length) {
+    const picture = emerald.picture(appearance, false)!;
+    const images = new Map<string, string>();
+    const frames = commands.map(({ frame, duration, hFlip, vFlip }) => {
+      const key = `${frame}:${hFlip}:${vFlip}`;
+      if (!images.has(key)) {
+        images.set(key, frame === 0 && !hFlip && !vFlip
+          ? sprite(mon)
+          : spriteUrl(picture.frame(frame, hFlip, vFlip), 64, false));
+      }
+      return { image: images.get(key)!, duration };
+    });
+    if (images.size > 1) entrance = { frames };
+  }
+  entranceCache.set(key, entrance);
+  return entrance;
 }
 const sound = new GameAudio(scene, updateSoundButton);
 function updateSoundButton() {
@@ -227,7 +261,7 @@ const ADVENTURE_LIST: AdventureInfo[] = [
 ];
 function yellowHost(): YellowHost {
   return {
-    engine, input, menuInput, layer, canvas, sound, saveWarning, sprite, cry,
+    engine, input, menuInput, layer, canvas, sound, saveWarning, sprite, spriteEntrance, cry,
     activate: game => {
       yellow = game;
       mode = game ? "yellow" : "title";
@@ -267,6 +301,7 @@ async function journeys(error?: string) {
   mountJourneyList(layer, {
     entries, adventures: ADVENTURE_LIST.map(a => missing.has(a.id) ? { ...a, note: notes[a.id] } : a),
     sprite, cursor: journeyCursor, error,
+    onManageRoms: () => mountRomManager(layer, { crystal: engine.cartridge, emerald, onEmerald: useEmerald, back: () => void journeys() }),
     onContinue: entry => {
       if (isYellowAdventure(entry.adventure)) return void continueYellowJourney(yellowHost(), { ...entry, adventure: entry.adventure });
       if (isCrystalAdventure(entry.adventure)) return void continueCrystalJourney(crystalHost(), { ...entry, adventure: entry.adventure });
@@ -1497,7 +1532,7 @@ function startBattle(species: number, level: number, o?: WorldObject, fishing = 
             ),
           }
         : { species, level, stationary: o?.kind === "legendary" };
-    battleLaunch = new BattleLaunch({ engine, layer, sound, sprite, cry }, {
+    battleLaunch = new BattleLaunch({ engine, layer, sound, sprite, spriteEntrance, cry }, {
       start: {
       party: save.party,
       opponent,
@@ -1924,8 +1959,8 @@ function frame(now: number) {
     );
     if (back) back.click();
     else close();
-  } else if ((mode === "title" || mode === "intro") && input.hit("b")) {
-    layer.querySelector<HTMLButtonElement>("#cancel, #back")?.click();
+  } else if ((mode === "title" || mode === "intro" || mode === "welcome") && input.hit("b")) {
+    layer.querySelector<HTMLButtonElement>("#cancel:enabled, #back:enabled")?.click();
   } else if (mode === "menu" && input.hit("menu")) close();
   else if (mode === "battle" && input.hit("b")) battleLaunch?.back();
   else if (mode === "evolution-result") evolutionInput(layer, input);
@@ -1971,8 +2006,13 @@ if ("serviceWorker" in navigator) {
   }
 }
 mode = "welcome";
-openCartridge(layer, ready => {
+const emeraldReady = storedEmerald().then(useEmerald).catch(() => {});
+openCartridge(layer, async ready => {
   engine = ready;
   renderer.setEngine(engine);
+  await emeraldReady;
   void journeys();
+}, async (back, addCrystal) => {
+  await emeraldReady;
+  mountRomManager(layer, { emerald, onEmerald: useEmerald, back, addCrystal });
 });

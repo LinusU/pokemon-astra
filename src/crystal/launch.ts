@@ -1,6 +1,7 @@
 /** Starting and continuing Crystal and Crystal Legacy journeys from the journey list. */
 import type { Engine } from "../engine";
 import type { PokemonPortrait } from "../engine/appearance";
+import type { PortraitEntrance } from "../emerald/portraits";
 import { soundSetting, type GameAudio } from "../game/audio";
 import type { Input } from "../game/input";
 import type { MusicScene } from "../game/music";
@@ -19,6 +20,7 @@ export interface CrystalHost {
   sound: GameAudio;
   saveWarning: HTMLElement;
   sprite: (mon: PokemonPortrait | number, back?: boolean) => string;
+  spriteEntrance?: (mon: PokemonPortrait, back: boolean) => PortraitEntrance | undefined;
   cry: (species: number) => void;
   activate: (game: CrystalRunner | undefined) => void;
   journeys: (error?: string) => void;
@@ -59,10 +61,10 @@ export async function readCrystalBackup(data: { adventure: CrystalAdventure }) {
 }
 
 /** Asks for Crystal Legacy: the patched cartridge, or the official patch applied to Astra's Crystal. */
-function importLegacy(host: CrystalHost, back: () => void): Promise<Uint8Array | undefined> {
+export function importCrystalLegacy(layer: HTMLElement, crystal: Uint8Array, back: () => void): Promise<Uint8Array | undefined> {
   return new Promise(resolve => {
     const show = (message = "", error = true) => {
-      const p = panel(host.layer, "Pokémon Crystal Legacy",
+      const p = panel(layer, "Pokémon Crystal Legacy",
         `<p>This adventure plays Johto and Kanto as rebalanced by Crystal Legacy (by TheSmithPlays), read from your own cartridge. Choose your Pokémon Crystal patched with Crystal Legacy V1.3.1, or just the official V1.3.1 “USA 1.0” patch (.bps): Astra applies it in this browser to the Crystal cartridge you already gave it.</p><div class="drop"><button id="choose-rom">Choose file</button><input hidden type="file" multiple accept=".gb,.gbc,.bps,application/octet-stream"><span class="drop-hint">or drop it onto the screen</span></div>${message ? `<p ${error ? 'role="alert" class="error"' : 'role="status"'}>${escapeHtml(message)}</p>` : ""}<p class="cartridge-note">Your cartridge stays in this browser.</p><div class="buttons"><button class="secondary" id="back">Back</button></div>`,
         "rom-import arrival-card");
       const input = p.querySelector<HTMLInputElement>("input")!;
@@ -75,7 +77,7 @@ function importLegacy(host: CrystalHost, back: () => void): Promise<Uint8Array |
           let legacy: Uint8Array | undefined;
           if (isBps(bytes)) {
             try {
-              legacy = applyBps(host.engine.cartridge, bytes);
+              legacy = applyBps(crystal, bytes);
             } catch (error) {
               return show(error instanceof BpsError ? `${error.message} Choose the official Crystal Legacy V1.3.1 patch for the English Pokémon Crystal (USA 1.0).` : "The patch could not be applied.");
             }
@@ -106,7 +108,7 @@ async function cartridge(host: CrystalHost, adventure: CrystalAdventure, back: (
       return bytes;
     } catch { /* ask again */ }
   }
-  return importLegacy(host, back);
+  return importCrystalLegacy(host.layer, host.engine.cartridge, back);
 }
 
 export async function newCrystalJourney(host: CrystalHost, adventure: CrystalAdventure, back: () => void) {
@@ -183,7 +185,7 @@ async function start(host: CrystalHost, entry: JourneyEntry & { adventure: Cryst
   host.layer.replaceChildren();
   game = new CrystalGame({
     engine: host.engine, rom, input: host.input, menuInput: host.menuInput, layer: host.layer, canvas: host.canvas,
-    sound: host.sound, sprite: host.sprite, cry: host.cry, store, save: data, saveWarning: host.saveWarning,
+    sound: host.sound, sprite: host.sprite, spriteEntrance: host.spriteEntrance, cry: host.cry, store, save: data, saveWarning: host.saveWarning,
     exit: () => {
       game?.stop();
       host.activate(undefined);

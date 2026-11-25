@@ -19,6 +19,7 @@ export interface JourneyListOptions {
   error?: string;
   onContinue: (entry: JourneyEntry) => void;
   onNew: (adventure: AdventureId) => void;
+  onManageRoms: () => void;
   onExport: (entry: JourneyEntry) => void;
   onDelete: (entry: JourneyEntry) => Promise<void>;
   /** Restore a backup file as a new journey. Resolves to an error message on failure. */
@@ -45,7 +46,7 @@ export function mountJourneyList(layer: HTMLElement, options: JourneyListOptions
   const p = panel(layer, options.entries.length ? "Your journeys" : "Begin a journey",
     `${options.entries.length ? `<div class="journey-list">${rows.join("")}</div>` : "<p>Choose an adventure to begin. Each journey keeps its own save in this browser.</p>"}
     ${options.error ? `<p class="error" role="alert">${escapeHtml(options.error)}</p>` : ""}
-    <div class="buttons"><button id="new-journey">New journey</button><button class="secondary" data-backup-picker id="restore-journey">Restore backup</button><input hidden type="file" accept=".json,application/json"></div>`,
+    <div class="buttons"><button id="new-journey">New journey</button><button class="secondary" data-backup-picker id="restore-journey">Restore backup</button><button class="secondary" id="rom-manager">ROM manager</button><input hidden type="file" accept=".json,application/json"></div>`,
     "opening-panel arrival-card journeys-panel", options.cursor);
   if (!p.contains(document.activeElement)) p.querySelector<HTMLButtonElement>("button")?.focus({ preventScroll: true });
   for (const button of p.querySelectorAll<HTMLButtonElement>("[data-journey]")) {
@@ -53,6 +54,7 @@ export function mountJourneyList(layer: HTMLElement, options: JourneyListOptions
     button.onclick = () => journeyCard(layer, entry, options);
   }
   p.querySelector<HTMLButtonElement>("#new-journey")!.onclick = () => adventurePicker(layer, options);
+  p.querySelector<HTMLButtonElement>("#rom-manager")!.onclick = options.onManageRoms;
   const file = p.querySelector<HTMLInputElement>("input[type=file]")!;
   const picker = p.querySelector<HTMLButtonElement>("#restore-journey")!;
   picker.onclick = () => file.click();

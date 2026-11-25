@@ -16,6 +16,8 @@ npm run dev
 
 Open the URL Vite prints. On first launch, choose or drop **Pokémon Crystal (English), version 1.0**. The file name is not important; the supported ROM's SHA-1 is `f4cd194bdee0d04ca4eac29e09b8e4e9d818c133`. The ROM is read in the browser and stored in IndexedDB. It is never uploaded, included in the app bundle, or required by the production server. The supplied workspace ROM is used only for local verification.
 
+On the opening screen, **ROM manager** shows the cartridges available in this browser and lets you add them before starting a journey. Optionally select **Add Emerald** and choose an unmodified English Pokémon Emerald ROM (.gba, SHA-1 `f3ae088181bf583e55daf962a92bb46f4f1d07b7`). Every journey then uses Emerald Pokémon portraits, including shiny palettes and Unown forms. In battle, front sprites play Emerald's frame sequences and back sprites use short motions based on Emerald's species animation assignments. Select **Remove Emerald** to restore Crystal portraits. Crystal is still required to play.
+
 ```sh
 npm run build
 npm run preview
@@ -44,7 +46,7 @@ Choose **New journey → Yellow** to play Pokémon Yellow's Kanto on Astra's eng
 
 - **From the Yellow cartridge:** every map layout, collision, warp, connection, sign, person, item ball, hidden item, trainer party, encounter table, mart stock, in-game trade and all dialogue.
 - **Kanto in Crystal's colors:** maps are drawn with Pokémon Crystal's tiles and palettes from your Crystal cartridge. Crystal's Kanto tileset kept Yellow's tile numbers, so towns and routes match tile for tile, with each town's roof colors and Crystal's animated water and flowers. Buildings, gyms, caves and other interiors map Yellow's tiles onto Crystal's interior tilesets (`src/yellow/crystal-look.ts`). People use Crystal's overworld sprites, and the gym leaders, Bill and Mr. Fuji appear as their Crystal selves. Pikachu, the other Pokémon and the few characters Crystal never drew keep Yellow's sprites in Crystal-style colors. Tall grass hides the lower half of anyone standing in it. **Option → Graphics** switches to Yellow's own Game Boy Color look.
-- **From Astra:** the Crystal battle engine and battle screen, Crystal Pokémon pictures and cries, menus, the Bag, party and storage screens, autosave, and Crystal's arrangements of the Kanto music. Trainers fight with Crystal Legacy's level-up moves plus the cartridge's hand-picked ones, such as the gym leaders' special moves.
+- **From Astra:** the Crystal battle engine and battle screen, Pokémon portraits and Crystal cries, menus, the Bag, party and storage screens, autosave, and Crystal's arrangements of the Kanto music. Trainers fight with Crystal Legacy's level-up moves plus the cartridge's hand-picked ones, such as the gym leaders' special moves.
 - **The story:** the map scripts are hand ports of the pret/pokeyellow disassembly's logic in `src/yellow/scripts/`. They reference the cartridge's text by label, so the dialogue on screen is always the cartridge's. A test checks that every map script, text routine and hidden object in the cartridge has a port.
 - Pikachu follows you and won't go in its ball. Talk to it to see how it feels.
 - Field moves need their badge and a Pokémon that knows the move. Inspect a tree, the water or a boulder to use Cut, Surf or Strength, or choose the move from the party menu. Fly, Flash, Dig, Teleport and Softboiled work as in Yellow. A fainted Pokémon can still use field moves.
@@ -75,7 +77,7 @@ Choose **New journey → Crystal** to play Johto and Kanto from the Pokémon Cry
 - **Crystal Legacy's engine changes:** a Repel that wears off offers another of the same kind, the Move Reminder and Egg Move Reminder teach forgotten moves with their own dialogue, HMs can't be left in the PC, and its expanded tilesets draw as Legacy draws them. Everything else Legacy changed (its story, trainers and rematches, wild Pokémon, marts, Kurt's instant Apricorn Balls) is in its scripts and data, so it plays as Legacy wrote it.
 - You move freely, diagonals included, as in the other adventures. **Option → Movement** switches to square-by-square steps. Hold B or Shift to run.
 
-Not included: link-cable trades and battles, mobile and Mystery Gift features, the Battle Tower, Crystal Legacy's hard mode, Nayru's Pokédex (Astra's own Pokédex list is used) and room decorations (Mom saves money and buys items with it, but passes over the dolls). The Game Corner's slots and Card Flip and the Unown stone panels are Astra's own simpler versions. The radio plays music only, without its talk shows. Battle pictures come from your Crystal cartridge, so Legacy's redrawn Pokémon keep Crystal's look in battle.
+Not included: link-cable trades and battles, mobile and Mystery Gift features, the Battle Tower, Crystal Legacy's hard mode, Nayru's Pokédex (Astra's own Pokédex list is used) and room decorations (Mom saves money and buys items with it, but passes over the dolls). The Game Corner's slots and Card Flip and the Unown stone panels are Astra's own simpler versions. The radio plays music only, without its talk shows. Battle pictures use the Crystal cartridge by default, or Emerald when added in ROM manager.
 
 ## Controls and saves
 

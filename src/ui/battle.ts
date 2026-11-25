@@ -1,6 +1,8 @@
 import { typeNames } from "../game/type-names";
 import { trackMenuCursor } from "./menu-cursor";
 import type { PokemonPortrait } from "../engine/appearance";
+import type { PortraitEntrance } from "../emerald/portraits";
+import { playPortraitEntrance } from "./portrait-entrance";
 import type { BattleMon, BattleSnapshot, Pokemon } from "../engine";
 import type { CaptureSoundState } from "../engine/battle-sound";
 import { battleStatus, mountParty } from "./party";
@@ -41,6 +43,7 @@ type Options = {
   snapshot: BattleSnapshot;
   act: (index: number) => BattleSnapshot;
   sprite: (mon: PokemonPortrait, back?: boolean) => string;
+  spriteEntrance?: (mon: PokemonPortrait, back: boolean) => PortraitEntrance | undefined;
   species: (id: number) => { name: string; types?: number[] };
   move: (id: number, dvs?: number) => { name: string; type?: number; pp?: number; power?: number; description?: string };
   cry: (id: number) => void;
@@ -473,6 +476,7 @@ export class BattlePresenter {
   private message = "";
   private timer = 0;
   private stopCapture?: () => void;
+  private stopEntrance?: () => void;
   private stopMove?: () => void;
   private disposed = false;
   constructor(private o: Options) {
@@ -548,6 +552,10 @@ export class BattlePresenter {
     }
     return this.snapshot.exp_progress[slot] ?? 0;
   }
+  private portrait(side: Battler): PokemonPortrait {
+    const { species, dvs } = this.shown[side];
+    return { species, dvs, paletteDvs: this.sentOut[side].dvs };
+  }
   private paint() {
     for (const side of ["player", "enemy"] as const) {
       const mon = this.shown[side];
@@ -561,7 +569,7 @@ export class BattlePresenter {
       if (image.dataset.species !== String(mon.species) || image.dataset.dvs !== traits) {
         image.dataset.dvs = traits;
         image.dataset.species = String(mon.species);
-        image.src = this.o.sprite({ species: mon.species, dvs: mon.dvs, paletteDvs: original.dvs }, side === "player");
+        image.src = this.o.sprite(this.portrait(side), side === "player");
         image.alt = this.o.species(mon.species).name;
       }
       const status = battleStatus(mon.status);
@@ -832,14 +840,28 @@ export class BattlePresenter {
       this.next();
       return;
     }
-    if (effect === "appear") el.classList.remove("faint", "withdraw");
-    if (event)
-      this.playAnimationSound(side, event, duration / Math.max(0.25, this.o.speed));
+    let entrance: PortraitEntrance | undefined;
+    if (effect === "appear") {
+      el.classList.remove("faint", "withdraw");
+      if (this.o.spriteEntrance && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        entrance = this.o.spriteEntrance(this.portrait(side), side === "player");
+        if (entrance && "frames" in entrance) {
+          // Give the browser time to decode alternate frames during the reveal.
+          for (const frame of entrance.frames) new Image().src = frame.image;
+        }
+      }
+    }
+    const speed = Math.max(0.25, this.o.speed);
+    if (event) this.playAnimationSound(side, event, duration / speed);
     el.classList.add(effect);
     this.delay(duration, () => {
       if (effect !== "faint" && effect !== "withdraw")
         el.classList.remove(effect);
-      this.next();
+      if (!entrance) return this.next();
+      this.stopEntrance = playPortraitEntrance(el.querySelector("img")!, entrance, speed, () => {
+        this.stopEntrance = undefined;
+        this.next();
+      });
     });
   }
   private clearCapture() {
@@ -1233,6 +1255,7 @@ export class BattlePresenter {
     this.disposed = true;
     clearTimeout(this.timer);
     this.stopMove?.();
+    this.stopEntrance?.();
     this.clearCapture();
     this.closeBag();
     this.root.remove();

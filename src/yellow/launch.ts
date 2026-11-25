@@ -1,6 +1,7 @@
 /** Starting and continuing Yellow journeys from the journey list. */
 import type { Engine } from "../engine";
 import type { PokemonPortrait } from "../engine/appearance";
+import type { PortraitEntrance } from "../emerald/portraits";
 import { soundSetting, type GameAudio } from "../game/audio";
 import type { Input } from "../game/input";
 import type { MusicScene } from "../game/music";
@@ -19,6 +20,7 @@ export interface YellowHost {
   sound: GameAudio;
   saveWarning: HTMLElement;
   sprite: (mon: PokemonPortrait | number, back?: boolean) => string;
+  spriteEntrance?: (mon: PokemonPortrait, back: boolean) => PortraitEntrance | undefined;
   cry: (species: number) => void;
   /** Called with the running game, or undefined once it stops. */
   activate: (game: YellowRunner | undefined) => void;
@@ -81,14 +83,14 @@ const COPY: Record<YellowAdventure, { title: string; about: (yellowStored: boole
  * Legacy's may come patched, or as the player's Yellow and the official patch,
  * in one go or one after the other.
  */
-function importCartridge(host: YellowHost, adventure: YellowAdventure, back: () => void): Promise<Uint8Array | undefined> {
+export function importYellowCartridge(layer: HTMLElement, adventure: YellowAdventure, back: () => void): Promise<Uint8Array | undefined> {
   const { cartridge, key } = ADVENTURES[adventure];
   const copy = COPY[adventure];
   return new Promise(resolve => {
     let yellow: Uint8Array | undefined, patch: Uint8Array | undefined;
     const show = async (message = "", error = true) => {
       if (cartridge === "legacy") yellow ??= await stored(ADVENTURES.yellow.key);
-      const p = panel(host.layer, copy.title,
+      const p = panel(layer, copy.title,
         `${copy.about(!!yellow)}<div class="drop"><button id="choose-rom">Choose ${cartridge === "legacy" ? "files" : "ROM"}</button><input hidden type="file" multiple accept="${copy.accept}"><span class="drop-hint">or drop ${cartridge === "legacy" ? "them" : "it"} onto the screen</span></div>${message ? `<p ${error ? 'role="alert" class="error"' : 'role="status"'}>${escapeHtml(message)}</p>` : ""}<p class="cartridge-note">Your cartridge stays in this browser.</p><div class="buttons"><button class="secondary" id="back">Back</button></div>`,
         "rom-import arrival-card");
       const input = p.querySelector<HTMLInputElement>("input")!;
@@ -163,7 +165,7 @@ async function cartridge(host: YellowHost, adventure: YellowAdventure, back: () 
       return bytes;
     } catch { /* ask again */ }
   }
-  return importCartridge(host, adventure, back);
+  return importYellowCartridge(host.layer, adventure, back);
 }
 
 export async function newYellowJourney(host: YellowHost, adventure: YellowAdventure, back: () => void) {
@@ -231,7 +233,7 @@ async function start(host: YellowHost, entry: JourneyEntry & { adventure: Yellow
   host.layer.replaceChildren();
   game = new YellowGame({
     engine: host.engine, rom, input: host.input, menuInput: host.menuInput, layer: host.layer, canvas: host.canvas,
-    sound: host.sound, sprite: host.sprite, cry: host.cry, store, save: data, saveWarning: host.saveWarning,
+    sound: host.sound, sprite: host.sprite, spriteEntrance: host.spriteEntrance, cry: host.cry, store, save: data, saveWarning: host.saveWarning,
     exit: () => {
       game?.stop();
       host.activate(undefined);

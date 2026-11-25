@@ -52,6 +52,13 @@ export async function set(key: string, value: unknown): Promise<void> {
   });
 }
 
+export function remove(key: string): Promise<void> {
+  return transact("readwrite", store => {
+    store.delete(key);
+    return () => undefined;
+  });
+}
+
 export class JourneyConflict extends Error {
   constructor() { super("Another window saved a newer journey. Open Options to keep a copy of this session or load the browser save."); }
 }

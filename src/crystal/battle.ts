@@ -247,7 +247,7 @@ async function runBattle(game: CrystalGame, start: BattleOptions, trainerName: s
   game.battleCue = String(battleMusic(game, klass, battleType));
   game.ctx.sound.refreshMusic();
   try {
-    const launch = new BattleLaunch({ engine, layer: game.ctx.layer, sound: game.ctx.sound, sprite: game.ctx.sprite, cry: game.ctx.cry ?? (() => {}) }, {
+    const launch = new BattleLaunch({ engine, layer: game.ctx.layer, sound: game.ctx.sound, sprite: game.ctx.sprite, spriteEntrance: game.ctx.spriteEntrance, cry: game.ctx.cry ?? (() => {}) }, {
       start, trainerName, speed: game.save.settings.battleSpeed,
       itemName: id => engine.itemName(id),
       party: () => game.save.party.filter(m => !m.egg),

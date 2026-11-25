@@ -6,6 +6,7 @@
  */
 import type { BattleOptions, BattleResult, BattleSnapshot, Engine, Pokemon } from "../engine";
 import type { PokemonPortrait } from "../engine/appearance";
+import type { PortraitEntrance } from "../emerald/portraits";
 import type { GameAudio } from "../game/audio";
 import { BattlePresenter, escapeAnnounced } from "./battle";
 
@@ -18,6 +19,7 @@ export interface BattleHost {
   layer: HTMLElement;
   sound: GameAudio;
   sprite: (mon: PokemonPortrait, back?: boolean) => string;
+  spriteEntrance?: (mon: PokemonPortrait, back: boolean) => PortraitEntrance | undefined;
   cry: (species: number) => void;
 }
 
@@ -123,6 +125,7 @@ export class BattleLaunch {
           snapshot: s,
           act: index => battle.act(index),
           sprite: host.sprite,
+          spriteEntrance: host.spriteEntrance,
           species: id => engine.species(id),
           move: (id, dvs) => engine.move(id, dvs),
           cry: host.cry,

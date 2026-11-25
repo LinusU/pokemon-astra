@@ -4,6 +4,7 @@
  */
 import type { Engine, Pokemon } from "../engine";
 import type { PokemonPortrait } from "../engine/appearance";
+import type { PortraitEntrance } from "../emerald/portraits";
 import type { Input } from "../game/input";
 import { BODY_RADIUS, WALK_SPEED, bodyEntersBlockedTile, heldHeading, walkFreely, walkSpeed, type Position } from "../game/free-movement";
 import type { GameAudio } from "../game/audio";
@@ -43,6 +44,7 @@ export interface YellowContext {
   canvas: HTMLCanvasElement;
   sound: GameAudio;
   sprite: (mon: PokemonPortrait | number, back?: boolean) => string;
+  spriteEntrance?: (mon: PokemonPortrait, back: boolean) => PortraitEntrance | undefined;
   cry: (species: number) => void;
   store: JourneyStore;
   save: YellowSave;

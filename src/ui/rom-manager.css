@@ -1,0 +1,33 @@
+.rom-list {
+  margin: 0.3em 0;
+}
+.rom-list > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.22em 0;
+  border-bottom: 1px solid #385a4840;
+}
+.rom-list small {
+  display: block;
+  color: #486653;
+  line-height: 1;
+}
+.rom-list dd {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.25em;
+  margin: 0;
+  font-size: 0.85em;
+}
+.rom-manager .cartridge-note {
+  color: #486653;
+}
+@container (max-width: 390px) {
+  .rom-list > div { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); }
+  .rom-list dd { font-size: 0.8em; }
+  .rom-list dd button { font-size: inherit; }
+}

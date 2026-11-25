@@ -2,14 +2,22 @@ import { initEngine, UnsupportedCartridge, type Engine } from "../engine";
 import { get, set } from "../game/storage";
 import { escapeHtml, panel } from "./shell";
 
-export function openCartridge(layer: HTMLElement, onReady: (engine: Engine) => void) {
+export function openCartridge(
+  layer: HTMLElement,
+  onReady: (engine: Engine) => void,
+  onManage: (back: () => void, addCrystal: () => void) => void,
+) {
   function busy() {
     panel(layer, "Preparing Astra", "<p>Opening your cartridge…</p>", "opening-panel");
   }
 
   function choose(error = "") {
     const p = panel(layer, "Pokémon Astra",
-      `<p>Open your English Pokémon Crystal 1.0 cartridge (.gbc).</p><div class="drop" id="drop"><button id="choose-rom">Choose ROM</button><input hidden id="rom" type="file" accept=".gbc,application/octet-stream"><span class="drop-hint">or drop it onto the screen</span></div>${error ? `<p role="alert" class="error">${escapeHtml(error)}</p>` : ""}<p class="cartridge-note">Your cartridge and save stay in this browser.</p>`, "rom-import arrival-card");
+      `<p>Open your English Pokémon Crystal 1.0 cartridge (.gbc).</p><div class="drop" id="drop"><button id="choose-rom">Choose ROM</button><input hidden id="rom" type="file" accept=".gbc,application/octet-stream"><span class="drop-hint">or drop it onto the screen</span></div>${error ? `<p role="alert" class="error">${escapeHtml(error)}</p>` : ""}<p class="cartridge-note">Your cartridge and save stay in this browser.</p><div class="buttons"><button class="secondary" id="rom-manager">ROM manager</button></div>`, "rom-import arrival-card");
+    p.querySelector<HTMLButtonElement>("#rom-manager")!.onclick = () => {
+      panel(layer, "ROM manager", "<p>Reading your cartridges…</p>", "opening-panel");
+      onManage(() => choose(), () => choose());
+    };
     const input = p.querySelector<HTMLInputElement>("#rom")!;
     p.querySelector<HTMLButtonElement>("#choose-rom")!.onclick = () => input.click();
     input.onchange = () => { if (input.files?.[0]) void loadFile(input.files[0]); };

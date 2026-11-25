@@ -5,6 +5,7 @@
  */
 import type { Engine, Pokemon } from "../engine";
 import type { PokemonPortrait } from "../engine/appearance";
+import type { PortraitEntrance } from "../emerald/portraits";
 import type { Input } from "../game/input";
 import type { GameAudio } from "../game/audio";
 import type { MusicScene } from "../game/music";
@@ -31,6 +32,7 @@ export interface CrystalContext {
   canvas?: HTMLCanvasElement;
   sound?: GameAudio;
   sprite?: (mon: PokemonPortrait | number, back?: boolean) => string;
+  spriteEntrance?: (mon: PokemonPortrait, back: boolean) => PortraitEntrance | undefined;
   cry?: (species: number) => void;
   store?: JourneyStore;
   save: CrystalSave;
