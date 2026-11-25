@@ -1,4 +1,5 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { heldHeading, walkFreely } from "../src/game/free-movement";
 import { Input } from "../src/game/input";
 
 let surface: EventTarget;
@@ -144,11 +145,56 @@ describe("game input", () => {
     input.update();
     expect(input.hit("right")).toBe(true);
     expect(input.held("up")).toBe(false);
+    expect(heldHeading(input, "up")).toMatchObject({ dx: 1, dy: 0, facing: "right" });
     pads = [pad(0, [1, 0], [12, 14])];
     input.update();
     expect(input.hit("left")).toBe(true);
     expect(input.hit("up")).toBe(true);
     expect(input.held("right")).toBe(false);
+  });
+  it("walks at the exact stick angle while keeping directional actions discrete", () => {
+    const input = new Input();
+    pads = [pad(0)];
+    input.update();
+    pads = [pad(0, [0.8, -0.2])];
+    input.update();
+    const pos = { x: 0, y: 0 };
+    const heading = heldHeading(input, "up")!;
+    expect(heading).toMatchObject({ facing: "right", across: "right", along: undefined });
+    expect(walkFreely(pos, heading, 1, () => false)).toBeCloseTo(1);
+    expect(pos.y / pos.x).toBeCloseTo(-0.25);
+    expect(input.held("right")).toBe(true);
+    expect(input.held("up")).toBe(false);
+
+    pads = [pad(0, [0.45, -0.9])];
+    input.update();
+    const steered = heldHeading(input, "right")!;
+    expect(steered.facing).toBe("up");
+    expect(steered.dx / steered.dy).toBeCloseTo(-0.5);
+  });
+  it("uses a radial dead zone and waits for a held stick to recenter after focus returns", () => {
+    const input = new Input();
+    pads = [pad(0, [0.2, 0.2])];
+    input.update();
+    expect(heldHeading(input, "down")).toBeUndefined();
+    pads = [pad(0, [0.3, 0.3])];
+    input.update();
+    expect(heldHeading(input, "down")?.dx).toBeCloseTo(Math.SQRT1_2);
+    expect(input.held("right") || input.held("down")).toBe(false);
+
+    surface.dispatchEvent(new Event("blur"));
+    expect(heldHeading(input, "down")).toBeUndefined();
+    surface.dispatchEvent(new Event("focus"));
+    input.update();
+    pads = [pad(0, [0.3, 0.3], [0])];
+    input.update();
+    expect(input.hit("a")).toBe(true);
+    expect(heldHeading(input, "down")).toBeUndefined();
+    pads = [pad(0)];
+    input.update();
+    pads = [pad(0, [0.3, 0.3])];
+    input.update();
+    expect(heldHeading(input, "down")?.dx).toBeCloseTo(Math.SQRT1_2);
   });
   it("swaps gamepad A and B after releasing the button used to change layouts", () => {
     const input = new Input();

@@ -25,6 +25,7 @@ const keys: Record<string, Action> = {
   m: "menu",
   Shift: "speed",
 };
+const STICK_DEAD_ZONE = 0.35;
 
 function gamepadActions(pad: Gamepad, swapAB: boolean, suppressed: Set<number> | undefined) {
   const actions = new Set<Action>();
@@ -33,10 +34,10 @@ function gamepadActions(pad: Gamepad, swapAB: boolean, suppressed: Set<number> |
   if (on(1) && !suppressed?.has(1)) actions.add(swapAB ? "a" : "b");
   if (on(9)) actions.add("menu");
   const dpad = on(12) || on(13) || on(14) || on(15);
-  if (on(12) || (!dpad && (pad.axes[1] ?? 0) < -0.35)) actions.add("up");
-  if (on(13) || (!dpad && (pad.axes[1] ?? 0) > 0.35)) actions.add("down");
-  if (on(14) || (!dpad && (pad.axes[0] ?? 0) < -0.35)) actions.add("left");
-  if (on(15) || (!dpad && (pad.axes[0] ?? 0) > 0.35)) actions.add("right");
+  if (on(12) || (!dpad && (pad.axes[1] ?? 0) < -STICK_DEAD_ZONE)) actions.add("up");
+  if (on(13) || (!dpad && (pad.axes[1] ?? 0) > STICK_DEAD_ZONE)) actions.add("down");
+  if (on(14) || (!dpad && (pad.axes[0] ?? 0) < -STICK_DEAD_ZONE)) actions.add("left");
+  if (on(15) || (!dpad && (pad.axes[0] ?? 0) > STICK_DEAD_ZONE)) actions.add("right");
   return actions;
 }
 
@@ -55,8 +56,23 @@ export class Input {
   confirmLabel = window.matchMedia?.("(pointer: coarse)").matches ? "A" : "Z";
   private padStates = new Map<
     number,
-    { id: string; buttons: boolean[]; axes: number[]; actions: Set<Action>; heldOnFocus?: Set<Action>; suppressed?: Set<number> }
+    {
+      id: string;
+      buttons: boolean[];
+      axes: number[];
+      actions: Set<Action>;
+      stick?: Readonly<{ x: number; y: number }>;
+      stickHeldOnFocus: boolean;
+      heldOnFocus?: Set<Action>;
+      suppressed?: Set<number>;
+    }
   >();
+
+  get movementStick() {
+    const state = this.padStates.get(this.active);
+    if (!state || state.stickHeldOnFocus || state.buttons.slice(12, 16).some(Boolean)) return undefined;
+    return state.stick;
+  }
 
   setGamepadLayout(swapAB: boolean) {
     if (this.swapAB === swapAB) return;
@@ -178,10 +194,13 @@ export class Input {
       const previous = this.padStates.get(pad.index);
       const buttons = pad.buttons.map((button) => button.pressed);
       const axes = pad.axes.slice(0, 2).map(axis => Math.abs(axis) > 0.4 ? Math.sign(axis) : 0);
+      const x = pad.axes[0] ?? 0, y = pad.axes[1] ?? 0;
+      const stick = Math.hypot(x, y) > STICK_DEAD_ZONE ? { x, y } : undefined;
       // An idle receiver with an axis already held must not steal the controller.
       const used =
         buttons.some((down, i) => down && !previous?.buttons[i]) ||
-        (!!previous && axes.some((direction, i) => direction !== 0 && direction !== previous.axes[i]));
+        (!!previous && ((stick && !previous.stick) ||
+          axes.some((direction, i) => direction !== 0 && direction !== previous.axes[i])));
       if (used && this.padPolling !== "resuming") {
         this.active = pad.index;
         this.confirmLabel = "A";
@@ -198,7 +217,9 @@ export class Input {
         }
       }
       this.padStates.set(pad.index, {
-        id: pad.id, buttons, axes, actions, suppressed: suppressed?.size ? suppressed : undefined,
+        id: pad.id, buttons, axes, actions, stick,
+        stickHeldOnFocus: !!stick && (this.padPolling === "resuming" || previous?.stickHeldOnFocus === true),
+        suppressed: suppressed?.size ? suppressed : undefined,
         heldOnFocus: heldOnFocus?.size ? heldOnFocus : undefined,
       });
     }

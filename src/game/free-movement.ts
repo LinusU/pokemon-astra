@@ -30,6 +30,17 @@ export interface Heading {
 
 /** The direction held on the pad, and which way the player faces while walking it. */
 export function heldHeading(input: Input, facing: Facing): Heading | undefined {
+  const stick = input.movementStick;
+  if (stick) {
+    const length = Math.hypot(stick.x, stick.y);
+    const dx = stick.x / length, dy = stick.y / length;
+    const horizontal = dx > 0 ? "right" : "left";
+    const vertical = dy > 0 ? "down" : "up";
+    const ax = Math.abs(dx), ay = Math.abs(dy);
+    const next = ax === ay && facing === horizontal ? horizontal : ax > ay ? horizontal : vertical;
+    // A shallow tilt still steers the player, but should not activate a sideways exit.
+    return { dx, dy, facing: next, across: ax > 0.35 ? horizontal : undefined, along: ay > 0.35 ? vertical : undefined };
+  }
   const held = (d: Facing) => input.held(d) || input.hit(d);
   const h = Number(held("right")) - Number(held("left")), v = Number(held("down")) - Number(held("up"));
   if (!h && !v) return undefined;
