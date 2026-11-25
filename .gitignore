@@ -18,3 +18,5 @@ target/
 *.srm
 *.state
 .DS_Store
+
+*.gba
