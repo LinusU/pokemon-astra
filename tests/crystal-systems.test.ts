@@ -90,6 +90,54 @@ describe.skipIf(!hasEngine || !CARTRIDGES.length).each(SUITES)("Crystal's system
     expect(h.ui.log.join(" ")).not.toMatch(/POKéRUS/);
   }, 60000);
 
+  it("spaces out incoming calls with only one trainer registered", async () => {
+    const h = await headlessGame(adventure);
+    const g = h.game;
+    await g.warpTo(...MAP.CHERRYGROVE_CITY, 29, 4);
+    const alan = C("PHONE_SCHOOLBOY_ALAN");
+    const mom = C("PHONECONTACT_MOM");
+    g.save.phone = [mom, alan];
+    const start = g.now().getTime();
+    let minutes = 0;
+    const now = vi.spyOn(g, "now").mockImplementation(() => new Date(start + minutes * 60_000));
+    const random = vi.spyOn(Math, "random").mockReturnValue(0);
+    const rings = () => h.ui.log.filter(line => line.includes("Ring! Ring!")).length;
+    const idleAt = async (minute: number, roll: number) => {
+      minutes = minute;
+      random.mockReturnValue(roll);
+      g.frame(minute * 60_000, 0.05);
+      await h.settle();
+    };
+    try {
+      g.save.steps = 63;
+      await g.runScript(() => g.arrived());
+      expect(g.save.steps).toBe(64);
+      expect(rings()).toBe(0);
+      g.deletePhoneNumber(mom);
+
+      // No rolls before 20 minutes, then misses shorten the next delay to 10, 5 and 3.
+      await idleAt(19, 0);
+      expect(rings()).toBe(0);
+      for (const [due, beforeNext] of [[20, 29], [30, 34], [35, 37]]) {
+        await idleAt(due, 0.5);
+        await idleAt(beforeNext, 0);
+        expect(rings()).toBe(0);
+      }
+      await idleAt(38, 0);
+      expect(rings()).toBe(1);
+      expect(g.save.vars.caller).toBe(alan);
+
+      await idleAt(57, 0);
+      expect(rings()).toBe(1);
+      await idleAt(58, 0);
+      expect(rings()).toBe(2);
+      expect(g.save.steps).toBe(64);
+    } finally {
+      random.mockRestore();
+      now.mockRestore();
+    }
+  }, 60000);
+
   it("gives no badge for a lost gym battle", async () => {
     const h = await headlessGame(adventure);
     const g = h.game;

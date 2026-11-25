@@ -1,5 +1,5 @@
 /** What each step counts (engine/overworld/events.asm, CountStep): Repel, poison, Eggs, the Day-Care, friendship and phone calls. */
-import { C, RAM, SYM, TEXT } from "./symbols";
+import { RAM, SYM, TEXT } from "./symbols";
 import type { CrystalGame } from "./runtime";
 import { runScript } from "./script";
 
@@ -62,17 +62,10 @@ export async function countStep(game: CrystalGame): Promise<boolean> {
     await contestTimeUp(game);
     return true;
   }
-  // Phone calls: a special call queued by a script, then now and then a contact.
+  // Scripted calls are checked on steps. Random calls use the overworld clock.
   if (save.specialCall && !game.map.phoneService) {
     const { specialCall } = await import("./phone");
     if (await specialCall(game)) return true;
   }
-  if (save.steps % 64 === 0 && save.phone.length > 1 && !game.map.phoneService && Math.random() < 0.06) {
-    const { randomCall } = await import("./phone");
-    if (await randomCall(game)) return true;
-  }
-  void runScript;
-  void SYM;
-  void C;
   return false;
 }

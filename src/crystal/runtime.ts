@@ -19,6 +19,7 @@ import { CrystalRom, type BgEvent, type CrystalMap, type ObjectEvent, type TextO
 import { CrystalWorld, FACINGS, STEP, opposite, type Facing, type LiveMap } from "./world";
 import { crystalSummary, type CrystalMon, type CrystalSave } from "./save";
 import { readTrainerHeader, runScript, UnsupportedScript, type TrainerHeader } from "./script";
+import { startRandomCall } from "./phone";
 import { DomUi, paginate, type CrystalUi } from "./ui";
 import type { TimeOfDay } from "./gfx";
 import type { NicknameText } from "./menu";
@@ -78,6 +79,7 @@ export type BattleSetup =
 
 const WALK_SECONDS = 1 / 4.2;
 const TREE_SHAKE_FRAMES = 24;
+const PHONE_CALL_DELAYS = [20, 10, 5, 3]; // In clock minutes.
 
 export class CrystalGame {
   readonly rom: CrystalRom;
@@ -106,6 +108,8 @@ export class CrystalGame {
   private flags: Set<number>;
   private deferred: number[] = [];
   private clock = 0;
+  private phoneDelayIndex = 0;
+  private nextPhoneCallMinute = 0;
   private waiters: { until: number; resolve: () => void }[] = [];
   private musicOverride?: number;
   private lastSave = 0;
@@ -140,6 +144,7 @@ export class CrystalGame {
     this.flags = new Set(this.save.flags);
     this.ui = ctx.ui ?? new DomUi(ctx.layer!, ctx.input, ctx.menuInput!);
     this.me = { x: this.save.x, y: this.save.y, facing: this.save.facing, walkFrame: 0 };
+    this.resetPhoneCallTimer();
     this.dailyReset();
     this.enterMap(this.save.map[0], this.save.map[1], { arrival: "continue" });
     ctx.input.setGamepadLayout?.(!!this.save.settings.swapGamepadAB);
@@ -1063,6 +1068,7 @@ export class CrystalGame {
       else this.ctx.menuInput?.update(top, input, now, false);
     }
     this.updateMovers(dt);
+    if (this.mode === "world") this.checkForPhoneCall();
     if (this.mode === "world") this.control(dt);
     if (this.mode === "world") this.lookForTrainers();
     if (this.mode !== "battle") this.renderer?.render(now);
@@ -1536,6 +1542,21 @@ export class CrystalGame {
   }
   async credits() {
     await this.say("Congratulations! Your adventure continues…");
+  }
+  resetPhoneCallTimer() {
+    this.phoneDelayIndex = 0;
+    this.nextPhoneCallMinute = Math.floor(this.now().getTime() / 60_000) + PHONE_CALL_DELAYS[0];
+  }
+  private checkForPhoneCall() {
+    if (this.me.from || this.save.contest) return;
+    const minute = Math.floor(this.now().getTime() / 60_000);
+    if (minute < this.nextPhoneCallMinute) return;
+    const tile = this.world.collision(this.map, this.me.x, this.me.y);
+    if ([CONST.COLL_DOOR, CONST.COLL_DOOR_79, CONST.COLL_STAIRCASE, CONST.COLL_CAVE].includes(tile)) return;
+    // Each expired timer starts the next delay, even if the roll misses or nobody can call.
+    this.phoneDelayIndex = Math.min(this.phoneDelayIndex + 1, PHONE_CALL_DELAYS.length - 1);
+    this.nextPhoneCallMinute = minute + PHONE_CALL_DELAYS[this.phoneDelayIndex];
+    if (Math.random() < 0.5 && !this.map.phoneService) startRandomCall(this);
   }
   addPhoneNumber(contact: number) {
     if (this.save.phone.includes(contact)) return true;

@@ -42,22 +42,25 @@ export async function specialCall(game: CrystalGame) {
   // what to say, and clears it itself with `specialphonecall SPECIALCALL_NONE`.
   await runScript(game, game.rom.far(o + 3));
   if (game.save.specialCall === id) game.save.specialCall = 0;
-  await hangUp(game);
+  await finishIncomingCall(game);
   return true;
 }
 
-/** A contact calls now and then, from their own caller script. */
-export async function randomCall(game: CrystalGame) {
+/** Start a call if a contact is available. */
+export function startRandomCall(game: CrystalGame) {
   // GetAvailableCallers: contacts who call at this time of day, from somewhere else.
-  const callers = game.save.phone.map(i => contact(game, i)).filter(c => c.callerTime & game.timeOfDayFlag());
-  if (!callers.length) return false;
+  const time = game.timeOfDayFlag();
+  const callers = game.save.phone.map(i => contact(game, i)).filter(c =>
+    (c.callerTime & time) && (c.group !== game.map.group || c.number !== game.map.number));
+  if (!callers.length) return;
   const c = callers[Math.floor(Math.random() * callers.length)];
-  if (c.group === game.map.group && c.number === game.map.number) return false;
-  game.save.vars.caller = c.index;
-  await ring(game, c);
-  await runScript(game, c.caller);
-  await hangUp(game);
-  return true;
+  void game.runScript(async () => {
+    await game.settle();
+    game.save.vars.caller = c.index;
+    await ring(game, c);
+    await runScript(game, c.caller);
+    await finishIncomingCall(game);
+  });
 }
 
 /** The player calls a contact from the Pokégear. */
@@ -87,6 +90,11 @@ async function hangUp(game: CrystalGame) {
   if (game.textOpen) await game.waitButton();
   game.sfx("SFX_HANG_UP");
   game.closeText();
+}
+
+async function finishIncomingCall(game: CrystalGame) {
+  await hangUp(game);
+  game.resetPhoneCallTimer();
 }
 
 // ------------------------------------------------------------------ Mom's shopping
@@ -140,5 +148,5 @@ export async function momTriesToBuySomething(game: CrystalGame) {
     const at = TEXT[label];
     if (at !== undefined) await game.writeText(at);
   }
-  await hangUp(game);
+  await finishIncomingCall(game);
 }
