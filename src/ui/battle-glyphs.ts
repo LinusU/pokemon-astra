@@ -267,7 +267,22 @@ export function battleGlyph(
         ctx.restore();
       }
       break;
+    case "anger":
+      for (let i = 0; i < 4; i++) {
+        line([[-6, -2], [-3, -3], [-2, -7]], ink, 2.8);
+        line([[-6, -2], [-3, -3], [-2, -7]], fill, 1.5);
+        ctx.rotate(Math.PI / 2);
+      }
+      break;
+    case "dome":
+      oval(7.8, 7.2, 0, 0, fill);
+      loop(6.4, 7, light);
+      line([[-5, -3], [-1, -6], [2, -6]], light, 1.7);
+      break;
     case "screen":
+      shape([[-7, -4], [5, -8], [7, -7], [7, 5], [-5, 8], [-7, 7]]);
+      line([[-5, 5], [-5, -3], [4, -6]], light);
+      break;
     case "mirror":
       shape([[-6, -6], [1, -8], [6, -5], [6, 4], [0, 8], [-6, 4]]);
       line([[-4, 1], [1, -5]], light);

@@ -134,7 +134,7 @@
   /* Crop the flat bottom row at the dialogue box, including during a switch. */
   top: auto;
   bottom: -2px;
-  transform-origin: center calc(100% - 2px);
+  transform-origin: center bottom;
 }
 .battle-box {
   position: relative;
