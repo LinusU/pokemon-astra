@@ -231,7 +231,8 @@ export class Input {
       }
       this.padStates.set(pad.index, {
         id: pad.id, buttons, axes, actions, stick,
-        stickHeldOnFocus: !!stick && (this.padPolling === "resuming" || previous?.stickHeldOnFocus === true),
+        // A stick already tilted when the controller appears (or drifting at rest) must recenter before it steers.
+        stickHeldOnFocus: !!stick && (!previous || this.padPolling === "resuming" || previous.stickHeldOnFocus),
         suppressed: suppressed?.size ? suppressed : undefined,
         heldOnFocus: heldOnFocus?.size ? heldOnFocus : undefined,
       });

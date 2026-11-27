@@ -146,6 +146,17 @@ describe("game input", () => {
     input.update();
     expect(input.connectedGamepads).toEqual(pads);
   });
+  it("does not walk from a stick already tilted when the controller appears", () => {
+    const input = new Input();
+    pads = [pad(0, [0.3, 0.3], [0])];
+    input.update();
+    expect(heldHeading(input, "down")).toBeUndefined();
+    pads = [pad(0)];
+    input.update();
+    pads = [pad(0, [0.3, 0.3])];
+    input.update();
+    expect(heldHeading(input, "down")?.dx).toBeCloseTo(Math.SQRT1_2);
+  });
   it("ignores a receiver with a stuck axis and follows the controller actually used", () => {
     const input = new Input();
     pads = [pad(0, [1, 0]), pad(1)];
