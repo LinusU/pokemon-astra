@@ -27,6 +27,10 @@ const keys: Record<string, Action> = {
 };
 const STICK_DEAD_ZONE = 0.35;
 
+function pageInFront() {
+  return typeof document !== "undefined" && document.visibilityState === "visible" && document.hasFocus?.() === true;
+}
+
 function gamepadActions(pad: Gamepad, swapAB: boolean, suppressed: Set<number> | undefined) {
   const actions = new Set<Action>();
   const on = (i: number) => !!pad.buttons[i]?.pressed;
@@ -118,8 +122,16 @@ export class Input {
       this.active = -1;
       this.padPolling = "blurred";
     });
-    window.addEventListener("focus", () => {
+    // iOS does not always send focus back to the page, so any sign that it is in front again resumes polling.
+    const resume = () => {
       if (this.padPolling === "blurred") this.padPolling = "resuming";
+      else if (this.padPolling === "denied") this.padPolling = "active";
+    };
+    window.addEventListener("focus", resume);
+    window.addEventListener("pageshow", resume);
+    window.addEventListener("pointerdown", resume, true);
+    window.addEventListener("visibilitychange", () => {
+      if (typeof document === "undefined" || document.visibilityState === "visible") resume();
     });
   }
 
@@ -170,6 +182,7 @@ export class Input {
   }
 
   private pollGamepads() {
+    if (this.padPolling === "blurred" && pageInFront()) this.padPolling = "resuming";
     if (this.padPolling === "blurred" || this.padPolling === "denied") return [];
     try {
       return Array.from(navigator.getGamepads?.() || []).filter(

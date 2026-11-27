@@ -106,6 +106,46 @@ describe("game input", () => {
     expect(input.hit("a")).toBe(true);
     expect(input.connectedGamepads).toEqual(pads);
   });
+  it("resumes controller polling when the page returns without a focus event", () => {
+    const input = new Input();
+    surface.dispatchEvent(new Event("blur"));
+    pads = [pad(0, [0, 0], [0])];
+    input.update();
+    expect(input.connectedGamepads).toEqual([]);
+    surface.dispatchEvent(new Event("pageshow"));
+    input.update();
+    pads = [pad(0)];
+    input.update();
+    pads = [pad(0, [0, 0], [0])];
+    input.update();
+    expect(input.hit("a")).toBe(true);
+  });
+  it("resumes controller polling when a blurred page is visible and focused again", () => {
+    vi.stubGlobal("document", { visibilityState: "hidden", hasFocus: () => false });
+    const input = new Input();
+    surface.dispatchEvent(new Event("blur"));
+    pads = [pad(0, [0, 0], [0])];
+    input.update();
+    expect(input.connectedGamepads).toEqual([]);
+    vi.stubGlobal("document", { visibilityState: "visible", hasFocus: () => true });
+    input.update();
+    pads = [pad(0)];
+    input.update();
+    pads = [pad(0, [0, 0], [0])];
+    input.update();
+    expect(input.hit("a")).toBe(true);
+  });
+  it("retries Gamepad access after the page is touched", () => {
+    let blocked = true;
+    vi.stubGlobal("navigator", { getGamepads: () => { if (blocked) throw new DOMException("Blocked", "SecurityError"); return pads; } });
+    const input = new Input();
+    input.update();
+    blocked = false;
+    surface.dispatchEvent(new Event("pointerdown"));
+    pads = [pad(0, [0, 0], [0])];
+    input.update();
+    expect(input.connectedGamepads).toEqual(pads);
+  });
   it("ignores a receiver with a stuck axis and follows the controller actually used", () => {
     const input = new Input();
     pads = [pad(0, [1, 0]), pad(1)];
